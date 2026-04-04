@@ -7,7 +7,7 @@ import {
   type LifecycleConfig,
 } from "@lifecycle/contracts";
 
-import { BridgeClientError } from "./errors";
+import { LifecycleCliError } from "./errors";
 
 export const MANIFEST_FILE_NAME = "lifecycle.json";
 
@@ -33,7 +33,7 @@ async function resolveExplicitManifestPath(inputPath: string): Promise<string> {
   const stats = await stat(resolvedPath).catch(() => null);
 
   if (!stats) {
-    throw new BridgeClientError({
+    throw new LifecycleCliError({
       code: "manifest_not_found",
       message: `Lifecycle could not find ${resolvedPath}.`,
       suggestedAction: "Pass a valid repo path or lifecycle.json path, then retry.",
@@ -46,7 +46,7 @@ async function resolveExplicitManifestPath(inputPath: string): Promise<string> {
       return manifestPath;
     }
 
-    throw new BridgeClientError({
+    throw new LifecycleCliError({
       code: "manifest_not_found",
       message: `Lifecycle could not find ${MANIFEST_FILE_NAME} in ${resolvedPath}.`,
       suggestedAction: "Create lifecycle.json first with `lifecycle repo init`, then retry.",
@@ -88,7 +88,7 @@ export async function findManifestPath(options?: {
     currentDirectory = parentDirectory;
   }
 
-  throw new BridgeClientError({
+  throw new LifecycleCliError({
     code: "manifest_not_found",
     message: "Lifecycle could not find lifecycle.json for this command.",
     suggestedAction:
@@ -106,7 +106,7 @@ export async function loadManifest(options?: {
   const parsed = parseManifest(manifestText);
 
   if (!parsed.valid) {
-    throw new BridgeClientError({
+    throw new LifecycleCliError({
       code: "manifest_invalid",
       details: {
         errors: parsed.errors,

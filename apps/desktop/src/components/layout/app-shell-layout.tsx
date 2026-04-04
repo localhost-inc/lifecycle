@@ -48,7 +48,7 @@ import {
   readLastWorkspaceId,
   writeLastWorkspaceId,
 } from "@/features/workspaces/state/workspace-canvas-state";
-import { BridgeListener } from "@/features/workspaces/state/bridge-listener";
+import { DesktopRpcListener } from "@/features/workspaces/state/desktop-rpc-listener";
 import { WorkspaceOpenRequestsProvider } from "@/features/workspaces/state/workspace-open-requests";
 import { WorkspaceToolbarProvider } from "@/features/workspaces/state/workspace-toolbar-context";
 import {
@@ -662,7 +662,7 @@ export function AppShellLayout() {
 
   return (
     <WorkspaceOpenRequestsProvider>
-      <BridgeListener />
+      <DesktopRpcListener />
       <WorkspaceToolbarProvider>
         <CommandPaletteProvider
           repositories={repositories}

@@ -1,7 +1,7 @@
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
-import { createClient } from "../../rpc-client";
 import { failCommand, jsonFlag } from "../_shared";
 
 function printOutput(
@@ -32,9 +32,9 @@ export default defineCommand({
         return 1;
       }
 
-      const client = createClient();
-      const res = await client.workspaces[":workspaceId"].exec.$post({
-        param: { workspaceId },
+      const { client } = await ensureBridge();
+      const res = await client.workspaces[":id"].exec.$post({
+        param: { id: workspaceId },
         json: { command },
       });
       const result = await res.json();

@@ -18,18 +18,22 @@ The center column is one terminal surface from Lifecycle's point of view. If tmu
 
 ## Authority split
 
-Lifecycle CLI is the primary control-plane brain for the TUI session.
+Client selection and bridge operations are separate.
 
 Rules:
 
-1. `packages/cli/src/commands/tui.ts` resolves the TUI session before the Rust process starts.
-2. The resolved session is passed into the TUI through `LIFECYCLE_TUI_SESSION`.
-3. The Rust app consumes that session and renders it; it should not invent separate host, workspace, or shell semantics when the CLI already resolved them.
-4. A Rust-side fallback path may exist for direct binary launches, but it is secondary to the CLI-resolved path.
+1. `lifecycle` with no args launches the TUI.
+2. `packages/cli/src/tui/launch.ts` ensures the Lifecycle bridge is available before the Rust process starts.
+3. The Lifecycle bridge endpoint is passed through `LIFECYCLE_BRIDGE_URL` and `LIFECYCLE_BRIDGE_TOKEN`.
+4. The client owns selected-workspace state and may restore it from local state or an initial hint such as `LIFECYCLE_INITIAL_WORKSPACE_ID`.
+5. The TUI must not resolve workspace host, shell attach policy, or tmux session naming on its own when the bridge is available.
+6. The bridge owns authoritative workspace facts and the workspace-shell operation for a selected workspace.
+7. Bridge requests use singular dotted method names such as `repo.list`, `workspace.get`, `workspace.activity`, `service.list`, and `workspace.shell`.
+8. In repository development mode, the TUI and bridge must inherit the local control-plane URL from the process environment. Root `bun dev` sets `LIFECYCLE_API_URL=http://127.0.0.1:8787`, and the TUI should not silently fall back to the production API in that mode.
 
 ## Bound workspace scope
 
-One TUI session maps to one workspace scope:
+One workspace shell operation maps to one workspace scope:
 
 1. one `workspace.id` or explicit ad hoc local shell
 2. one authoritative `workspace.host`
@@ -42,14 +46,15 @@ The middle and right columns must never silently drift across hosts.
 
 ### `local`
 
-1. The CLI resolves a local shell runtime through the host-aware workspace client boundary.
+1. The Lifecycle bridge resolves a local workspace shell through the host-aware workspace client boundary.
 2. TUI sessions request a tmux-backed launch by passing a persistent session name for the bound or ad hoc local path.
-3. Closing the TUI detaches the client; the tmux session survives.
-4. The right column reflects the same local workspace scope when Lifecycle can resolve it.
+3. The Rust TUI attaches through tmux's native create-or-attach flow rather than a shell-script shim.
+4. Closing the TUI detaches the client; the tmux session survives.
+5. The right column reflects the same local workspace scope when Lifecycle can resolve it.
 
 ### `cloud`
 
-1. The CLI resolves a cloud shell runtime through the host-aware workspace client boundary.
+1. The Lifecycle bridge resolves a cloud workspace shell through the host-aware workspace client boundary.
 2. Persistent TUI sessions use remote tmux by asking the cloud runtime for a prepare step plus an interactive attach step.
 3. The shell session lives in the cloud workspace runtime, not on the local machine.
 4. `lifecycle workspace shell` and the TUI center column use the same host-owned shell runtime contract.
@@ -60,11 +65,22 @@ The middle and right columns must never silently drift across hosts.
 2. The TUI must not silently alias docker shells to local tmux sessions.
 3. Until an authoritative docker shell attach path exists, the TUI surfaces an explicit unsupported-host error.
 
-## Session envelope
+## Selected Workspace
 
-The CLI passes a JSON session envelope through `LIFECYCLE_TUI_SESSION`.
+The TUI owns selected-workspace state.
 
-The envelope contains:
+Rules:
+
+1. On startup, the client may restore a selected workspace from local state.
+2. If no workspace is selected, the TUI shows an empty state.
+3. Repository and workspace lists still load from the bridge.
+4. Selecting a workspace is a client event, not a server decision.
+
+## Workspace Shell
+
+When the user selects a workspace, the TUI asks the Lifecycle bridge for the workspace shell.
+
+The server response contains:
 
 1. `workspace`
    - binding mode (`bound` or `adhoc`)
@@ -79,7 +95,19 @@ The envelope contains:
    - optional prepare launch spec (`program`, `args`, `cwd`, `env`) for hosts that need setup before attach
    - interactive launch spec (`program`, `args`, `cwd`, `env`) or launch error
 
-This envelope is the current primitive that lets other Lifecycle clients reuse the same host-aware session decision without copying Rust UI code.
+The workspace shell is the canonical bridge operation for opening the center shell. Clients keep selection local and ask the bridge only for authoritative workspace/shell facts.
+
+## Lifecycle Bridge
+
+The TUI is a client of the Lifecycle bridge.
+
+Rules:
+
+1. `lifecycle bridge start` starts the Lifecycle bridge for the current host context.
+2. The same bridge boundary is intended to run on local, remote, and cloud hosts.
+3. The bridge owns workspace-shell resolution, shared workspace reads, repository/workspace listing, workspace activity, and service snapshots.
+4. The TUI should prefer the bridge for shared reads and workspace-shell resolution instead of shelling out to fresh `lifecycle` subprocesses.
+5. Clients stay thin; the bridge owns stateful coordination.
 
 ## Input and layout
 
@@ -90,11 +118,11 @@ The TUI owns:
 3. outer-column resize via mouse drag
 4. key passthrough into the center shell when the canvas is focused
 
-The TUI forwards terminal mouse input for the center canvas into the attached shell surface, including click, release, drag, motion, and wheel events when the pointer is inside the canvas. Sidebar chrome, right-column panels, and outer column-resize borders remain TUI-owned and are not forwarded into the shell.
+The TUI forwards terminal mouse and keyboard input for the center canvas through the VT backend's native encoders whenever available. Sidebar chrome, right-column panels, and outer column-resize borders remain TUI-owned and are not forwarded into the shell.
 
 ## Activity
 
-Sidebar activity is derived from the host-aware `lifecycle tui activity` CLI path, not from Rust-side host-specific tmux inspection. That CLI command is responsible for querying the authoritative host runtime and tmux session for each workspace. A workspace is considered busy when any pane in its tracked tmux session has a foreground command that represents real background work. Plain shells are always non-busy foregrounds. Interactive agent CLIs such as `claude` and `codex` are activity-gated foregrounds: they count as busy only while recent pane output indicates an active turn, and they return to non-busy once that output goes quiet. Shells without a tmux session may still fall back to active-PTY shell integration for the currently attached workspace only.
+Sidebar activity is derived from the Lifecycle bridge's workspace-activity read, not from Rust-side host-specific tmux inspection. The bridge is responsible for querying the authoritative host runtime and tmux session for each workspace. A workspace is considered busy when any pane in its tracked tmux session has a foreground command that represents real background work. Plain shells are always non-busy foregrounds. Interactive agent CLIs such as `claude` and `codex` are activity-gated foregrounds: they count as busy only while recent pane output indicates an active turn, and they return to non-busy once that output goes quiet. Shells without a tmux session may still fall back to active-PTY shell integration for the currently attached workspace only.
 
 ## Module map
 
@@ -102,8 +130,9 @@ Sidebar activity is derived from the host-aware `lifecycle tui activity` CLI pat
 apps/tui/src/
   main.rs        # TUI runtime, event loop, input dispatch
   app.rs         # app state, column layout, render orchestration
-  lifecycle.rs   # session bootstrap; prefers CLI-provided LIFECYCLE_TUI_SESSION
-  shell.rs       # TUI session types plus fallback shell resolution
+  selection.rs   # client-owned selected-workspace persistence
+  bridge.rs      # client for the Lifecycle bridge surface, including workspace-shell reads
+  shell.rs       # workspace-shell types plus shell launch helpers
   terminal.rs    # PTY lifecycle and VT feeding
   ui/
     sidebar.rs   # workspace scope summary
@@ -117,4 +146,4 @@ The TUI does not currently:
 
 1. maintain its own inner pane tree inside the center terminal
 2. mirror tmux panes into Lifecycle UI state
-3. define a second host resolution system separate from the CLI
+3. define a second host resolution system separate from the Lifecycle bridge

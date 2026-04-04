@@ -201,6 +201,56 @@ Avoid this term in new target-state docs; use `workspace extension strip` or `wo
 
 ## Runtime
 
+### Lifecycle bridge
+
+The authoritative host-local or remote process that owns workspace/runtime reads and workspace-shell operations for Lifecycle clients.
+
+Use `bridge` for this authority boundary.
+
+Avoid: local runtime, TUI runtime, server when the meaning is "the authoritative host process"
+
+Operation naming rule:
+
+1. use singular dotted method names across bridge and API surfaces
+2. examples: `workspace.get`, `workspace.list`, `workspace.activity`, `workspace.shell`, `service.get`, `service.list`, `repo.list`
+3. CLI commands and MCP tools may keep the filesystem command tree, but they should map onto the same underlying operations
+4. keep plurality in arguments and results, not in the namespace name
+
+### Selected workspace
+
+The workspace currently focused by a specific client.
+
+This is client-owned UI state.
+
+Examples:
+
+1. the workspace currently shown in the TUI
+2. the last workspace restored from local client state
+
+Many workspaces may be running at once. A client selects one of them.
+
+### Initial workspace hint
+
+An optional startup hint that tells a client which workspace to select first.
+
+Examples:
+
+1. `LIFECYCLE_INITIAL_WORKSPACE_ID`
+2. web local storage restoring a previously selected workspace
+
+This is still client state, not server authority.
+
+### Workspace shell
+
+The bridge-resolved shell operation and metadata for a specific workspace.
+
+Contains:
+
+1. workspace scope
+2. shell launch details
+
+Use `workspace shell` when the client asks the bridge to open the shell for a selected workspace.
+
 ### Environment
 
 The declarative execution graph defined in `lifecycle.json`.

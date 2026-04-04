@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process";
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { buildCloudShellSshArgs } from "@lifecycle/workspace/internal/cloud";
 import { z } from "zod";
 
 import { gatherEnvironment } from "../../env-sync";
-import { createClient } from "../../rpc-client";
 import { failCommand, jsonFlag } from "../_shared";
 
 function buildProviderLaunchCommand(provider: "claude" | "codex"): string {
@@ -93,9 +93,9 @@ export default defineCommand({
         return 1;
       }
 
-      const client = createClient();
-      const res = await client.workspaces[":workspaceId"].shell.$get({
-        param: { workspaceId: workspace },
+      const { client } = await ensureBridge();
+      const res = await client.workspaces[":id"].shell.$get({
+        param: { id: workspace },
       });
       const result = await res.json();
 

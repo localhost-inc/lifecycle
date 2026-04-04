@@ -1,11 +1,8 @@
 use serde::de::{self, Deserializer};
 use serde::Deserialize;
 use std::path::Path;
-use std::process::Command;
 
-pub const TUI_SESSION_ENV: &str = "LIFECYCLE_TUI_SESSION";
-pub const TUI_WORKSPACE_CWD_ENV: &str = "LIFECYCLE_TUI_WORKSPACE_CWD";
-pub const TUI_WORKSPACE_ID_ENV: &str = "LIFECYCLE_TUI_WORKSPACE_ID";
+pub const INITIAL_WORKSPACE_ID_ENV: &str = "LIFECYCLE_INITIAL_WORKSPACE_ID";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -43,16 +40,6 @@ impl<'de> Deserialize<'de> for WorkspaceHost {
 }
 
 impl WorkspaceHost {
-    pub fn from_str(value: &str) -> Self {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "local" => Self::Local,
-            "docker" => Self::Docker,
-            "cloud" => Self::Cloud,
-            "remote" => Self::Remote,
-            _ => Self::Unknown,
-        }
-    }
-
     pub fn label(&self) -> &str {
         match self {
             Self::Local => "local",
@@ -100,31 +87,29 @@ pub struct ShellLaunchSpec {
 
 #[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)]
-pub struct ShellRuntime {
+pub struct ShellPlan {
     pub backend_label: String,
     pub launch_error: Option<String>,
     pub persistent: bool,
     pub session_name: Option<String>,
+    pub prepare: Option<ShellLaunchSpec>,
     pub spec: Option<ShellLaunchSpec>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct TuiSession {
+pub struct WorkspaceShell {
     pub workspace: WorkspaceScope,
-    pub shell: ShellRuntime,
+    pub shell: ShellPlan,
 }
 
-pub fn resolve_shell_runtime(scope: &WorkspaceScope) -> ShellRuntime {
-    build_shell_runtime(scope, command_available("tmux"))
-}
-
-fn build_shell_runtime(scope: &WorkspaceScope, tmux_available: bool) -> ShellRuntime {
+fn build_shell_runtime(scope: &WorkspaceScope, tmux_available: bool) -> ShellPlan {
     if let Some(error) = &scope.resolution_error {
-        return ShellRuntime {
+        return ShellPlan {
             backend_label: "unavailable".to_string(),
             launch_error: Some(error.clone()),
             persistent: false,
             session_name: None,
+            prepare: None,
             spec: None,
         };
     }
@@ -134,8 +119,8 @@ fn build_shell_runtime(scope: &WorkspaceScope, tmux_available: bool) -> ShellRun
 
     match scope.host {
         WorkspaceHost::Local => build_local_runtime(scope, tmux_available, cwd, session_name),
-        WorkspaceHost::Cloud => build_cloud_runtime(scope, session_name),
-        WorkspaceHost::Docker => ShellRuntime {
+        WorkspaceHost::Cloud => build_cloud_plan(scope, session_name),
+        WorkspaceHost::Docker => ShellPlan {
             backend_label: "docker shell".to_string(),
             launch_error: Some(
                 "Docker workspace shells are not wired into an authoritative TUI attach path yet."
@@ -143,9 +128,10 @@ fn build_shell_runtime(scope: &WorkspaceScope, tmux_available: bool) -> ShellRun
             ),
             persistent: false,
             session_name: None,
+            prepare: None,
             spec: None,
         },
-        WorkspaceHost::Remote => ShellRuntime {
+        WorkspaceHost::Remote => ShellPlan {
             backend_label: "remote shell".to_string(),
             launch_error: Some(
                 "Remote workspace shells are reserved in the contract but not implemented in the TUI yet."
@@ -153,15 +139,17 @@ fn build_shell_runtime(scope: &WorkspaceScope, tmux_available: bool) -> ShellRun
             ),
             persistent: false,
             session_name: None,
+            prepare: None,
             spec: None,
         },
-        WorkspaceHost::Unknown => ShellRuntime {
+        WorkspaceHost::Unknown => ShellPlan {
             backend_label: "unknown shell".to_string(),
             launch_error: Some(format!(
                 "Lifecycle could not resolve a supported shell launch path for this workspace host."
             )),
             persistent: false,
             session_name: None,
+            prepare: None,
             spec: None,
         },
     }
@@ -172,9 +160,9 @@ fn build_local_runtime(
     tmux_available: bool,
     cwd: Option<String>,
     session_name: String,
-) -> ShellRuntime {
+) -> ShellPlan {
     if !tmux_available {
-        return ShellRuntime {
+        return ShellPlan {
             backend_label: "local tmux".to_string(),
             launch_error: Some(
                 "tmux is required for the Lifecycle TUI local shell. Install tmux or launch from an environment where tmux is available."
@@ -182,12 +170,13 @@ fn build_local_runtime(
             ),
             persistent: false,
             session_name: None,
+            prepare: None,
             spec: None,
         };
     }
 
     let Some(cwd) = cwd else {
-        return ShellRuntime {
+        return ShellPlan {
             backend_label: "local tmux".to_string(),
             launch_error: Some(
                 "Lifecycle could not resolve a local working directory for this TUI session."
@@ -195,63 +184,60 @@ fn build_local_runtime(
             ),
             persistent: false,
             session_name: None,
+            prepare: None,
             spec: None,
         };
     };
 
-    let window_name = if scope.binding == WorkspaceBinding::AdHoc {
-        " -n shell"
-    } else {
-        ""
-    };
+    // Use tmux's native create-or-attach flow directly rather than shelling out
+    // through `sh -c`. This avoids quoting bugs for workspace paths and removes
+    // the race between has-session/new-session/attach-session.
+    let mut args = vec![
+        "new-session".to_string(),
+        "-A".to_string(),
+        "-s".to_string(),
+        session_name.clone(),
+        "-c".to_string(),
+        cwd.clone(),
+    ];
+    if scope.binding == WorkspaceBinding::AdHoc {
+        args.push("-n".to_string());
+        args.push("shell".to_string());
+    }
 
-    // Create-or-attach: tmux session uses the user's default shell.
-    // Activity detection is handled by the tmux poller (not OSC 133),
-    // so no shell integration injection is needed.
-    let script = format!(
-        concat!(
-            "if ! tmux has-session -t '{session}' 2>/dev/null; then ",
-            "  tmux new-session -d -s '{session}' -c '{cwd}'{window_name}; ",
-            "fi; ",
-            "exec tmux attach-session -t '{session}'",
-        ),
-        session = session_name,
-        cwd = cwd,
-        window_name = window_name,
-    );
-
-    ShellRuntime {
+    ShellPlan {
         backend_label: "local tmux".to_string(),
         launch_error: None,
         persistent: true,
         session_name: Some(session_name),
+        prepare: None,
         spec: Some(ShellLaunchSpec {
-            program: "sh".to_string(),
-            args: vec!["-c".to_string(), script],
+            program: "tmux".to_string(),
+            args,
             cwd: Some(cwd),
-            env: vec![
-                ("TERM".to_string(), "xterm-256color".to_string()),
-            ],
+            env: vec![("TERM".to_string(), "xterm-256color".to_string())],
         }),
     }
 }
 
-fn build_cloud_runtime(scope: &WorkspaceScope, session_name: String) -> ShellRuntime {
+fn build_cloud_plan(scope: &WorkspaceScope, session_name: String) -> ShellPlan {
     let Some(workspace_id) = scope.workspace_id.as_ref() else {
-        return ShellRuntime {
+        return ShellPlan {
             backend_label: "cloud tmux".to_string(),
             launch_error: Some("Cloud TUI sessions require a bound workspace id.".to_string()),
             persistent: false,
             session_name: None,
+            prepare: None,
             spec: None,
         };
     };
 
-    ShellRuntime {
+    ShellPlan {
         backend_label: "cloud tmux".to_string(),
         launch_error: None,
         persistent: true,
         session_name: Some(session_name.clone()),
+        prepare: None,
         spec: Some(ShellLaunchSpec {
             program: "lifecycle".to_string(),
             args: vec![
@@ -265,14 +251,6 @@ fn build_cloud_runtime(scope: &WorkspaceScope, session_name: String) -> ShellRun
             env: vec![],
         }),
     }
-}
-
-fn command_available(program: &str) -> bool {
-    Command::new(program)
-        .arg("-V")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
 }
 
 fn build_tmux_session_name(scope: &WorkspaceScope) -> String {
@@ -366,21 +344,33 @@ mod tests {
 
     #[test]
     fn local_runtime_prefers_tmux() {
-        let runtime = build_shell_runtime(&scope(WorkspaceHost::Local), true);
-        assert_eq!(runtime.backend_label, "local tmux");
-        assert!(runtime.persistent);
-        let spec = runtime.spec.expect("expected local launch spec");
-        // Local runtime uses sh -c to orchestrate tmux session setup + attach.
-        assert_eq!(spec.program, "sh");
-        let script = &spec.args[1];
-        assert!(script.contains("tmux new-session"));
-        assert!(script.contains("tmux attach-session"));
+        let plan = build_shell_runtime(&scope(WorkspaceHost::Local), true);
+        assert_eq!(plan.backend_label, "local tmux");
+        assert!(plan.persistent);
+        let spec = plan.spec.expect("expected local launch spec");
+        assert_eq!(spec.program, "tmux");
+        assert_eq!(spec.args[0], "new-session");
+        assert!(spec.args.iter().any(|arg| arg == "-A"));
+        assert!(spec.args.iter().any(|arg| arg == "-s"));
+        assert!(spec.args.iter().any(|arg| arg == "-c"));
+    }
+
+    #[test]
+    fn local_runtime_preserves_literal_cwd_in_tmux_args() {
+        let mut scoped = scope(WorkspaceHost::Local);
+        scoped.cwd = Some("/tmp/it's-real".to_string());
+        scoped.worktree_path = scoped.cwd.clone();
+
+        let plan = build_shell_runtime(&scoped, true);
+        let spec = plan.spec.expect("expected local launch spec");
+        assert_eq!(spec.program, "tmux");
+        assert!(spec.args.windows(2).any(|window| window == ["-c", "/tmp/it's-real"]));
     }
 
     #[test]
     fn cloud_runtime_wraps_workspace_shell_command() {
-        let runtime = build_shell_runtime(&scope(WorkspaceHost::Cloud), true);
-        let spec = runtime.spec.expect("expected cloud launch spec");
+        let plan = build_shell_runtime(&scope(WorkspaceHost::Cloud), true);
+        let spec = plan.spec.expect("expected cloud launch spec");
         assert_eq!(spec.program, "lifecycle");
         assert_eq!(spec.args[0], "workspace");
         assert_eq!(spec.args[1], "shell");
@@ -390,9 +380,9 @@ mod tests {
 
     #[test]
     fn docker_runtime_fails_fast() {
-        let runtime = build_shell_runtime(&scope(WorkspaceHost::Docker), true);
-        assert!(runtime.spec.is_none());
-        assert!(runtime
+        let plan = build_shell_runtime(&scope(WorkspaceHost::Docker), true);
+        assert!(plan.spec.is_none());
+        assert!(plan
             .launch_error
             .as_deref()
             .unwrap_or_default()

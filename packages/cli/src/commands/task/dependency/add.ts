@@ -1,7 +1,7 @@
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import { createTaskDependencyAddRequest, requestBridge } from "../../../bridge";
+import { createTaskDependencyAddRequest, requestDesktopRpc } from "../../../desktop/rpc";
 import { failCommand, jsonFlag, repositoryIdFlag } from "../../_shared";
 
 export default defineCommand({
@@ -14,7 +14,7 @@ export default defineCommand({
   }),
   run: async (input, context) => {
     try {
-      await requestBridge(
+      await requestDesktopRpc(
         createTaskDependencyAddRequest({
           taskId: input.taskId,
           dependsOnTaskId: input.dependsOn,

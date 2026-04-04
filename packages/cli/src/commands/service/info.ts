@@ -1,7 +1,7 @@
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import { createServiceInfoRequest, requestBridge, resolveWorkspaceId } from "../../bridge";
+import { createServiceGetRequest, requestDesktopRpc, resolveWorkspaceId } from "../../desktop/rpc";
 import {
   failCommand,
   failValidation,
@@ -36,8 +36,8 @@ export default defineCommand({
 
     try {
       const workspaceId = resolveWorkspaceId(input.workspaceId);
-      const response = await requestBridge(
-        createServiceInfoRequest({
+      const response = await requestDesktopRpc(
+        createServiceGetRequest({
           service: input.args[0] ?? "",
           workspaceId,
         }),

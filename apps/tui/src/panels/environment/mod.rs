@@ -1,6 +1,6 @@
 pub mod render;
 
-use std::process::Command;
+use crate::bridge::LifecycleBridgeClient;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EnvTab {
@@ -80,16 +80,15 @@ impl EnvironmentPanel {
         self.active_tab = tabs[(idx + tabs.len() - 1) % tabs.len()];
     }
 
-    /// Refresh services from the lifecycle CLI.
+    /// Refresh services from the bridge.
     pub fn refresh(&mut self, workspace_id: Option<&str>) {
-        // Try to get service status from the workspace
         let Some(ws_id) = workspace_id else {
             self.services.clear();
             return;
         };
 
-        if let Some(output) = lifecycle_cmd(&["service", "list", "--workspace-id", ws_id, "--json"]) {
-            if let Ok(parsed) = serde_json::from_str::<ServiceListPayload>(&output) {
+        if let Some(bridge) = LifecycleBridgeClient::from_env() {
+            if let Ok(parsed) = bridge.service_list(ws_id) {
                 self.services = parsed.services.into_iter().map(|s| ServiceEntry {
                     name: s.name,
                     status: s.status,
@@ -99,28 +98,4 @@ impl EnvironmentPanel {
             }
         }
     }
-}
-
-#[derive(serde::Deserialize)]
-struct ServiceListPayload {
-    services: Vec<ServicePayload>,
-}
-
-#[derive(serde::Deserialize)]
-struct ServicePayload {
-    name: String,
-    status: String,
-    assigned_port: Option<u16>,
-    preview_url: Option<String>,
-}
-
-fn lifecycle_cmd(args: &[&str]) -> Option<String> {
-    let output = Command::new("lifecycle")
-        .args(args)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }

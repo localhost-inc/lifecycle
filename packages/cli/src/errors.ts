@@ -1,4 +1,4 @@
-export class BridgeClientError extends Error {
+export class LifecycleCliError extends Error {
   readonly code: string;
   readonly details?: Record<string, unknown>;
   readonly retryable: boolean;
@@ -12,7 +12,7 @@ export class BridgeClientError extends Error {
     suggestedAction?: string | undefined;
   }) {
     super(input.message);
-    this.name = "BridgeClientError";
+    this.name = "LifecycleCliError";
     this.code = input.code;
     this.retryable = input.retryable ?? false;
     if (input.details !== undefined) {

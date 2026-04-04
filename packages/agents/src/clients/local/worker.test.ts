@@ -13,7 +13,7 @@ mock.module("./worker-connection", () => ({
 const { createLocalAgentWorker } = await import("./worker");
 
 describe("createLocalAgentWorker", () => {
-  test("fails startup when bridge session creation fails", async () => {
+  test("fails startup when desktop rpc session creation fails", async () => {
     const worker = createLocalAgentWorker({
       commandRunner: {
         createCommand: () => ({
@@ -25,7 +25,7 @@ describe("createLocalAgentWorker", () => {
         }),
       },
       invoke: async (command) => {
-        if (command === "bridge_create_agent_session") {
+        if (command === "desktop_rpc_create_agent_session") {
           throw new Error("bridge offline");
         }
         throw new Error(`unexpected command: ${command}`);
@@ -57,7 +57,9 @@ describe("createLocalAgentWorker", () => {
           onState: () => {},
         },
       ),
-    ).rejects.toThrow("Failed to create bridge session for workspace workspace_1: bridge offline");
+    ).rejects.toThrow(
+      "Failed to create desktop rpc session for workspace workspace_1: bridge offline",
+    );
 
     expect(connectLocalAgentWorker).not.toHaveBeenCalled();
   });

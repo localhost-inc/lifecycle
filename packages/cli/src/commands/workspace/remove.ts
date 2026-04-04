@@ -1,7 +1,6 @@
 import { resolve } from "node:path";
 import { defineCommand } from "@lifecycle/cmd";
-import { getLifecycleDb } from "@lifecycle/db";
-import { archiveWorkspace, getRepositoryByPath } from "@lifecycle/db/queries";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
 import { failCommand, jsonFlag } from "../_shared";
@@ -22,16 +21,19 @@ export default defineCommand({
       }
 
       const repoPath = resolve(input.repoPath ?? process.cwd());
-      const db = await getLifecycleDb();
-      const repo = await getRepositoryByPath(db, repoPath);
-      const removed = repo ? await archiveWorkspace(db, repo.id, name) : false;
+      const { client } = await ensureBridge();
+      const res = await client.workspaces[":id"].$delete({
+        param: { id: name },
+        query: { repoPath },
+      });
+      const data = await res.json();
 
       if (input.json) {
-        context.stdout(JSON.stringify({ removed, name, repoPath }, null, 2));
+        context.stdout(JSON.stringify({ removed: data.archived, name, repoPath }, null, 2));
         return 0;
       }
 
-      if (removed) {
+      if (data.archived) {
         context.stdout(`Workspace "${name}" removed.`);
       } else {
         context.stdout(`Workspace "${name}" not found in config.`);

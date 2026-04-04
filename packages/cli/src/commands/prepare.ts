@@ -5,7 +5,7 @@ import type { LifecycleConfig } from "@lifecycle/contracts";
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import { BridgeClientError } from "../errors";
+import { LifecycleCliError } from "../errors";
 import { loadManifest } from "../manifest";
 import { failCommand, jsonFlag } from "./_shared";
 
@@ -54,8 +54,8 @@ function createPrepareFailure(input: {
   stepName: string;
   suggestedAction?: string | undefined;
   code?: string | undefined;
-}): BridgeClientError {
-  return new BridgeClientError({
+}): LifecycleCliError {
+  return new LifecycleCliError({
     code: input.code ?? "prepare_step_failed",
     details: {
       ...(input.command ? { command: input.command } : {}),

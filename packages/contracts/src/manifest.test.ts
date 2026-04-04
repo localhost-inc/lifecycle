@@ -48,7 +48,7 @@ const VALID_CONFIG = `{
       "kind": "service",
       "runtime": "process",
       "command": "bun run dev:api",
-      "cwd": "apps/api",
+      "cwd": "apps/control-plane",
       "depends_on": ["migrate"],
       "health_check": {
         "kind": "http",
@@ -127,7 +127,7 @@ describe("parseManifest", () => {
         "prepare": [{
           "name": "write-env",
           "write_files": [{
-            "path": "apps/api/.env.local",
+            "path": "apps/control-plane/.env.local",
             "lines": ["PORT=${API_PORT_TEMPLATE}", "HOST=${API_HOST_TEMPLATE}"]
           }],
           "timeout_seconds": 10,
@@ -143,7 +143,7 @@ describe("parseManifest", () => {
     const step = result.config.workspace.prepare[0]!;
     expect(step.command).toBeUndefined();
     expect(step.write_files).toHaveLength(1);
-    expect(step.write_files?.[0]?.path).toBe("apps/api/.env.local");
+    expect(step.write_files?.[0]?.path).toBe("apps/control-plane/.env.local");
   });
 
   test("rejects workspace prepare steps with depends_on", () => {

@@ -92,14 +92,14 @@ pub fn run() {
                 crate::platform::app_config::resolve_config_path().expect("failed to resolve config path");
             app.manage(AppConfigPath(config_path));
 
-            let bridge = match capabilities::bridge::BridgeState::start(app.handle().clone()) {
-                Ok(bridge) => bridge,
+            let desktop_rpc = match capabilities::rpc::DesktopRpcState::start(app.handle().clone()) {
+                Ok(desktop_rpc) => desktop_rpc,
                 Err(error) => {
-                    crate::platform::diagnostics::append_error("bridge", error);
-                    capabilities::bridge::BridgeState::disabled()
+                    crate::platform::diagnostics::append_error("desktop-rpc", error);
+                    capabilities::rpc::DesktopRpcState::disabled()
                 }
             };
-            app.manage(bridge);
+            app.manage(desktop_rpc);
 
             if let Err(error) = disable_main_webview_scroll_elasticity(&app.handle()) {
                 crate::platform::diagnostics::append_error("main-webview-scroll-elasticity", error);
@@ -211,9 +211,9 @@ pub fn run() {
             capabilities::process::commands::wait_for_health,
             capabilities::app::commands::read_json_file,
             capabilities::app::commands::resolve_lifecycle_root_path,
-            capabilities::bridge::bridge_create_agent_session,
-            capabilities::bridge::bridge_complete_shell_request,
-            capabilities::bridge::bridge_fail_shell_request,
+            capabilities::rpc::desktop_rpc_create_agent_session,
+            capabilities::rpc::desktop_rpc_complete_shell_request,
+            capabilities::rpc::desktop_rpc_fail_shell_request,
             capabilities::app::commands::set_window_accepts_mouse_moved_events,
             capabilities::app::commands::set_window_pointing_cursor,
             capabilities::app::commands::get_window_mouse_position,

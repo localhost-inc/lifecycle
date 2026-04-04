@@ -1,10 +1,10 @@
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 import { createInterface } from "node:readline";
 
-import { createClient } from "../../../rpc-client";
 import { readCredentials, requireActiveOrg } from "../../../credentials";
-import { BridgeClientError } from "../../../errors";
+import { LifecycleCliError } from "../../../errors";
 import { failCommand, jsonFlag } from "../../_shared";
 
 function prompt(question: string): Promise<string> {
@@ -23,7 +23,7 @@ async function openBrowser(url: string) {
   exec(`${cmd} "${url}"`);
 }
 
-const CF_TOKEN_URL = "https://dash.cloudflare.com/profile/api-tokens/create";
+const CF_TOKEN_URL = "https://dash.cloudflare.com/profile/control-plane-tokens/create";
 
 export default defineCommand({
   description: "Connect a Cloudflare account to the active organization.",
@@ -35,7 +35,7 @@ export default defineCommand({
     try {
       const credentials = await readCredentials();
       if (!credentials) {
-        throw new BridgeClientError({
+        throw new LifecycleCliError({
           code: "unauthenticated",
           message: "Not signed in.",
           suggestedAction: "Run `lifecycle auth login` to sign in.",
@@ -65,7 +65,7 @@ export default defineCommand({
         }
       }
 
-      const client = createClient();
+      const { client } = await ensureBridge();
       const res = await client.organizations[":orgId"]["cloud-accounts"].$post({
         param: { orgId },
         json: { apiToken },

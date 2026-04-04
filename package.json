@@ -31,7 +31,7 @@
   "scripts": {
     "bench:naming": "bun run scripts/benchmark-naming-models.ts",
     "build": "turbo run build",
-    "dev": "turbo run dev --filter=@lifecycle/tui --filter=@lifecycle/desktop --filter=@lifecycle/api --filter=@lifecycle/www",
+    "dev": "LIFECYCLE_DEV=1 LIFECYCLE_API_URL=http://127.0.0.1:8787 turbo run dev --filter=@lifecycle/tui --filter=@lifecycle/desktop --filter=@lifecycle/control-plane --filter=@lifecycle/www",
     "format": "oxfmt --write apps packages",
     "format:check": "oxfmt --check apps packages",
     "lint": "turbo run lint",

@@ -2,7 +2,7 @@ import { defineCommand } from "@lifecycle/cmd";
 import { parseTaskPriority } from "@lifecycle/contracts";
 import { z } from "zod";
 
-import { createTaskUpdateRequest, requestBridge } from "../../bridge";
+import { createTaskUpdateRequest, requestDesktopRpc } from "../../desktop/rpc";
 import { failCommand, jsonFlag } from "../_shared";
 
 export default defineCommand({
@@ -20,7 +20,7 @@ export default defineCommand({
   }),
   run: async (input, context) => {
     try {
-      const response = await requestBridge(
+      const response = await requestDesktopRpc(
         createTaskUpdateRequest({
           taskId: input.id,
           ...(input.name ? { name: input.name } : {}),

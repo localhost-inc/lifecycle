@@ -3,9 +3,9 @@ import { z } from "zod";
 
 import {
   createAgentSessionInspectRequest,
-  requestBridge,
+  requestDesktopRpc,
   resolveAgentSessionId,
-} from "../../../bridge";
+} from "../../../desktop/rpc";
 import { failCommand, jsonFlag } from "../../_shared";
 
 export default defineCommand({
@@ -22,7 +22,7 @@ export default defineCommand({
   run: async (input, context) => {
     try {
       const sessionId = resolveAgentSessionId(input.sessionId);
-      const response = await requestBridge(createAgentSessionInspectRequest({ sessionId }));
+      const response = await requestDesktopRpc(createAgentSessionInspectRequest({ sessionId }));
 
       if (input.json) {
         context.stdout(JSON.stringify(response.result, null, 2));

@@ -1,10 +1,10 @@
 import { createInterface } from "node:readline";
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
 import { detectEnvironment, type EnvironmentProfile } from "../env-sync";
 import { readCredentials } from "../credentials";
-import { createClient } from "../rpc-client";
 import { failCommand, jsonFlag } from "./_shared";
 
 function confirm(question: string): Promise<boolean> {
@@ -116,7 +116,7 @@ export default defineCommand({
       }
 
       // Upload profile to API
-      const client = createClient();
+      const { client } = await ensureBridge();
       await client.users.me.environment.$put({
         json: {
           git: accepted.git ? {

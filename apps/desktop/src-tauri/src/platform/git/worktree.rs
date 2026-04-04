@@ -555,12 +555,12 @@ mod tests {
         let destination_root =
             std::env::temp_dir().join(format!("lifecycle-dest-{}", uuid::Uuid::new_v4()));
 
-        fs::create_dir_all(source_root.join("apps/api")).expect("create source api dir");
+        fs::create_dir_all(source_root.join("apps/control-plane")).expect("create source api dir");
         fs::create_dir_all(source_root.join("apps/web")).expect("create source web dir");
         fs::create_dir_all(source_root.join("node_modules/pkg")).expect("create source cache dir");
         fs::create_dir_all(destination_root.join("apps/web")).expect("create destination web dir");
 
-        fs::write(source_root.join("apps/api/.env"), "API_KEY=secret\n").expect("write api env");
+        fs::write(source_root.join("apps/control-plane/.env"), "API_KEY=secret\n").expect("write api env");
         fs::write(source_root.join("apps/web/.env.local"), "WEB_PORT=3000\n")
             .expect("write web env local");
         fs::write(
@@ -580,7 +580,7 @@ mod tests {
         )
         .expect("copy local config files");
 
-        let copied_api_env = fs::read_to_string(destination_root.join("apps/api/.env"))
+        let copied_api_env = fs::read_to_string(destination_root.join("apps/control-plane/.env"))
             .expect("copied api env should exist");
         let existing_web_env = fs::read_to_string(destination_root.join("apps/web/.env.local"))
             .expect("existing web env should exist");

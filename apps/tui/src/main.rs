@@ -1,6 +1,9 @@
+mod debug;
 mod app;
-mod lifecycle;
+mod bridge;
+mod events;
 mod panels;
+mod selection;
 mod shell;
 mod sidebar;
 mod terminal;
@@ -54,6 +57,9 @@ fn restore_terminal() {
 }
 
 fn main() -> anyhow::Result<()> {
+    debug::init();
+    debug::log("main start");
+
     // Suppress libghostty info logging by redirecting stderr to /dev/null
     suppress_stderr();
 
@@ -62,6 +68,7 @@ fn main() -> anyhow::Result<()> {
     // 1. Panic hook — restores terminal before printing the panic.
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
+        crate::debug::log(format!("panic: {info}"));
         restore_terminal();
         original_hook(info);
     }));
@@ -73,27 +80,45 @@ fn main() -> anyhow::Result<()> {
     signal_hook::flag::register(signal_hook::consts::SIGINT, sigint.clone())?;
     signal_hook::flag::register(signal_hook::consts::SIGTERM, sigint.clone())?;
 
-    enable_raw_mode()?;
+    // Force a clean terminal state on startup — handles restarts from
+    // cargo watch where the previous process may have left the terminal
+    // in alternate screen / raw mode / mouse capture enabled.
+    let _ = disable_raw_mode();
     let mut stdout = std::io::stdout();
+    let _ = execute!(
+        stdout,
+        DisableMouseCapture,
+        LeaveAlternateScreen,
+        crossterm::cursor::Show
+    );
+
+    enable_raw_mode()?;
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut term = Terminal::new(backend)?;
+    term.clear()?;
 
-    let mut app = App::new();
+    // Run the app inside a closure so restore_terminal() is always called,
+    // even if App::new() fails (missing bridge env vars, etc.).
+    let result = (|| -> anyhow::Result<()> {
+        let mut app = App::new().map_err(anyhow::Error::msg)?;
+        debug::log("app created");
 
-    let size = term.size()?;
-    let canvas_cols = size
-        .width
-        .saturating_sub(app.sidebar_width + app.extensions_width + 2);
-    let canvas_rows = size.height.saturating_sub(3); // borders + status bar
-    app.init_pty(canvas_rows, canvas_cols);
+        let result = run_loop(&mut term, &mut app, &sigint);
 
-    let result = run_loop(&mut term, &mut app, &sigint);
+        // Drop the PTY before restoring terminal — kills the child process.
+        drop(app.pty.take());
 
-    // Drop the PTY before restoring terminal — kills the child process.
-    drop(app.pty.take());
+        result
+    })();
 
     restore_terminal();
+
+    // Print the error to the now-restored terminal. stderr was redirected
+    // to /dev/null for libghostty, so use stdout (alternate screen is gone).
+    if let Err(ref e) = result {
+        println!("lifecycle-tui: {e}");
+    }
 
     result
 }
@@ -102,6 +127,9 @@ fn main() -> anyhow::Result<()> {
 fn suppress_stderr() {
     #[cfg(unix)]
     {
+        if std::env::var_os("LIFECYCLE_TUI_DEBUG_STDERR").is_some() {
+            return;
+        }
         use std::os::unix::io::AsRawFd;
         if let Ok(devnull) = std::fs::File::open("/dev/null") {
             unsafe {
@@ -117,6 +145,7 @@ fn run_loop(
     sigint: &AtomicBool,
 ) -> anyhow::Result<()> {
     let mut cached_width: u16 = term.size()?.width;
+    crate::debug::log(format!("run_loop start width={cached_width}"));
 
     while app.running && !sigint.load(Ordering::Relaxed) {
         // 1. Wait for at least one event or a short timeout (for PTY output).
@@ -127,9 +156,13 @@ fn run_loop(
             loop {
                 match event::read()? {
                     Event::Key(key) => handle_key(app, key),
-                    Event::Mouse(mouse) => handle_mouse(app, mouse, cached_width),
+                    Event::Mouse(mouse) => {
+                        crate::debug::log(format!("mouse event: {:?}", mouse));
+                        handle_mouse(app, mouse, cached_width)
+                    }
                     Event::Resize(w, _) => {
                         cached_width = w;
+                        crate::debug::log(format!("resize event width={w}"));
                     }
                     _ => {}
                 }
@@ -142,7 +175,7 @@ fn run_loop(
 
         // 3. Drain PTY output + background tasks + activity poll + spinner.
         app.process_pty();
-        if app.poll_workspace_activity() {
+        if app.poll_bridge_events() {
             app.needs_draw = true;
         }
         let (sidebar_changed, sidebar_error) = app.sidebar_state.poll_background();
@@ -156,25 +189,35 @@ fn run_loop(
             app.needs_draw = true;
         }
 
+        // Poll git background messages
+        if app.poll_git_bg() {
+            app.needs_draw = true;
+        }
+
         // 4. Draw only when something changed.
         if app.needs_draw {
             app.needs_draw = false;
             term.draw(|frame| {
                 let rows = ratatui::layout::Layout::vertical([
+                    ratatui::layout::Constraint::Length(1),
                     ratatui::layout::Constraint::Min(0),
                     ratatui::layout::Constraint::Length(1),
                 ])
                 .split(frame.area());
                 let columns = ratatui::layout::Layout::horizontal([
                     ratatui::layout::Constraint::Length(app.sidebar_width),
+                    ratatui::layout::Constraint::Length(1), // left divider
                     ratatui::layout::Constraint::Min(app::MIN_CANVAS_WIDTH),
+                    ratatui::layout::Constraint::Length(1), // right divider
                     ratatui::layout::Constraint::Length(app.extensions_width),
                 ])
-                .split(rows[0]);
-                let canvas_inner = ratatui::widgets::Block::default()
-                    .borders(ratatui::widgets::Borders::ALL)
-                    .inner(columns[1]);
-                app.resize_pty_if_needed(canvas_inner.height, canvas_inner.width);
+                .split(rows[1]);
+                let canvas_rect = columns[2];
+                crate::debug::log(format!(
+                    "draw canvas rect={}x{}+{},{}",
+                    canvas_rect.width, canvas_rect.height, canvas_rect.x, canvas_rect.y
+                ));
+                app.ensure_canvas_pty(canvas_rect.height, canvas_rect.width);
 
                 app.render(frame);
             })?;
@@ -188,6 +231,12 @@ fn handle_key(app: &mut App, key: KeyEvent) {
     // Global quit: Ctrl+Q always exits, even when the canvas owns input.
     if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::CONTROL) {
         app.running = false;
+        return;
+    }
+
+    // Dialog intercepts all keys when open.
+    if matches!(app.dialog, app::AppDialog::GitCommit(_)) {
+        handle_git_dialog_key(app, key);
         return;
     }
 
@@ -252,6 +301,28 @@ fn handle_mouse(app: &mut App, mouse: MouseEvent, total_width: u16) {
 
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
+            // Header button clicks (git, stack)
+            let gr = app.git_button_rect;
+            if mouse.row == gr.y
+                && mouse.column >= gr.x
+                && mouse.column < gr.x + gr.width
+            {
+                if matches!(app.dialog, app::AppDialog::GitCommit(_)) {
+                    app.dialog = app::AppDialog::None;
+                } else {
+                    app.open_git_dialog();
+                }
+                return;
+            }
+            let sr = app.stack_button_rect;
+            if mouse.row == sr.y
+                && mouse.column >= sr.x
+                && mouse.column < sr.x + sr.width
+            {
+                app.toggle_stack();
+                return;
+            }
+
             // Check sidebar button clicks
             if mouse.column < app.sidebar_width {
                 // Header [+] — add repo
@@ -382,7 +453,7 @@ fn handle_mouse(app: &mut App, mouse: MouseEvent, total_width: u16) {
 fn translate_canvas_mouse_event(
     canvas: Rect,
     mouse: MouseEvent,
-    canvas_focused: bool,
+    _canvas_focused: bool,
 ) -> Option<Vec<VtMouseEvent>> {
     let x = mouse.column.checked_sub(canvas.x)?;
     let y = mouse.row.checked_sub(canvas.y)?;
@@ -414,10 +485,6 @@ fn translate_canvas_mouse_event(
         MouseEventKind::Drag(button) => Some(vec![VtMouseEvent {
             action: VtMouseAction::Motion,
             button: map_mouse_button(button),
-            ..base
-        }]),
-        MouseEventKind::Moved if canvas_focused => Some(vec![VtMouseEvent {
-            action: VtMouseAction::Motion,
             ..base
         }]),
         MouseEventKind::ScrollUp => Some(vec![
@@ -456,8 +523,39 @@ fn map_mouse_button(button: MouseButton) -> Option<VtMouseButton> {
     }
 }
 
+fn handle_git_dialog_key(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Esc => {
+            app.dialog = app::AppDialog::None;
+        }
+        KeyCode::Enter => {
+            app.execute_git_commit();
+        }
+        KeyCode::Tab => {
+            if let app::AppDialog::GitCommit(ref mut state) = app.dialog {
+                state.push_after_commit = !state.push_after_commit;
+            }
+        }
+        KeyCode::Backspace => {
+            if let app::AppDialog::GitCommit(ref mut state) = app.dialog {
+                state.commit_message.pop();
+            }
+        }
+        KeyCode::Char(ch) => {
+            if let app::AppDialog::GitCommit(ref mut state) = app.dialog {
+                state.commit_message.push(ch);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn handle_canvas_key(app: &mut App, key: KeyEvent) {
-    let bytes = key_to_bytes(key);
+    if app.write_key_to_pty(key) {
+        return;
+    }
+
+    let bytes = legacy_key_to_bytes(key);
     if !bytes.is_empty() {
         app.write_to_pty(&bytes);
     }
@@ -497,6 +595,7 @@ fn handle_sidebar_key(app: &mut App, key: KeyEvent) {
         }
         KeyCode::Char('a') => app.sidebar_state.add_repo_via_picker(),
         KeyCode::Char('n') => app.sidebar_state.start_new_workspace_dialog(),
+        KeyCode::Char('g') => app.open_git_dialog(),
         _ => {}
     }
 }
@@ -514,11 +613,12 @@ fn handle_extensions_key(app: &mut App, key: KeyEvent) {
             app.vc_panel.next_tab();
             app.env_panel.next_tab();
         }
+        KeyCode::Char('g') => app.open_git_dialog(),
         _ => {}
     }
 }
 
-fn key_to_bytes(key: KeyEvent) -> Vec<u8> {
+fn legacy_key_to_bytes(key: KeyEvent) -> Vec<u8> {
     let has_alt = key.modifiers.contains(KeyModifiers::ALT);
 
     let base = match key.code {

@@ -2,6 +2,7 @@ use std::io::{Read as IoRead, Write as IoWrite};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use crossterm::event::KeyEvent;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 
 use crate::shell::ShellLaunchSpec;
@@ -19,6 +20,10 @@ pub struct PtySession<B: VtBackend> {
 
 impl<B: VtBackend> PtySession<B> {
     pub fn spawn(rows: u16, cols: u16, launch: &ShellLaunchSpec) -> anyhow::Result<Self> {
+        crate::debug::log(format!(
+            "pty spawn program={} rows={} cols={} args={:?}",
+            launch.program, rows, cols, launch.args
+        ));
         let pty_system = native_pty_system();
         let pair = pty_system.openpty(PtySize {
             rows,
@@ -83,15 +88,20 @@ impl<B: VtBackend> PtySession<B> {
             match self.byte_rx.try_recv() {
                 Ok(bytes) => {
                     had_data = true;
-                    let responses = scan_terminal_queries(&bytes);
-                    if !responses.is_empty() {
-                        let _ = self.writer.write_all(&responses);
-                        let _ = self.writer.flush();
-                    }
                     if let Some(a) = scan_shell_activity(&bytes) {
                         activity = Some(a);
                     }
                     self.backend.process(&bytes);
+                    let responses = if self.backend.uses_native_query_responses() {
+                        self.backend.take_pending_pty_writes()
+                    } else {
+                        scan_terminal_queries(&bytes)
+                    };
+                    if !responses.is_empty() {
+                        crate::debug::log(format!("pty query response {} bytes", responses.len()));
+                        let _ = self.writer.write_all(&responses);
+                        let _ = self.writer.flush();
+                    }
                 }
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => return (false, had_data, activity),
@@ -111,6 +121,7 @@ impl<B: VtBackend> PtySession<B> {
 
     /// Resize both the PTY and the VT backend so the shell sees the correct dimensions.
     pub fn resize(&mut self, rows: u16, cols: u16) {
+        crate::debug::log(format!("pty resize rows={rows} cols={cols}"));
         let _ = self.master.resize(PtySize {
             rows,
             cols,
@@ -129,7 +140,13 @@ impl<B: VtBackend> PtySession<B> {
     }
 
     pub fn encode_mouse(&mut self, event: &VtMouseEvent) -> Vec<u8> {
+        crate::debug::log(format!("backend encode_mouse: {:?}", event));
         self.backend.encode_mouse(event)
+    }
+
+    pub fn encode_key(&mut self, key: KeyEvent) -> Vec<u8> {
+        crate::debug::log(format!("backend encode_key: {:?}", key));
+        self.backend.encode_key(key)
     }
 }
 

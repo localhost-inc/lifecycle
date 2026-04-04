@@ -1,7 +1,7 @@
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import { createTaskDeleteRequest, requestBridge } from "../../bridge";
+import { createTaskDeleteRequest, requestDesktopRpc } from "../../desktop/rpc";
 import { failCommand, jsonFlag, repositoryIdFlag } from "../_shared";
 
 export default defineCommand({
@@ -13,7 +13,7 @@ export default defineCommand({
   }),
   run: async (input, context) => {
     try {
-      await requestBridge(
+      await requestDesktopRpc(
         createTaskDeleteRequest({
           taskId: input.id,
           repositoryId: input.repositoryId ?? "",

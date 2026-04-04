@@ -1,5 +1,5 @@
 pub mod app;
-pub mod bridge;
+pub mod rpc;
 pub mod files;
 pub mod git;
 pub mod process;

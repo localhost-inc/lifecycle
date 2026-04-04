@@ -1,8 +1,7 @@
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
-import { createClient } from "../../rpc-client";
-import { readCredentials, requireActiveOrg } from "../../credentials";
 import { failCommand, jsonFlag } from "../_shared";
 
 export default defineCommand({
@@ -12,16 +11,9 @@ export default defineCommand({
   }),
   run: async (input, context) => {
     try {
-      const credentials = await readCredentials();
-      if (!credentials) {
-        context.stderr("Not signed in. Run `lifecycle auth login` first.");
-        return 1;
-      }
-
-      const orgId = requireActiveOrg(credentials);
-      const client = createClient();
-      const res = await client.workspaces.$get({ query: { organizationId: orgId } });
-      const { workspaces } = await res.json();
+      const { client } = await ensureBridge();
+      const response = await client.workspaces.$get({ query: {} });
+      const { workspaces } = await response.json();
 
       if (input.json) {
         context.stdout(JSON.stringify({ workspaces }, null, 2));

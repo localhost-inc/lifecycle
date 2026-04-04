@@ -346,7 +346,7 @@ mod tests {
         };
         let runtime_env = HashMap::from([(
             "API_URL".to_string(),
-            "http://api.example.localhost:3000".to_string(),
+            "http://control-plane.example.localhost:3000".to_string(),
         )]);
 
         let env =
@@ -354,7 +354,7 @@ mod tests {
 
         assert_eq!(
             env.get("API_ORIGIN").map(String::as_str),
-            Some("http://api.example.localhost:3000")
+            Some("http://control-plane.example.localhost:3000")
         );
     }
 
@@ -397,7 +397,7 @@ mod tests {
     fn render_write_file_content_joins_lines_with_trailing_newline() {
         let env = HashMap::from([("NAME".to_string(), "kin".to_string())]);
         let file = WriteFile {
-            path: "apps/api/.env.local".to_string(),
+            path: "apps/control-plane/.env.local".to_string(),
             content: None,
             lines: Some(vec!["NAME=${NAME}".to_string()]),
         };
@@ -411,7 +411,7 @@ mod tests {
     #[test]
     fn resolve_write_target_path_rejects_paths_outside_root() {
         let root = normalize_path(Path::new("/tmp/worktree"));
-        let cwd = root.join("apps/api");
+        let cwd = root.join("apps/control-plane");
         let error = resolve_write_target_path(&root, &cwd, "../../../outside.env", "step.write-env")
             .expect_err("outside path should fail");
 

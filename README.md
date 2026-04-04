@@ -49,7 +49,7 @@ Both modes share the same `lifecycle.json`, the same workspace environment, and 
 4. **Stack package** (`packages/stack`) — process supervisor, health checks, port management
 5. **Contracts package** (`packages/contracts`) — shared domain types, manifest parsing, Zod validation
 6. **DB package** (`packages/db`) — control-plane persistence (Turso/SQLite)
-7. **API scaffold** (`apps/api`) — Hono-based backend
+7. **API scaffold** (`apps/control-plane`) — Hono-based backend
 8. **Desktop app** (`apps/desktop`) — Tauri app, maintenance-only
 9. **Landing page** (`apps/www`)
 

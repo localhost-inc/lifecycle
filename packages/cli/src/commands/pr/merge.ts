@@ -1,9 +1,9 @@
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
-import { createClient } from "../../rpc-client";
 import { failCommand, jsonFlag, workspaceIdFlag } from "../_shared";
-import { resolveWorkspaceId } from "../../bridge";
+import { resolveWorkspaceId } from "../../desktop/rpc";
 
 export default defineCommand({
   description: "Merge a pull request from a cloud workspace.",
@@ -16,9 +16,9 @@ export default defineCommand({
     try {
       const workspaceId = resolveWorkspaceId(input.workspaceId);
 
-      const client = createClient();
-      const res = await client.workspaces[":workspaceId"].pr.merge.$post({
-        param: { workspaceId },
+      const { client } = await ensureBridge();
+      const res = await client.workspaces[":id"].pr.merge.$post({
+        param: { id: workspaceId },
         json: { pullRequestNumber: input.pullRequestNumber },
       });
       const result = await res.json();

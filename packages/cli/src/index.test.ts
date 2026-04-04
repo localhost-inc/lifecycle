@@ -184,8 +184,8 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
-            LIFECYCLE_BRIDGE_SESSION_TOKEN: "session-token",
+            LIFECYCLE_DESKTOP_SOCKET: bridgePath,
+            LIFECYCLE_DESKTOP_SESSION_TOKEN: "session-token",
             LIFECYCLE_WORKSPACE_ID: "ws_123",
           },
           async () =>
@@ -247,8 +247,8 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
-            LIFECYCLE_BRIDGE_SESSION_TOKEN: undefined,
+            LIFECYCLE_DESKTOP_SOCKET: bridgePath,
+            LIFECYCLE_DESKTOP_SESSION_TOKEN: undefined,
           },
           async () =>
             await main(
@@ -290,7 +290,7 @@ describe("lifecycle cli", () => {
     await withBridge(
       (request) => {
         expect(request).toMatchObject({
-          method: "service.info",
+          method: "service.get",
           params: {
             service: "api",
             workspaceId: "ws_123",
@@ -299,7 +299,7 @@ describe("lifecycle cli", () => {
 
         return {
           id: (request as { id: string }).id,
-          method: "service.info",
+          method: "service.get",
           ok: true,
           result: {
             service: {
@@ -307,7 +307,7 @@ describe("lifecycle cli", () => {
               created_at: "2026-03-21T00:00:00.000Z",
               id: "svc_123",
               name: "api",
-              preview_url: "http://api.lifecycle.localhost",
+              preview_url: "http://control-plane.lifecycle.localhost",
               status: "ready",
               status_reason: null,
               updated_at: "2026-03-21T00:00:00.000Z",
@@ -319,7 +319,7 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
+            LIFECYCLE_DESKTOP_SOCKET: bridgePath,
             LIFECYCLE_WORKSPACE_ID: "ws_123",
           },
           async () => await main(["service", "info", "api"], sink.io),
@@ -333,12 +333,12 @@ describe("lifecycle cli", () => {
       "api",
       "status: ready",
       "port: 3000",
-      "preview: http://api.lifecycle.localhost",
+      "preview: http://control-plane.lifecycle.localhost",
     ]);
     expect(sink.stderr).toEqual([]);
   });
 
-  test("lists services through the bridge", async () => {
+  test("lists services through the desktop rpc", async () => {
     const sink = createIo();
     await withBridge(
       (request) => {
@@ -360,7 +360,7 @@ describe("lifecycle cli", () => {
                 created_at: "2026-03-21T00:00:00.000Z",
                 id: "svc_123",
                 name: "api",
-                preview_url: "http://api.lifecycle.localhost",
+                preview_url: "http://control-plane.lifecycle.localhost",
                 status: "ready",
                 status_reason: null,
                 updated_at: "2026-03-21T00:00:00.000Z",
@@ -384,7 +384,7 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
+            LIFECYCLE_DESKTOP_SOCKET: bridgePath,
             LIFECYCLE_WORKSPACE_ID: "ws_123",
           },
           async () => await main(["service", "list"], sink.io),
@@ -398,7 +398,7 @@ describe("lifecycle cli", () => {
       "api",
       "status: ready",
       "port: 3000",
-      "preview: http://api.lifecycle.localhost",
+      "preview: http://control-plane.lifecycle.localhost",
       "",
       "redis",
       "status: starting",
@@ -407,7 +407,7 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual([]);
   });
 
-  test("starts services through the bridge", async () => {
+  test("starts services through the desktop rpc", async () => {
     const sink = createIo();
     const worktreePath = await mkdtemp(join(tmpdir(), "lifecycle-cli-worktree-"));
     let receivedRequest: unknown = null;
@@ -444,7 +444,7 @@ describe("lifecycle cli", () => {
                   created_at: "2026-03-21T00:00:00.000Z",
                   id: "svc_123",
                   name: "api",
-                  preview_url: "http://api.lifecycle.localhost",
+                  preview_url: "http://control-plane.lifecycle.localhost",
                   status: "ready",
                   status_reason: null,
                   updated_at: "2026-03-21T00:00:00.000Z",
@@ -459,7 +459,7 @@ describe("lifecycle cli", () => {
         async (bridgePath) => {
           const code = await withEnvironment(
             {
-              LIFECYCLE_BRIDGE_SOCKET: bridgePath,
+              LIFECYCLE_DESKTOP_SOCKET: bridgePath,
               LIFECYCLE_WORKSPACE_ID: "ws_123",
               LIFECYCLE_WORKSPACE_PATH: worktreePath,
             },
@@ -496,7 +496,7 @@ describe("lifecycle cli", () => {
         "api",
         "status: ready",
         "port: 3000",
-        "preview: http://api.lifecycle.localhost",
+        "preview: http://control-plane.lifecycle.localhost",
       ]);
       expect(sink.stderr).toEqual([]);
     } finally {
@@ -531,9 +531,9 @@ describe("lifecycle cli", () => {
               cliInstalled: true,
               context: true,
               service: {
-                health: false,
-                info: true,
-                list: true,
+              health: false,
+              get: true,
+              list: true,
                 logs: false,
                 set: false,
                 start: true,
@@ -556,7 +556,7 @@ describe("lifecycle cli", () => {
               "lifecycle service start [service...]",
               "lifecycle tab open --surface preview --url <url>",
             ],
-            bridge: {
+            desktopRpc: {
               available: true,
               session: true,
             },
@@ -578,7 +578,7 @@ describe("lifecycle cli", () => {
             },
             provider: {
               name: "local",
-              shellBridge: true,
+              shellRpc: true,
             },
             session: {
               workspaceId: "ws_123",
@@ -589,7 +589,7 @@ describe("lifecycle cli", () => {
                 created_at: "2026-03-21T00:00:00.000Z",
                 id: "svc_123",
                 name: "api",
-                preview_url: "http://api.lifecycle.localhost",
+                preview_url: "http://control-plane.lifecycle.localhost",
                 status: "ready",
                 status_reason: null,
                 updated_at: "2026-03-21T00:00:00.000Z",
@@ -620,8 +620,8 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
-            LIFECYCLE_BRIDGE_SESSION_TOKEN: "session-token",
+            LIFECYCLE_DESKTOP_SOCKET: bridgePath,
+            LIFECYCLE_DESKTOP_SESSION_TOKEN: "session-token",
             LIFECYCLE_WORKSPACE_ID: "ws_123",
           },
           async () => await main(["context"], sink.io),
@@ -639,7 +639,7 @@ describe("lifecycle cli", () => {
         path: "/tmp/lifecycle",
       },
       commands: expect.arrayContaining(["lifecycle context", "lifecycle service list"]),
-      bridge: {
+      desktopRpc: {
         available: true,
         session: true,
       },
@@ -653,7 +653,7 @@ describe("lifecycle cli", () => {
       },
       provider: {
         name: "local",
-        shellBridge: true,
+        shellRpc: true,
       },
       workspace: {
         id: "ws_123",
@@ -668,7 +668,7 @@ describe("lifecycle cli", () => {
     await withBridge(
       (request) => {
         expect(request).toMatchObject({
-          method: "workspace.status",
+          method: "workspace.get",
           params: {
             workspaceId: "ws_123",
           },
@@ -679,7 +679,7 @@ describe("lifecycle cli", () => {
 
         return {
           id: (request as { id: string }).id,
-          method: "workspace.status",
+          method: "workspace.get",
           ok: true,
           result: {
             services: [
@@ -719,8 +719,8 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
-            LIFECYCLE_BRIDGE_SESSION_TOKEN: "session-token",
+            LIFECYCLE_DESKTOP_SOCKET: bridgePath,
+            LIFECYCLE_DESKTOP_SESSION_TOKEN: "session-token",
             LIFECYCLE_WORKSPACE_ID: "ws_123",
           },
           async () => await main(["workspace", "status", "--json"], sink.io),
@@ -774,7 +774,7 @@ describe("lifecycle cli", () => {
       await writeFile(
         join(repoPath, "apps", "api", "package.json"),
         JSON.stringify({
-          name: "@example/api",
+          name: "@example/control-plane",
           scripts: {
             dev: "bun run dev",
           },
@@ -811,7 +811,7 @@ describe("lifecycle cli", () => {
       expect(parsed.config.stack).toMatchObject({
         api: {
           command: "bun run dev",
-          cwd: "apps/api",
+          cwd: "apps/control-plane",
           kind: "service",
           runtime: "process",
         },
@@ -827,7 +827,7 @@ describe("lifecycle cli", () => {
         manifestPath: join(repoPath, "lifecycle.json"),
         packageManager: "bun",
         services: [
-          { cwd: "apps/api", name: "api" },
+          { cwd: "apps/control-plane", name: "api" },
           { cwd: "apps/web", name: "web" },
         ],
       });
@@ -927,7 +927,7 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual(["Unknown command: lifecycle service missing"]);
   });
 
-  test("creates a plan through the bridge", async () => {
+  test("creates a plan through the desktop rpc", async () => {
     const sink = createIo();
     let receivedRequest: unknown = null;
 
@@ -957,7 +957,7 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
+            LIFECYCLE_DESKTOP_SOCKET: bridgePath,
             LIFECYCLE_WORKSPACE_ID: "ws_123",
           },
           async () =>
@@ -1010,7 +1010,7 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
+            LIFECYCLE_DESKTOP_SOCKET: bridgePath,
           },
           async () =>
             await main(
@@ -1039,7 +1039,7 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual([]);
   });
 
-  test("creates a task through the bridge", async () => {
+  test("creates a task through the desktop rpc", async () => {
     const sink = createIo();
     let receivedRequest: unknown = null;
 
@@ -1072,7 +1072,7 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
+            LIFECYCLE_DESKTOP_SOCKET: bridgePath,
           },
           async () =>
             await main(
@@ -1109,7 +1109,7 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual([]);
   });
 
-  test("adds a task dependency through the bridge", async () => {
+  test("adds a task dependency through the desktop rpc", async () => {
     const sink = createIo();
     let receivedRequest: unknown = null;
 
@@ -1126,7 +1126,7 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
+            LIFECYCLE_DESKTOP_SOCKET: bridgePath,
           },
           async () =>
             await main(

@@ -49,6 +49,12 @@ Clients are thin surfaces that talk to the control plane or directly to a local 
 
 Clients are interchangeable. State lives in the control plane and workspaces, not in clients.
 
+For interactive hosts, Lifecycle also runs a host-local Lifecycle bridge near the workspace. `lifecycle bridge start` starts that bridge, and `lifecycle` launches the TUI as a client of it. The client owns its selected workspace in local state. When it needs to open a shell for that selection, it asks the bridge for the workspace shell. The same bridge boundary is intended to run on local, remote, and cloud hosts so clients can reuse one authority surface across environments.
+
+In repository development mode, the control plane defaults to the local API dev server instead of `https://control-plane.lifecycle.dev`. The root `bun dev` command exports `LIFECYCLE_DEV=1` and `LIFECYCLE_API_URL=http://127.0.0.1:8787`, `apps/control-plane` listens on `127.0.0.1:8787`, and bridge / CLI API clients resolve their control-plane base URL from that shared process environment.
+
+Operation naming should stay consistent at the semantic layer. Bridge and API methods use singular dotted names such as `workspace.get`, `workspace.list`, `workspace.activity`, `workspace.shell`, `service.get`, `service.list`, and `repo.list`. CLI commands and MCP tools keep the filesystem command tree, but they should map cleanly onto the same underlying operations.
+
 ### 2. Control Plane
 
 The control plane runs on Cloudflare Workers with Durable Objects and D1.

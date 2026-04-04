@@ -4,9 +4,9 @@ import { z } from "zod";
 import {
   createServiceStartRequest,
   loadManifestForServiceStart,
-  requestBridge,
+  requestDesktopRpc,
   resolveWorkspaceId,
-} from "../../bridge";
+} from "../../desktop/rpc";
 import { failCommand, jsonFlag, printServiceSummary, workspaceIdFlag } from "../_shared";
 
 export default defineCommand({
@@ -22,7 +22,7 @@ export default defineCommand({
     try {
       const workspaceId = resolveWorkspaceId(input.workspaceId);
       const manifest = await loadManifestForServiceStart();
-      const response = await requestBridge(
+      const response = await requestDesktopRpc(
         createServiceStartRequest({
           manifestFingerprint: manifest.manifestFingerprint,
           manifestJson: manifest.manifestJson,

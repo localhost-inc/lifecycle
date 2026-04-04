@@ -5,6 +5,9 @@
   "scripts": {
     "build": "cargo build --release",
     "build:debug": "cargo build",
-    "dev": "cargo watch -w src -c --no-process-group -s 'cargo run -p lifecycle-tui; stty sane'"
+    "dev": "bun scripts/dev.ts"
+  },
+  "dependencies": {
+    "@lifecycle/bridge": "workspace:*"
   }
 }

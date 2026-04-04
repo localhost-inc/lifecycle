@@ -1,7 +1,7 @@
 import { defineCommand, defineFlag } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import { BridgeClientError } from "../errors";
+import { LifecycleCliError } from "../errors";
 
 export const jsonFlag = defineFlag(
   z.boolean().default(false).describe("Emit structured JSON output."),
@@ -98,7 +98,7 @@ export function failCommand(
   },
 ): number {
   if (options.json) {
-    if (error instanceof BridgeClientError) {
+    if (error instanceof LifecycleCliError) {
       options.stderr(
         JSON.stringify(
           {
@@ -132,7 +132,7 @@ export function failCommand(
     return 1;
   }
 
-  if (error instanceof BridgeClientError) {
+  if (error instanceof LifecycleCliError) {
     options.stderr(error.message);
     if (error.suggestedAction) {
       options.stderr(`Suggested action: ${error.suggestedAction}`);

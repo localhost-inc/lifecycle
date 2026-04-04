@@ -3,7 +3,16 @@
   "compilerOptions": {
     "rootDir": "../..",
     "outDir": "dist",
-    "types": ["node", "bun"]
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "types": ["node", "bun"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
-  "include": ["src/**/*.ts", "../../apps/api/routed.d.ts"]
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../../apps/control-plane" }]
 }

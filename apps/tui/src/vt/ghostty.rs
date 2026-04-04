@@ -1,6 +1,10 @@
+use crossterm::event::{
+    KeyCode as CrosstermKeyCode, KeyEvent as CrosstermKeyEvent, KeyEventKind, KeyEventState,
+    KeyModifiers as CrosstermKeyModifiers, MediaKeyCode, ModifierKeyCode,
+};
 use ratatui::style::Color;
 
-use libghostty_vt::key::Mods;
+use libghostty_vt::key::{Action as KeyAction, Encoder as KeyEncoder, Event as KeyEvent, Key, Mods};
 use libghostty_vt::mouse::{
     self, Action as MouseAction, Button as MouseButton, Encoder as MouseEncoder,
     EncoderSize, Event as MouseEvent,
@@ -15,6 +19,8 @@ pub struct GhosttyBackend {
     render_state: RenderState<'static>,
     row_iter: RowIterator<'static>,
     cell_iter: CellIterator<'static>,
+    key_encoder: KeyEncoder<'static>,
+    key_event: KeyEvent<'static>,
     mouse_encoder: MouseEncoder<'static>,
     mouse_event: MouseEvent<'static>,
     mouse_button_down: bool,
@@ -26,6 +32,7 @@ pub struct GhosttyBackend {
 
 impl VtBackend for GhosttyBackend {
     fn new(rows: u16, cols: u16) -> Self {
+        crate::debug::log(format!("ghostty backend new rows={rows} cols={cols}"));
         let term = Terminal::new(TerminalOptions {
             cols,
             rows,
@@ -36,6 +43,8 @@ impl VtBackend for GhosttyBackend {
         let render_state = RenderState::new().expect("failed to create render state");
         let row_iter = RowIterator::new().expect("failed to create row iterator");
         let cell_iter = CellIterator::new().expect("failed to create cell iterator");
+        let key_encoder = KeyEncoder::new().expect("failed to create key encoder");
+        let key_event = KeyEvent::new().expect("failed to create key event");
         let mouse_encoder = MouseEncoder::new().expect("failed to create mouse encoder");
         let mouse_event = MouseEvent::new().expect("failed to create mouse event");
 
@@ -46,6 +55,8 @@ impl VtBackend for GhosttyBackend {
             render_state,
             row_iter,
             cell_iter,
+            key_encoder,
+            key_event,
             mouse_encoder,
             mouse_event,
             mouse_button_down: false,
@@ -60,6 +71,7 @@ impl VtBackend for GhosttyBackend {
     }
 
     fn resize(&mut self, rows: u16, cols: u16) {
+        crate::debug::log(format!("ghostty resize rows={rows} cols={cols}"));
         self.rows = rows;
         self.cols = cols;
         let _ = self.term.resize(cols, rows, 1, 1);
@@ -191,7 +203,56 @@ impl VtBackend for GhosttyBackend {
         self.cached.clone()
     }
 
+    fn encode_key(&mut self, key: CrosstermKeyEvent) -> Vec<u8> {
+        crate::debug::log(format!("ghostty encode_key input: {:?}", key));
+        let Some(mapped) = map_crossterm_key_event(key) else {
+            crate::debug::log("ghostty encode_key unmapped");
+            return Vec::new();
+        };
+
+        self.key_event
+            .set_action(mapped.action)
+            .set_key(mapped.key)
+            .set_mods(mapped.mods)
+            .set_consumed_mods(mapped.consumed_mods)
+            .set_composing(false)
+            .set_utf8(mapped.utf8.as_deref())
+            .set_unshifted_codepoint(mapped.unshifted_codepoint);
+
+        let mut bytes = Vec::new();
+        if self
+            .key_encoder
+            .set_options_from_terminal(&self.term)
+            .encode_to_vec(&self.key_event, &mut bytes)
+            .is_err()
+        {
+            crate::debug::log("ghostty encode_key error");
+            return Vec::new();
+        }
+
+        crate::debug::log(format!("ghostty encode_key output {} bytes", bytes.len()));
+        bytes
+    }
+
     fn encode_mouse(&mut self, event: &VtMouseEvent) -> Vec<u8> {
+        crate::debug::log(format!("ghostty encode_mouse input: {:?}", event));
+        let is_tracking = self.term.is_mouse_tracking().unwrap_or(false);
+        let should_emit = matches!(
+            event.button,
+            Some(
+                VtMouseButton::Left
+                    | VtMouseButton::Right
+                    | VtMouseButton::Middle
+                    | VtMouseButton::WheelUp
+                    | VtMouseButton::WheelDown
+            )
+        ) && is_tracking;
+
+        if !should_emit {
+            crate::debug::log(format!("ghostty encode_mouse skipped tracking={is_tracking}"));
+            return Vec::new();
+        }
+
         let mut mods = Mods::empty();
         if event.shift {
             mods |= Mods::SHIFT;
@@ -243,10 +304,12 @@ impl VtBackend for GhosttyBackend {
             .encode_to_vec(&self.mouse_event, &mut bytes)
             .is_err()
         {
+            crate::debug::log("ghostty encode_mouse error");
             return Vec::new();
         }
 
         self.mouse_button_down = any_button_pressed;
+        crate::debug::log(format!("ghostty encode_mouse output {} bytes", bytes.len()));
         bytes
     }
 }
@@ -259,6 +322,246 @@ fn map_mouse_button(button: VtMouseButton) -> MouseButton {
         VtMouseButton::WheelUp => MouseButton::Four,
         VtMouseButton::WheelDown => MouseButton::Five,
     }
+}
+
+struct MappedKeyEvent {
+    action: KeyAction,
+    key: Key,
+    mods: Mods,
+    consumed_mods: Mods,
+    utf8: Option<String>,
+    unshifted_codepoint: char,
+}
+
+fn map_crossterm_key_event(key: CrosstermKeyEvent) -> Option<MappedKeyEvent> {
+    let mut mods = Mods::empty();
+    if key.modifiers.contains(CrosstermKeyModifiers::SHIFT) {
+        mods |= Mods::SHIFT;
+    }
+    if key.modifiers.contains(CrosstermKeyModifiers::ALT) {
+        mods |= Mods::ALT;
+    }
+    if key.modifiers.contains(CrosstermKeyModifiers::CONTROL) {
+        mods |= Mods::CTRL;
+    }
+    if key.modifiers.contains(CrosstermKeyModifiers::SUPER) {
+        mods |= Mods::SUPER;
+    }
+    if key.state.contains(KeyEventState::CAPS_LOCK) {
+        mods |= Mods::CAPS_LOCK;
+    }
+    if key.state.contains(KeyEventState::NUM_LOCK) {
+        mods |= Mods::NUM_LOCK;
+    }
+
+    let action = match key.kind {
+        KeyEventKind::Press => KeyAction::Press,
+        KeyEventKind::Repeat => KeyAction::Repeat,
+        KeyEventKind::Release => KeyAction::Release,
+    };
+
+    let mut consumed_mods = Mods::empty();
+    let mut utf8 = None;
+
+    let (mapped_key, unshifted_codepoint) = match key.code {
+        CrosstermKeyCode::Backspace => (Key::Backspace, '\0'),
+        CrosstermKeyCode::Enter => (Key::Enter, '\0'),
+        CrosstermKeyCode::Left => (Key::ArrowLeft, '\0'),
+        CrosstermKeyCode::Right => (Key::ArrowRight, '\0'),
+        CrosstermKeyCode::Up => (Key::ArrowUp, '\0'),
+        CrosstermKeyCode::Down => (Key::ArrowDown, '\0'),
+        CrosstermKeyCode::Home => (Key::Home, '\0'),
+        CrosstermKeyCode::End => (Key::End, '\0'),
+        CrosstermKeyCode::PageUp => (Key::PageUp, '\0'),
+        CrosstermKeyCode::PageDown => (Key::PageDown, '\0'),
+        CrosstermKeyCode::Tab => (Key::Tab, '\0'),
+        CrosstermKeyCode::BackTab => {
+            mods |= Mods::SHIFT;
+            (Key::Tab, '\0')
+        }
+        CrosstermKeyCode::Delete => (Key::Delete, '\0'),
+        CrosstermKeyCode::Insert => (Key::Insert, '\0'),
+        CrosstermKeyCode::F(n) => (map_function_key(n)?, '\0'),
+        CrosstermKeyCode::Char(c) => {
+            let (mapped_key, unshifted) = map_char_key(c)?;
+            if !matches!(action, KeyAction::Release)
+                && !mods.intersects(Mods::CTRL | Mods::SUPER)
+            {
+                utf8 = Some(c.to_string());
+                if mods.contains(Mods::SHIFT) {
+                    consumed_mods |= Mods::SHIFT;
+                }
+            }
+            (mapped_key, unshifted)
+        }
+        CrosstermKeyCode::Null => return None,
+        CrosstermKeyCode::Esc => (Key::Escape, '\0'),
+        CrosstermKeyCode::CapsLock => (Key::CapsLock, '\0'),
+        CrosstermKeyCode::ScrollLock => (Key::ScrollLock, '\0'),
+        CrosstermKeyCode::NumLock => (Key::NumLock, '\0'),
+        CrosstermKeyCode::PrintScreen => (Key::PrintScreen, '\0'),
+        CrosstermKeyCode::Pause => (Key::Pause, '\0'),
+        CrosstermKeyCode::Menu => (Key::ContextMenu, '\0'),
+        CrosstermKeyCode::KeypadBegin => (Key::NumpadBegin, '\0'),
+        CrosstermKeyCode::Media(media) => (map_media_key(media)?, '\0'),
+        CrosstermKeyCode::Modifier(modifier) => (map_modifier_key(modifier)?, '\0'),
+    };
+
+    Some(MappedKeyEvent {
+        action,
+        key: mapped_key,
+        mods,
+        consumed_mods,
+        utf8,
+        unshifted_codepoint,
+    })
+}
+
+fn map_function_key(number: u8) -> Option<Key> {
+    Some(match number {
+        1 => Key::F1,
+        2 => Key::F2,
+        3 => Key::F3,
+        4 => Key::F4,
+        5 => Key::F5,
+        6 => Key::F6,
+        7 => Key::F7,
+        8 => Key::F8,
+        9 => Key::F9,
+        10 => Key::F10,
+        11 => Key::F11,
+        12 => Key::F12,
+        13 => Key::F13,
+        14 => Key::F14,
+        15 => Key::F15,
+        16 => Key::F16,
+        17 => Key::F17,
+        18 => Key::F18,
+        19 => Key::F19,
+        20 => Key::F20,
+        21 => Key::F21,
+        22 => Key::F22,
+        23 => Key::F23,
+        24 => Key::F24,
+        25 => Key::F25,
+        _ => return None,
+    })
+}
+
+fn map_media_key(key: MediaKeyCode) -> Option<Key> {
+    Some(match key {
+        MediaKeyCode::Play => Key::MediaPlayPause,
+        MediaKeyCode::Pause => Key::Pause,
+        MediaKeyCode::PlayPause => Key::MediaPlayPause,
+        MediaKeyCode::Reverse => return None,
+        MediaKeyCode::Stop => Key::MediaStop,
+        MediaKeyCode::FastForward => return None,
+        MediaKeyCode::Rewind => return None,
+        MediaKeyCode::TrackNext => Key::MediaTrackNext,
+        MediaKeyCode::TrackPrevious => Key::MediaTrackPrevious,
+        MediaKeyCode::Record => return None,
+        MediaKeyCode::LowerVolume => Key::AudioVolumeDown,
+        MediaKeyCode::RaiseVolume => Key::AudioVolumeUp,
+        MediaKeyCode::MuteVolume => Key::AudioVolumeMute,
+    })
+}
+
+fn map_modifier_key(key: ModifierKeyCode) -> Option<Key> {
+    Some(match key {
+        ModifierKeyCode::LeftShift => Key::ShiftLeft,
+        ModifierKeyCode::LeftControl => Key::ControlLeft,
+        ModifierKeyCode::LeftAlt => Key::AltLeft,
+        ModifierKeyCode::LeftSuper => Key::MetaLeft,
+        ModifierKeyCode::LeftHyper => return None,
+        ModifierKeyCode::LeftMeta => return None,
+        ModifierKeyCode::RightShift => Key::ShiftRight,
+        ModifierKeyCode::RightControl => Key::ControlRight,
+        ModifierKeyCode::RightAlt => Key::AltRight,
+        ModifierKeyCode::RightSuper => Key::MetaRight,
+        ModifierKeyCode::RightHyper => return None,
+        ModifierKeyCode::RightMeta => return None,
+        ModifierKeyCode::IsoLevel3Shift => return None,
+        ModifierKeyCode::IsoLevel5Shift => return None,
+    })
+}
+
+fn map_char_key(c: char) -> Option<(Key, char)> {
+    Some(match c {
+        'a'..='z' => (map_alpha_key(c)?, c),
+        'A'..='Z' => (map_alpha_key(c.to_ascii_lowercase())?, c.to_ascii_lowercase()),
+        '0'..='9' => (map_digit_key(c)?, c),
+        ' ' => (Key::Space, ' '),
+        '-' | '_' => (Key::Minus, '-'),
+        '=' | '+' => (Key::Equal, '='),
+        '[' | '{' => (Key::BracketLeft, '['),
+        ']' | '}' => (Key::BracketRight, ']'),
+        '\\' | '|' => (Key::Backslash, '\\'),
+        ';' | ':' => (Key::Semicolon, ';'),
+        '\'' | '"' => (Key::Quote, '\''),
+        ',' | '<' => (Key::Comma, ','),
+        '.' | '>' => (Key::Period, '.'),
+        '/' | '?' => (Key::Slash, '/'),
+        '`' | '~' => (Key::Backquote, '`'),
+        '!' => (Key::Digit1, '1'),
+        '@' => (Key::Digit2, '2'),
+        '#' => (Key::Digit3, '3'),
+        '$' => (Key::Digit4, '4'),
+        '%' => (Key::Digit5, '5'),
+        '^' => (Key::Digit6, '6'),
+        '&' => (Key::Digit7, '7'),
+        '*' => (Key::Digit8, '8'),
+        '(' => (Key::Digit9, '9'),
+        ')' => (Key::Digit0, '0'),
+        _ => return None,
+    })
+}
+
+fn map_alpha_key(c: char) -> Option<Key> {
+    Some(match c {
+        'a' => Key::A,
+        'b' => Key::B,
+        'c' => Key::C,
+        'd' => Key::D,
+        'e' => Key::E,
+        'f' => Key::F,
+        'g' => Key::G,
+        'h' => Key::H,
+        'i' => Key::I,
+        'j' => Key::J,
+        'k' => Key::K,
+        'l' => Key::L,
+        'm' => Key::M,
+        'n' => Key::N,
+        'o' => Key::O,
+        'p' => Key::P,
+        'q' => Key::Q,
+        'r' => Key::R,
+        's' => Key::S,
+        't' => Key::T,
+        'u' => Key::U,
+        'v' => Key::V,
+        'w' => Key::W,
+        'x' => Key::X,
+        'y' => Key::Y,
+        'z' => Key::Z,
+        _ => return None,
+    })
+}
+
+fn map_digit_key(c: char) -> Option<Key> {
+    Some(match c {
+        '0' => Key::Digit0,
+        '1' => Key::Digit1,
+        '2' => Key::Digit2,
+        '3' => Key::Digit3,
+        '4' => Key::Digit4,
+        '5' => Key::Digit5,
+        '6' => Key::Digit6,
+        '7' => Key::Digit7,
+        '8' => Key::Digit8,
+        '9' => Key::Digit9,
+        _ => return None,
+    })
 }
 
 /// Allocate a grid with default (blank) cells.

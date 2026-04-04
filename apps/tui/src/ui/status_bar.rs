@@ -42,9 +42,9 @@ pub fn render(
 
     // Right side: contextual keybind hints
     let hints = match focus {
-        Focus::Sidebar => "tab focus · n new · a add repo · q quit",
+        Focus::Sidebar => "tab focus · n new · a add repo · g git · q quit",
         Focus::Canvas => "tab focus",
-        Focus::Extensions => "tab focus · 1/2 toggle · q quit",
+        Focus::Extensions => "tab focus · 1/2 toggle · g git · q quit",
     };
     let right_text = format!("{hints} ");
 

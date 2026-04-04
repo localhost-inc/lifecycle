@@ -4,9 +4,9 @@ import { z } from "zod";
 import {
   createTabOpenPreviewRequest,
   formatTabOpenResult,
-  requestBridge,
+  requestDesktopRpc,
   resolveWorkspaceId,
-} from "../../bridge";
+} from "../../desktop/rpc";
 import { failCommand, failValidation, jsonFlag, workspaceIdFlag } from "../_shared";
 
 const workspaceSurface = z.enum(["changes-diff", "commit-diff", "file", "preview", "pull-request"]);
@@ -82,7 +82,7 @@ export default defineCommand({
 
     try {
       const workspaceId = resolveWorkspaceId(input.workspaceId);
-      const response = await requestBridge(
+      const response = await requestDesktopRpc(
         createTabOpenPreviewRequest({
           select: input.select,
           split: input.split,

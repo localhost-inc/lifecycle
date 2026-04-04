@@ -3,11 +3,11 @@
 > Status: planned execution plan
 > Depends on: [M4 workspace environments](../milestones/4-workspace-environments.md)
 > Plan index: [docs/plans/README.md](./README.md). This document is the target contract for the local CLI workstream.
-> Current execution focus: this plan and [TUI](../reference/tui.md) define the main build lane right now. Desktop-shell bridge ideas remain secondary unless they directly unblock CLI/TUI work.
+> Current execution focus: this plan and [TUI](../reference/tui.md) define the main build lane right now. Desktop RPC ideas remain secondary unless they directly unblock CLI/TUI work.
 
 ## Goal
 
-A developer (or agent) working inside a project root or workspace checkout can use the Lifecycle CLI through a stable singular noun model: `project` scaffolds the checked-in contract, `workspace` materializes a concrete working instance, `stack` operates the live runnable graph inside that workspace, `service` targets one node inside the stack, and `context` emits the aggregate machine-readable view. The current surface priority is shell/runtime control and TUI-oriented workflows. Desktop-app bridge commands are explicitly secondary. No cloud, no auth, no network.
+A developer (or agent) working inside a project root or workspace checkout can use the Lifecycle CLI through a stable singular noun model: `project` scaffolds the checked-in contract, `workspace` materializes a concrete working instance, `stack` operates the live runnable graph inside that workspace, `service` targets one node inside the stack, and `context` emits the aggregate machine-readable view. The current surface priority is shell/runtime control and TUI-oriented workflows. Desktop RPC commands are explicitly secondary. No cloud, no auth, no network.
 
 ## Canonical Noun Model
 
@@ -57,7 +57,7 @@ Rules:
    - `lifecycle tab open --surface terminal [--harness claude|codex|shell]` -- open or focus a terminal surface in the current workspace
    - `lifecycle browser snapshot` -- capture the current browser surface for agent inspection
    - shell commands are only available when the CLI can reach the running desktop app
-9. **Help and discoverability**: every subcommand has `--help` with examples. `lifecycle` with no args prints a concise command map. Error messages suggest the right command when possible.
+9. **Help and discoverability**: every subcommand has `--help` with examples. `lifecycle` with no args opens the TUI, and `lifecycle bridge start` starts the Lifecycle bridge. Error messages suggest the right command when possible.
 
 ## Implementation Contracts
 
@@ -122,7 +122,7 @@ Those families are out of scope for M5 itself, but they should reuse the same no
 For local mode in M5, the CLI has two explicit operating modes.
 
 1. **Standalone project/workspace mode**: `project init`, `workspace prepare`, manifest discovery, and other project-local commands operate directly from the checkout and do not require the desktop app.
-2. **Bridge mode**: `tab` and `browser` commands require the desktop app because they target app-local UI state.
+2. **Desktop RPC mode**: `tab` and `browser` commands require the desktop app because they target app-local UI state.
 3. `stack` and `service` commands should also work without assuming "desktop already launched me" is the normal case.
 4. When a command explicitly needs the desktop app and it is unavailable, it fails with a typed `local_app_not_running` error instead of silently degrading.
 
@@ -159,20 +159,20 @@ Routing rule:
 5. `tab *` and `browser *` route to desktop-shell handlers
 6. `context` may compose project, workspace, stack, and desktop-shell facts
 
-#### Local Desktop Bridge
+#### Local Desktop RPC
 
-The desktop app exposes one local request/response bridge for CLI access.
+The desktop app exposes one local request/response RPC channel for CLI access.
 
 1. Transport: local-only socket or named pipe, not HTTP
 2. Serialization: versioned JSON request/response envelope
-3. Scope: one bridge per running desktop app instance
+3. Scope: one desktop rpc per running desktop app instance
 4. Discovery:
-   - Lifecycle-launched sessions use `LIFECYCLE_BRIDGE_SOCKET`
+   - Lifecycle-launched sessions use `LIFECYCLE_DESKTOP_SOCKET`
    - external-shell descriptor discovery is still deferred
 
-The bridge exists to let the CLI talk to the running app process. It is not a second user-facing API surface.
+The desktop rpc exists to let the CLI talk to the running app process. It is not a second user-facing API surface.
 
-#### Bridge Envelope
+#### Desktop RPC Envelope
 
 Requests and responses should be boring, explicit, and correlation-friendly.
 
@@ -228,10 +228,10 @@ Error:
 
 #### Desktop App Handler Split
 
-Inside the desktop app, the bridge splits again by ownership.
+Inside the desktop app, the desktop rpc splits again by ownership.
 
-1. Rust/Tauri handles `workspace` and `stack` requests directly using the same underlying capabilities the app already uses for Tauri invokes, plus any bridge-routed project reads that cannot be satisfied in the CLI process.
-2. Rust/Tauri also terminates the socket bridge and enforces session/token validation.
+1. Rust/Tauri handles `workspace` and `stack` requests directly using the same underlying capabilities the app already uses for Tauri invokes, plus any `desktop/rpc`-routed project reads that cannot be satisfied in the CLI process.
+2. Rust/Tauri also terminates the socket gateway and enforces session/token validation.
 3. Frontend React code handles `desktop shell` requests because pane/tab/browser state is frontend-owned today.
 4. Rust forwards frontend-owned requests into the webview through a typed request/response channel instead of trying to reimplement shell state in Rust.
 
@@ -305,8 +305,8 @@ The bridge must be allowed to ensure that the target workspace is actually visib
 When a harness session runs inside the app, the CLI should feel local and zero-config.
 
 1. `workspace`, `stack`, and `service` commands use session env plus cwd to resolve the current workspace.
-2. `tab` and `browser` commands additionally use the injected bridge path and session token.
-3. The session token scopes what the harness is allowed to control in the shell bridge.
+2. `tab` and `browser` commands additionally use the injected desktop rpc socket path and session token.
+3. The session token scopes what the harness is allowed to control through the desktop rpc.
 4. Session-initiated shell commands should default to the current workspace tab, not global app navigation.
 
 #### Recommended Implementation Layout
@@ -314,7 +314,7 @@ When a harness session runs inside the app, the CLI should feel local and zero-c
 Keep the implementation split by concern instead of burying everything in the CLI package.
 
 1. `packages/cli` -- command parsing, help, output formatting, command-family routing
-2. `apps/desktop/src-tauri/src/capabilities/...` -- bridge listener plus workspace/stack request handlers
+2. `apps/desktop/src-tauri/src/capabilities/...` -- desktop rpc listener plus workspace/stack request handlers
 3. `apps/desktop/src/features/workspaces/...` -- frontend shell request handlers for tab open, focus, browser reload, and browser snapshot
 4. shared request/response schemas should live with other typed contracts, not as ad hoc JSON in the CLI
 
@@ -322,7 +322,7 @@ Keep the implementation split by concern instead of burying everything in the CL
 
 1. No separate local daemon in M5
 2. No browser-automation-only testing path for local app surfaces
-3. No duplicate “CLI API” beside the bridge envelope
+3. No duplicate “CLI API” beside the desktop rpc envelope
 4. No requirement that MCP bypass the CLI; wrapping the CLI is acceptable as long as the CLI contract stays canonical
 
 ### Full Command Surface (Local)
@@ -410,15 +410,15 @@ Required environment variables:
 2. `LIFECYCLE_PROJECT_ID`
 3. `LIFECYCLE_WORKSPACE_PATH`
 4. `LIFECYCLE_CLI_PATH`
-5. `LIFECYCLE_BRIDGE_SOCKET`
-6. `LIFECYCLE_BRIDGE_SESSION_TOKEN`
+5. `LIFECYCLE_DESKTOP_SOCKET`
+6. `LIFECYCLE_DESKTOP_SESSION_TOKEN`
 
 Rules:
 
 1. `cwd` should still be the workspace worktree so commands continue to work when env injection is incomplete.
-2. `LIFECYCLE_BRIDGE_SOCKET` identifies the local bridge endpoint the CLI uses to reach the running desktop app.
+2. `LIFECYCLE_DESKTOP_SOCKET` identifies the local desktop rpc endpoint the CLI uses to reach the running desktop app.
 3. `LIFECYCLE_CLI_PATH` points at the resolved local `lifecycle` executable, and the app should also prepend its parent directory to `PATH`.
-4. `LIFECYCLE_BRIDGE_SESSION_TOKEN` is a short-lived capability token for bridge-driven shell operations initiated from the session.
+4. `LIFECYCLE_DESKTOP_SESSION_TOKEN` is a short-lived capability token for `desktop/rpc`-driven shell operations initiated from the session.
 5. CLI commands must not require the caller to pass `--workspace` when this context is present.
 6. Shell commands must fail clearly when the bridge or session token is missing or invalid.
 
@@ -447,11 +447,11 @@ Rules:
 - **Quiet by default**: commands print only what you need. No banners, no tips, no emoji. `--verbose` for debug output.
 - **Stable `--json` contracts**: once a `--json` shape ships, it's a public API. Additive changes only.
 - **Agent-friendly, human-first**: default output is for humans. `--json` is for agents and scripts. Both are first-class.
-- **Desktop-aware when available**: commands that affect app UI go through the bridge, not through ad hoc browser automation.
+- **Desktop-aware when available**: commands that affect app UI go through the desktop rpc, not through ad hoc browser automation.
 
 ## Desktop App Surface
 
-No new persistent app surfaces in M5 -- the CLI is the primary interface for this milestone. M5 may still use a local bridge so a session can drive existing workspace, tab, and browser surfaces in the running app when those surfaces are present.
+No new persistent app surfaces in M5 -- the CLI is the primary interface for this milestone. M5 may still use a local desktop rpc so a session can drive existing workspace, tab, and browser surfaces in the running app when those surfaces are present.
 
 ## Exit Gate
 

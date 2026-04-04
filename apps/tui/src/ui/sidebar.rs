@@ -4,7 +4,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::Paragraph,
     Frame,
 };
 
@@ -20,12 +20,6 @@ pub fn render(
     spinner: Option<char>,
     activity: &HashMap<String, WorkspaceActivity>,
 ) {
-    let border_style = if focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-
     // The [+] lives in the title bar — clickable on the title row
     state.add_repo_button_row = Some(area.y);
 
@@ -34,10 +28,25 @@ pub fn render(
     state.repo_button_rows.clear();
     state.workspace_rows.clear();
 
+    // Title row
+    let is_title_hovered = hover_row == Some(area.y);
+    let plus_style = if is_title_hovered {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    let title_label = " Repositories";
+    let title_btn = "[+] ";
+    let title_pad = (tree_area.width as usize).saturating_sub(title_label.len() + title_btn.len());
+    lines.push(Line::from(vec![
+        Span::styled(title_label, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        Span::raw(" ".repeat(title_pad)),
+        Span::styled(title_btn, plus_style),
+    ]));
+
     for (ri, repo) in state.repos.iter().enumerate() {
-        // Track screen row for this repo's [+] button
-        // line index = lines.len(), screen row = tree_area.y + 1 (border) + line index
-        state.repo_button_rows.push((ri, tree_area.y + 1 + lines.len() as u16));
+        // Screen row = tree_area.y + lines.len() (flush, no border offset)
+        state.repo_button_rows.push((ri, tree_area.y + lines.len() as u16));
         let is_selected = state.selected == Some(SidebarSelection::Repo(ri));
         let icon = if repo.expanded { "▼" } else { "▶" };
         let source_tag = match repo.source {
@@ -54,18 +63,17 @@ pub fn render(
         };
 
         let mut spans = vec![
-            Span::styled(format!("{icon} "), Style::default().fg(Color::DarkGray)),
+            Span::styled(format!(" {icon} "), Style::default().fg(Color::DarkGray)),
             Span::styled(repo.name.clone(), style),
             Span::styled(source_tag.to_string(), Style::default().fg(Color::DarkGray)),
         ];
 
-        let repo_row = tree_area.y + 1 + lines.len() as u16;
+        let repo_row = tree_area.y + lines.len() as u16;
         let is_hovered = hover_row == Some(repo_row);
         if is_hovered || (is_selected && focused) {
-            // Calculate padding to right-align [+]
-            let inner_width = tree_area.width.saturating_sub(2) as usize; // minus borders
+            let inner_width = tree_area.width as usize;
             let used: usize = spans.iter().map(|s| s.width()).sum();
-            let btn = "[+]";
+            let btn = "[+] ";
             let pad = inner_width.saturating_sub(used + btn.len());
             spans.push(Span::raw(" ".repeat(pad)));
             spans.push(Span::styled(btn, Style::default().fg(
@@ -80,7 +88,7 @@ pub fn render(
             if let Some(SidebarDialog::NewWorkspace { repo_index, ref input }) = &state.dialog {
                 if *repo_index == ri {
                     let mut spans = vec![
-                        Span::styled("  + ", Style::default().fg(Color::Cyan)),
+                        Span::styled("   + ", Style::default().fg(Color::Cyan)),
                     ];
                     if input.is_empty() {
                         spans.push(Span::styled("█", Style::default().fg(Color::Cyan)));
@@ -94,7 +102,7 @@ pub fn render(
             }
 
             for (wi, ws) in repo.workspaces.iter().enumerate() {
-                state.workspace_rows.push((ri, wi, tree_area.y + 1 + lines.len() as u16));
+                state.workspace_rows.push((ri, wi, tree_area.y + lines.len() as u16));
                 let is_ws_selected =
                     state.selected == Some(SidebarSelection::Workspace(ri, wi));
 
@@ -113,7 +121,7 @@ pub fn render(
                     Style::default().fg(Color::Gray)
                 };
 
-                let ws_row = tree_area.y + 1 + lines.len() as u16;
+                let ws_row = tree_area.y + lines.len() as u16;
                 let ws_hovered = hover_row == Some(ws_row);
 
                 let ws_key = format!("{}\t{}", repo.name, ws.name);
@@ -136,15 +144,15 @@ pub fn render(
                 };
 
                 let mut ws_spans = vec![
-                    Span::raw("  "),
+                    Span::raw("   "),
                     Span::styled(indicator, indicator_style),
                     Span::styled(ws.name.clone(), ws_style),
                 ];
 
                 if ws_hovered {
-                    let inner_width = tree_area.width.saturating_sub(2) as usize;
+                    let inner_width = tree_area.width as usize;
                     let used: usize = ws_spans.iter().map(|s| s.width()).sum();
-                    let btn = "[x]";
+                    let btn = "[x] ";
                     let pad = inner_width.saturating_sub(used + btn.len());
                     ws_spans.push(Span::raw(" ".repeat(pad)));
                     ws_spans.push(Span::styled(btn, Style::default().fg(Color::Red)));
@@ -155,7 +163,7 @@ pub fn render(
 
             if repo.workspaces.is_empty() && repo.path.is_some() {
                 lines.push(Line::from(Span::styled(
-                    "  (no workspaces)",
+                    "   (no workspaces)",
                     Style::default().fg(Color::DarkGray),
                 )));
             }
@@ -164,7 +172,7 @@ pub fn render(
             if let Some(SidebarDialog::ConfirmDelete { repo_index, ws_index: _, ref message }) = &state.dialog {
                 if *repo_index == ri {
                     lines.push(Line::from(Span::styled(
-                        format!("  {message}"),
+                        format!("   {message}"),
                         Style::default().fg(Color::Yellow),
                     )));
                 }
@@ -177,21 +185,6 @@ pub fn render(
         }
     }
 
-    let is_title_hovered = hover_row == Some(area.y);
-    let plus_style = if is_title_hovered {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-
-    let tree = Paragraph::new(lines).block(
-        Block::default()
-            .title(" Repositories ")
-            .title(Line::from(vec![
-                Span::styled(" [+] ", plus_style),
-            ]).right_aligned())
-            .borders(Borders::ALL)
-            .border_style(border_style),
-    );
+    let tree = Paragraph::new(lines);
     frame.render_widget(tree, tree_area);
 }

@@ -4,6 +4,7 @@ import path from "node:path";
 import { defineCommand } from "@lifecycle/cmd";
 import { cancel, intro, isCancel, log, multiselect, outro } from "@clack/prompts";
 import TOML from "smol-toml";
+import type { TomlTable } from "smol-toml";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -85,8 +86,8 @@ function installJson(filePath: string, entry: McpEntry, force: boolean): Install
 
 function installToml(filePath: string, entry: McpEntry, force: boolean): InstallResult {
   const raw = readFileOr(filePath, "");
-  const config = raw ? TOML.parse(raw) : {};
-  const mcpServers = (config.mcp_servers ?? {}) as Record<string, unknown>;
+  const config: TomlTable = raw ? TOML.parse(raw) : {};
+  const mcpServers = (config.mcp_servers ?? {}) as TomlTable;
 
   if (mcpServers.lifecycle && !force) return "exists";
 
@@ -150,11 +151,14 @@ export default defineCommand({
 
     const selected = await multiselect({
       message: `Install into (${scope}):`,
-      options: available.map((h) => ({
-        value: h.id,
-        label: h.label,
-        hint: h.paths[scope],
-      })),
+      options: available.map((h) => {
+        const hint = h.paths[scope];
+        return {
+          value: h.id,
+          label: h.label,
+          ...(hint ? { hint } : {}),
+        };
+      }),
       initialValues: available.map((h) => h.id),
     });
 

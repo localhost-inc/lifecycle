@@ -1,7 +1,7 @@
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import { createClient } from "../../rpc-client";
+import { createControlPlaneClient } from "../../control-plane-client";
 import { readCredentials, writeCredentials } from "../../credentials";
 import { detectEnvironment } from "../../env-sync";
 import { failCommand, jsonFlag } from "../_shared";
@@ -39,7 +39,7 @@ export default defineCommand({
       }
 
       // Start device auth flow (unauthenticated)
-      const client = createClient({ requireAuth: false });
+      const client = createControlPlaneClient({ requireAuth: false });
 
       const deviceCodeRes = await client.auth["device-code"].$post();
       const deviceCode = await deviceCodeRes.json();
@@ -105,7 +105,7 @@ export default defineCommand({
           // Runs in the background of the success message. Failures are silent.
           try {
             const profile = detectEnvironment();
-            const authedClient = createClient();
+            const authedClient = createControlPlaneClient();
             await authedClient.users.me.environment.$put({
               json: {
                 git: profile.git ? {

@@ -13,24 +13,25 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -b tsconfig.json",
     "format": "oxfmt src",
     "lint": "oxlint src",
     "test": "bun test src",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -b tsconfig.json"
   },
   "dependencies": {
     "@clack/prompts": "^1.2.0",
     "@lifecycle/agents": "workspace:*",
-    "@lifecycle/api": "workspace:*",
+    "@lifecycle/bridge": "workspace:*",
+    "@lifecycle/control-plane": "workspace:*",
     "@lifecycle/cmd": "workspace:*",
     "@lifecycle/contracts": "workspace:*",
     "@lifecycle/db": "workspace:*",
     "@lifecycle/stack": "workspace:*",
     "@lifecycle/workspace": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.28.0",
-    "hono": "^4.7.0",
-    "routedjs": "^0.0.5",
+    "hono": "^4.7.10",
+    "routedjs": "0.1.4",
     "smol-toml": "^1.6.1",
     "zod": "^4.3.6"
   }

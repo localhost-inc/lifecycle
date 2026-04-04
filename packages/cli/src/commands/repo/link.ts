@@ -1,10 +1,10 @@
 import { execSync } from "node:child_process";
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
-import { createClient } from "../../rpc-client";
 import { readCredentials, requireActiveOrg } from "../../credentials";
-import { BridgeClientError } from "../../errors";
+import { LifecycleCliError } from "../../errors";
 import { failCommand, jsonFlag } from "../_shared";
 
 function detectGitRemote(): { owner: string; name: string } | null {
@@ -54,7 +54,7 @@ export default defineCommand({
     try {
       const credentials = await readCredentials();
       if (!credentials) {
-        throw new BridgeClientError({
+        throw new LifecycleCliError({
           code: "unauthenticated",
           message: "Not signed in.",
           suggestedAction: "Run `lifecycle auth login` to sign in.",
@@ -69,7 +69,7 @@ export default defineCommand({
       if (!owner || !repoName) {
         const remote = detectGitRemote();
         if (!remote) {
-          throw new BridgeClientError({
+          throw new LifecycleCliError({
             code: "repository_not_linked",
             message: "Could not detect a GitHub remote. Pass --owner and --name explicitly.",
             suggestedAction:
@@ -84,8 +84,8 @@ export default defineCommand({
       const repoPath = input.path ?? process.cwd();
       const providerRepoId = `${owner}/${repoName}`;
 
-      const client = createClient();
-      const res = await client.repos.$post({
+      const { client } = await ensureBridge();
+      const res = await client.repos.link.$post({
         json: {
           organizationId: orgId,
           owner,

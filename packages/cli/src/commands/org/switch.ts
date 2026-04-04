@@ -1,9 +1,9 @@
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
-import { createClient } from "../../rpc-client";
 import { readCredentials, updateCredentials } from "../../credentials";
-import { BridgeClientError } from "../../errors";
+import { LifecycleCliError } from "../../errors";
 import { failCommand, jsonFlag } from "../_shared";
 
 export default defineCommand({
@@ -22,14 +22,14 @@ export default defineCommand({
 
       const credentials = await readCredentials();
       if (!credentials) {
-        throw new BridgeClientError({
+        throw new LifecycleCliError({
           code: "unauthenticated",
           message: "Not signed in.",
           suggestedAction: "Run `lifecycle auth login` to sign in.",
         });
       }
 
-      const client = createClient();
+      const { client } = await ensureBridge();
       const res = await client.organizations.$get();
       const { organizations } = await res.json();
 
@@ -42,7 +42,7 @@ export default defineCommand({
       );
 
       if (!match) {
-        throw new BridgeClientError({
+        throw new LifecycleCliError({
           code: "organization_not_found",
           message: `Organization "${target}" not found.`,
           suggestedAction:

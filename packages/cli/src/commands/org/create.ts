@@ -1,7 +1,7 @@
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
-import { createClient } from "../../rpc-client";
 import { failCommand, jsonFlag } from "../_shared";
 
 export default defineCommand({
@@ -18,7 +18,7 @@ export default defineCommand({
         return 1;
       }
 
-      const client = createClient();
+      const { client } = await ensureBridge();
       const res = await client.organizations.$post({ json: { name } });
       const result = await res.json();
 

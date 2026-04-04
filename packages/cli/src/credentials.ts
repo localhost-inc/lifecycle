@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
-import { BridgeClientError } from "./errors";
+import { LifecycleCliError } from "./errors";
 
 const CREDENTIALS_DIR = path.join(homedir(), ".lifecycle");
 const CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, "credentials.json");
@@ -55,7 +55,7 @@ export async function clearCredentials(): Promise<void> {
 
 export function requireActiveOrg(credentials: { activeOrgId: string | null }): string {
   if (!credentials.activeOrgId) {
-    throw new BridgeClientError({
+    throw new LifecycleCliError({
       code: "organization_not_found",
       message: "No active organization.",
       suggestedAction: "Run `lifecycle org switch <name>` to select an organization.",

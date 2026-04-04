@@ -26,7 +26,7 @@ describe("agents package contracts", () => {
     ]) {
       workspaces.set(workspace.workspaceId, {
         id: workspace.workspaceId,
-        project_id: "project_1",
+        repository_id: "repo_1",
         name: workspace.workspaceId,
         checkout_type: "worktree",
         source_ref: "main",

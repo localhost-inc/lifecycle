@@ -22,29 +22,31 @@ function normalizeClaudePermissionMode(permissionMode: string): string {
   return permissionMode;
 }
 
-async function createBridgeEnv(
+async function createDesktopRpcEnv(
   invoke: LocalAgentInvoke,
   workspaceId: string,
   worktreePath: string,
 ): Promise<Record<string, string>> {
   try {
     const result = await invoke<{ socketPath: string; sessionToken: string }>(
-      "bridge_create_agent_session",
+      "desktop_rpc_create_agent_session",
       { request: { workspaceId } },
     );
     return {
-      LIFECYCLE_BRIDGE_SOCKET: result.socketPath,
-      LIFECYCLE_BRIDGE_SESSION_TOKEN: result.sessionToken,
+      LIFECYCLE_DESKTOP_SOCKET: result.socketPath,
+      LIFECYCLE_DESKTOP_SESSION_TOKEN: result.sessionToken,
       LIFECYCLE_WORKSPACE_ID: workspaceId,
       LIFECYCLE_WORKSPACE_PATH: worktreePath,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("[agent-worker] failed to create bridge session", {
+    console.error("[agent-worker] failed to create desktop rpc session", {
       error: message,
       workspaceId,
     });
-    throw new Error(`Failed to create bridge session for workspace ${workspaceId}: ${message}`);
+    throw new Error(
+      `Failed to create desktop rpc session for workspace ${workspaceId}: ${message}`,
+    );
   }
 }
 
@@ -116,7 +118,7 @@ async function connectLocalSession(
   const worktreePath = context.worktreePath;
   const [launchArgs, env] = await Promise.all([
     buildRuntimeLaunchArgs(deps.readHarnessSettings, session, worktreePath),
-    createBridgeEnv(deps.invoke, session.workspace_id, worktreePath),
+    createDesktopRpcEnv(deps.invoke, session.workspace_id, worktreePath),
   ]);
 
   console.info("[agent-worker] connecting local runtime", {

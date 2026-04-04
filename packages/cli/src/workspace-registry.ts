@@ -4,7 +4,7 @@ import {
 } from "@lifecycle/workspace";
 import { CloudWorkspaceClient } from "@lifecycle/workspace/internal/cloud";
 import { LocalWorkspaceClient } from "@lifecycle/workspace/internal/local";
-import { createClient } from "./rpc-client";
+import { createControlPlaneClient } from "./control-plane-client";
 
 let registry: WorkspaceClientRegistry | null = null;
 
@@ -30,7 +30,7 @@ export function getWorkspaceClientRegistry(): WorkspaceClientRegistry {
     });
     const cloudClient = new CloudWorkspaceClient({
       execWorkspaceCommand: async (workspaceId, command) => {
-        const client = createClient();
+        const client = createControlPlaneClient();
         const res = await client.workspaces[":workspaceId"].exec.$post({
           param: { workspaceId },
           json: { command },
@@ -43,7 +43,7 @@ export function getWorkspaceClientRegistry(): WorkspaceClientRegistry {
         };
       },
       getShellConnection: async (workspaceId) => {
-        const client = createClient();
+        const client = createControlPlaneClient();
         const res = await client.workspaces[":workspaceId"].shell.$get({
           param: { workspaceId },
         });

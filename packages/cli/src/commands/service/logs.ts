@@ -3,10 +3,10 @@ import { z } from "zod";
 
 import {
   createServiceLogsRequest,
-  requestBridge,
+  requestDesktopRpc,
   resolveWorkspaceId,
-  streamBridge,
-} from "../../bridge";
+  streamDesktopRpc,
+} from "../../desktop/rpc";
 import { failCommand, failValidation, jsonFlag, printLogLine, workspaceIdFlag } from "../_shared";
 
 function validateServiceLogsInput(input: { args: string[] }): string | null {
@@ -63,7 +63,7 @@ export default defineCommand({
         process.once("SIGTERM", onSignal);
 
         try {
-          await streamBridge(
+          await streamDesktopRpc(
             createServiceLogsRequest({
               follow: true,
               ...(input.grep ? { grep: input.grep } : {}),
@@ -98,7 +98,7 @@ export default defineCommand({
         return 0;
       }
 
-      const response = await requestBridge(
+      const response = await requestDesktopRpc(
         createServiceLogsRequest({
           follow: false,
           ...(input.grep ? { grep: input.grep } : {}),

@@ -20,8 +20,8 @@ These are set automatically in your session:
 
 - \`LIFECYCLE_WORKSPACE_ID\` — The active workspace identifier.
 - \`LIFECYCLE_WORKSPACE_PATH\` — Root path of the workspace checkout.
-- \`LIFECYCLE_BRIDGE_SOCKET\` — Socket path for the bridge (used by the CLI internally).
-- \`LIFECYCLE_BRIDGE_SESSION_TOKEN\` — Auth token for bridge requests.
+- \`LIFECYCLE_DESKTOP_SOCKET\` — Socket path for the desktop rpc (used by the CLI internally).
+- \`LIFECYCLE_DESKTOP_SESSION_TOKEN\` — Auth token for desktop rpc requests.
 - \`LIFECYCLE_AGENT_SESSION_ID\` — Identifier for this agent session (only set when running as an agent).
 
 ### CLI commands

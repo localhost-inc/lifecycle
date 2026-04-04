@@ -2,25 +2,18 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Tabs},
+    widgets::{Paragraph, Tabs},
     Frame,
 };
 
 use super::{VcTab, VersionControlPanel};
 
-pub fn render(frame: &mut Frame, area: Rect, panel: &VersionControlPanel, focused: bool) {
-    let border_style = if focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-
+pub fn render(frame: &mut Frame, area: Rect, panel: &VersionControlPanel, _focused: bool) {
     if panel.collapsed {
         let header = Paragraph::new(Line::from(vec![
-            Span::styled("▶ ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" ▶ ", Style::default().fg(Color::DarkGray)),
             Span::styled("Version Control", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-        ]))
-        .block(Block::default().borders(Borders::ALL).border_style(border_style));
+        ]));
         frame.render_widget(header, area);
         return;
     }
@@ -31,36 +24,34 @@ pub fn render(frame: &mut Frame, area: Rect, panel: &VersionControlPanel, focuse
     ])
     .split(area);
 
-    // Tab bar
+    // Tab bar — title line + tabs on second line
+    let title = Paragraph::new(Line::from(vec![
+        Span::styled(" ▼ ", Style::default().fg(Color::DarkGray)),
+        Span::styled("Version Control", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+    ]));
+    let title_area = Rect { height: 1, ..sections[0] };
+    frame.render_widget(title, title_area);
+
     let tab_titles: Vec<&str> = VcTab::ALL.iter().map(|t| t.label()).collect();
     let selected = VcTab::ALL.iter().position(|t| *t == panel.active_tab).unwrap_or(0);
     let tabs = Tabs::new(tab_titles)
         .select(selected)
         .style(Style::default().fg(Color::DarkGray))
         .highlight_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
-        .divider("│")
-        .block(
-            Block::default()
-                .title(Line::from(vec![
-                    Span::styled(" ▼ ", Style::default().fg(Color::DarkGray)),
-                    Span::styled("Version Control ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-                ]))
-                .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
-                .border_style(border_style),
-        );
-    frame.render_widget(tabs, sections[0]);
+        .divider("│");
+    let tab_area = Rect { y: sections[0].y + 1, height: 1, ..sections[0] };
+    frame.render_widget(tabs, tab_area);
 
     // Content
-    let content_block = Block::default()
-        .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
-        .border_style(border_style);
-    let inner = content_block.inner(sections[1]);
-    frame.render_widget(content_block, sections[1]);
-
     let scroll = panel.scroll;
+    let content_area = Rect {
+        x: sections[1].x + 1,
+        width: sections[1].width.saturating_sub(1),
+        ..sections[1]
+    };
     match panel.active_tab {
-        VcTab::Status => render_status(frame, inner, panel, scroll),
-        VcTab::Commits => render_commits(frame, inner, panel, scroll),
+        VcTab::Status => render_status(frame, content_area, panel, scroll),
+        VcTab::Commits => render_commits(frame, content_area, panel, scroll),
     }
 }
 

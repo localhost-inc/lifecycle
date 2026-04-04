@@ -1,0 +1,38 @@
+{
+  "name": "@lifecycle/control-plane",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./rpc": {
+      "types": "./src/rpc.ts",
+      "default": "./src/rpc.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "dev": "wrangler dev --ip 127.0.0.1 --port 8787",
+    "deploy": "wrangler deploy",
+    "format": "oxfmt src",
+    "lint": "oxlint src",
+    "test": "bun test src",
+    "typecheck": "tsc -b tsconfig.json",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply lifecycle-api --local"
+  },
+  "dependencies": {
+    "@daytonaio/sdk": "^0.158.1",
+    "@hono/zod-validator": "^0.7.6",
+    "@standard-schema/spec": "^1.1.0",
+    "@workos-inc/node": "^8.10.0",
+    "drizzle-orm": "^0.44.0",
+    "hono": "^4.7.10",
+    "routedjs": "0.1.4",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250327.0",
+    "drizzle-kit": "^0.31.0",
+    "wrangler": "^4.0.0"
+  }
+}

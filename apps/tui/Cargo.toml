@@ -26,6 +26,9 @@ libc = "0.2"
 notify = "7"
 dirs = "6"
 signal-hook = "0.3"
+ureq = { version = "2", features = ["json"] }
+tungstenite = "0.24"
+urlencoding = "2"
 
 # VT backends (feature-gated)
 libghostty-vt = { git = "https://github.com/Uzaaft/libghostty-rs.git", optional = true }

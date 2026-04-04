@@ -4,14 +4,8 @@ import path from "node:path";
 import { defineCommand, defineFlag } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import { BridgeClientError } from "../../errors";
-import { getLifecycleDb } from "@lifecycle/db";
-import {
-  getRepositoryByPath,
-  insertRepository,
-  insertWorkspace,
-  listWorkspacesByRepository,
-} from "@lifecycle/db/queries";
+import { LifecycleCliError } from "../../errors";
+import { ensureBridge } from "@lifecycle/bridge";
 import { MANIFEST_FILE_NAME } from "../../manifest";
 import { failCommand, jsonFlag } from "../_shared";
 
@@ -53,9 +47,9 @@ function detectCurrentBranch(repoPath: string): string {
   }
 }
 
-function createPackageJsonError(filePath: string, error: unknown): BridgeClientError {
+function createPackageJsonError(filePath: string, error: unknown): LifecycleCliError {
   const message = error instanceof Error ? error.message : String(error);
-  return new BridgeClientError({
+  return new LifecycleCliError({
     code: "manifest_invalid",
     details: {
       filePath,
@@ -336,7 +330,7 @@ async function resolveRepoTarget(inputPath?: string): Promise<{
     const repoPath = path.dirname(resolvedPath);
     const repoStats = await stat(repoPath).catch(() => null);
     if (!repoStats?.isDirectory()) {
-      throw new BridgeClientError({
+      throw new LifecycleCliError({
         code: "manifest_not_found",
         message: `Lifecycle could not find repo directory ${repoPath}.`,
         suggestedAction: "Pass a valid repo path or lifecycle.json path, then retry.",
@@ -351,7 +345,7 @@ async function resolveRepoTarget(inputPath?: string): Promise<{
 
   const repoStats = await stat(resolvedPath).catch(() => null);
   if (!repoStats?.isDirectory()) {
-    throw new BridgeClientError({
+    throw new LifecycleCliError({
       code: "manifest_not_found",
       message: `Lifecycle could not find repo directory ${resolvedPath}.`,
       suggestedAction: "Pass a valid repo path, then retry.",
@@ -408,26 +402,21 @@ export default defineCommand({
         packageManager = await detectPackageManager(target.repoPath);
       }
 
-      // Always ensure repo is registered in the db with a root workspace
-      const db = await getLifecycleDb();
+      // Register repo with the bridge (auto-starts if needed)
       const resolvedRepoPath = path.resolve(target.repoPath);
-      const existing = await getRepositoryByPath(db, resolvedRepoPath);
-      const repositoryId = existing?.id
-        ?? await insertRepository(db, { path: resolvedRepoPath, name: path.basename(target.repoPath) });
-
-      const existingWorkspaces = await listWorkspacesByRepository(db, repositoryId);
-      const hasRoot = existingWorkspaces.some((ws) => ws.checkout_type === "root");
-      if (!hasRoot) {
-        const currentBranch = detectCurrentBranch(resolvedRepoPath);
-        await insertWorkspace(db, {
-          repositoryId,
-          name: currentBranch,
-          sourceRef: currentBranch,
-          worktreePath: resolvedRepoPath,
-          host: "local",
-          checkoutType: "root",
-        });
-      }
+      const currentBranch = detectCurrentBranch(resolvedRepoPath);
+      const { client } = await ensureBridge();
+      await client.repos.$post({
+        json: {
+          path: resolvedRepoPath,
+          name: path.basename(target.repoPath),
+          rootWorkspace: {
+            name: currentBranch,
+            sourceRef: currentBranch,
+            worktreePath: resolvedRepoPath,
+          },
+        },
+      });
 
       const result = {
         manifestPath: target.manifestPath,

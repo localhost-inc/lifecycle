@@ -1,0 +1,14 @@
+{
+  "extends": "../config/tsconfig.package.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false
+  },
+  "include": ["src/**/*.ts", "routes/**/*.ts", "routed.gen.ts"],
+  "references": [{ "path": "../../apps/control-plane" }]
+}

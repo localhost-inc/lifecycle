@@ -3,6 +3,10 @@
 import { runCli, type CliIo } from "@lifecycle/cmd";
 
 export async function main(argv: string[] = Bun.argv.slice(2), io?: CliIo): Promise<number> {
+  if (!io && argv.length === 0) {
+    const { launchTui } = await import("./tui/launch");
+    return launchTui({ env: process.env });
+  }
   return runCli({
     name: "lifecycle",
     baseDir: import.meta.dir,

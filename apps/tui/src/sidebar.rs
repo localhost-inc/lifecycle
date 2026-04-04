@@ -1,9 +1,10 @@
 use notify::{recommended_watcher, EventKind, RecursiveMode, Watcher};
-use serde::Deserialize;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::mpsc;
 use std::thread;
+
+use crate::bridge::{LifecycleBridgeClient, RepoListPayload};
 
 #[derive(Debug, Clone)]
 pub struct SidebarRepo {
@@ -74,11 +75,7 @@ pub struct SidebarState {
 impl SidebarState {
     pub fn new() -> Self {
         let repos = load_repos();
-        let selected = if repos.is_empty() {
-            None
-        } else {
-            Some(SidebarSelection::Repo(0))
-        };
+        let selected = None;
         let (bg_tx, bg_rx) = mpsc::channel();
 
         // Watch ~/.lifecycle/config.json for changes
@@ -163,14 +160,29 @@ impl SidebarState {
         None
     }
 
+    pub fn select_workspace_by_id(&mut self, workspace_id: &str) -> bool {
+        for (repo_index, repo) in self.repos.iter_mut().enumerate() {
+            if let Some(workspace_index) = repo
+                .workspaces
+                .iter()
+                .position(|workspace| workspace.id.as_deref() == Some(workspace_id))
+            {
+                repo.expanded = true;
+                self.selected = Some(SidebarSelection::Workspace(repo_index, workspace_index));
+                return true;
+            }
+        }
+        false
+    }
+
     /// Open the system folder picker in a background thread.
     pub fn add_repo_via_picker(&self) {
         let tx = self.bg_tx.clone();
         thread::spawn(move || {
             if let Some(path) = open_folder_picker() {
-                let _ = Command::new("lifecycle")
-                    .args(["repo", "init", "--path", &path])
-                    .output();
+                if let Some(bridge) = LifecycleBridgeClient::from_env() {
+                    let _ = bridge.register_repo(&path);
+                }
                 let _ = tx.send(SidebarMessage::Reload);
             }
         });
@@ -236,31 +248,13 @@ impl SidebarState {
                 let repo_path = self.repos.get(repo_index).and_then(|r| r.path.clone());
                 let tx = self.bg_tx.clone();
                 thread::spawn(move || {
-                    let mut args = vec![
-                        "workspace".to_string(),
-                        "create".to_string(),
-                        name,
-                        "--host".to_string(),
-                        "local".to_string(),
-                    ];
-                    if let Some(path) = repo_path {
-                        args.push("--repo-path".to_string());
-                        args.push(path);
-                    }
-                    let output = Command::new("lifecycle").args(&args).output();
-                    match output {
-                        Ok(o) if o.status.success() => {
-                            let _ = tx.send(SidebarMessage::Reload);
-                        }
-                        Ok(o) => {
-                            let stderr = String::from_utf8_lossy(&o.stderr).trim().to_string();
-                            let _ = tx.send(SidebarMessage::Error(
-                                if stderr.is_empty() { "Workspace creation failed.".to_string() } else { stderr },
-                            ));
-                        }
-                        Err(e) => {
-                            let _ = tx.send(SidebarMessage::Error(format!("Failed to run lifecycle: {e}")));
-                        }
+                    let Some(bridge) = LifecycleBridgeClient::from_env() else {
+                        let _ = tx.send(SidebarMessage::Error("Bridge not available.".to_string()));
+                        return;
+                    };
+                    match bridge.create_workspace(&name, repo_path.as_deref()) {
+                        Ok(_) => { let _ = tx.send(SidebarMessage::Reload); }
+                        Err(e) => { let _ = tx.send(SidebarMessage::Error(e)); }
                     }
                 });
             }
@@ -320,26 +314,16 @@ impl SidebarState {
         let wi = ws_index;
 
         thread::spawn(move || {
-            let output = Command::new("lifecycle")
-                .args(["workspace", "archive", &ws_name, "--repo-path", &repo_path, "--json"])
-                .output();
-
-            match output {
-                Ok(o) if o.status.success() => {
-                    let _ = tx.send(SidebarMessage::Reload);
+            let Some(bridge) = LifecycleBridgeClient::from_env() else { return; };
+            match bridge.archive_workspace(&ws_name, &repo_path) {
+                Ok(_) => { let _ = tx.send(SidebarMessage::Reload); }
+                Err(_) => {
+                    let _ = tx.send(SidebarMessage::ConfirmDelete {
+                        repo_index: ri,
+                        ws_index: wi,
+                        ws_name,
+                    });
                 }
-                Ok(o) => {
-                    // Check if failure was due to uncommitted changes
-                    let stdout = String::from_utf8_lossy(&o.stdout);
-                    if stdout.contains("uncommitted_changes") {
-                        let _ = tx.send(SidebarMessage::ConfirmDelete {
-                            repo_index: ri,
-                            ws_index: wi,
-                            ws_name,
-                        });
-                    }
-                }
-                Err(_) => {}
             }
         });
     }
@@ -362,9 +346,9 @@ impl SidebarState {
         let tx = self.bg_tx.clone();
 
         thread::spawn(move || {
-            let _ = Command::new("lifecycle")
-                .args(["workspace", "archive", &ws_name, "--repo-path", &repo_path, "--force"])
-                .output();
+            if let Some(bridge) = LifecycleBridgeClient::from_env() {
+                let _ = bridge.archive_workspace(&ws_name, &repo_path);
+            }
             let _ = tx.send(SidebarMessage::Reload);
         });
     }
@@ -424,39 +408,14 @@ impl SidebarState {
 }
 
 // ---------------------------------------------------------------------------
-// Data loading — calls `lifecycle` CLI
+// Data loading — all data comes from the bridge.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize)]
-struct RepoListPayload {
-    repositories: Vec<RepoPayload>,
-}
-
-#[derive(Debug, Deserialize)]
-struct RepoPayload {
-    name: String,
-    source: String,
-    path: Option<String>,
-    #[serde(default)]
-    workspaces: Option<Vec<RepoWorkspacePayload>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct RepoWorkspacePayload {
-    #[serde(default)]
-    id: Option<String>,
-    name: String,
-    #[serde(default)]
-    host: Option<String>,
-    #[serde(default)]
-    status: Option<String>,
-    #[serde(rename = "ref")]
-    git_ref: Option<String>,
-    path: Option<String>,
-}
-
 fn load_repos() -> Vec<SidebarRepo> {
-    let repo_list = run_lifecycle_json::<RepoListPayload>(&["repo", "list"]);
+    let repo_list = match LifecycleBridgeClient::from_env() {
+        Some(bridge) => bridge.repo_list(),
+        None => Err("Bridge not available".to_string()),
+    };
 
     let mut repos: Vec<SidebarRepo> = Vec::new();
 
@@ -467,7 +426,7 @@ fn load_repos() -> Vec<SidebarRepo> {
                 .unwrap_or_default()
                 .into_iter()
                 .map(|ws| SidebarWorkspace {
-                    id: ws.id,
+                    id: Some(ws.id),
                     name: ws.name,
                     slug: None,
                     status: ws.status.unwrap_or_else(|| "active".to_string()),
@@ -537,18 +496,4 @@ return POSIX path of chosenFolder"#,
 fn config_file_path() -> Option<PathBuf> {
     let home = dirs::home_dir()?;
     Some(home.join(".lifecycle").join("config.json"))
-}
-
-fn run_lifecycle_json<T: serde::de::DeserializeOwned>(args: &[&str]) -> Result<T, String> {
-    let output = Command::new("lifecycle")
-        .args(args)
-        .arg("--json")
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
 }

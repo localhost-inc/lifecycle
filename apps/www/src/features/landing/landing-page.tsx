@@ -20,7 +20,7 @@ const manifestSnippet = `{
       "kind": "service",
       "runtime": "process",
       "command": "bun run dev",
-      "cwd": "apps/api",
+      "cwd": "apps/control-plane",
       "startup_timeout_seconds": 30,
       "health_check": {
         "kind": "http",

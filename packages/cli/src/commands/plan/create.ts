@@ -1,7 +1,7 @@
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import { createPlanCreateRequest, requestBridge } from "../../bridge";
+import { createPlanCreateRequest, requestDesktopRpc } from "../../desktop/rpc";
 import { failCommand, jsonFlag, repositoryIdFlag } from "../_shared";
 
 export default defineCommand({
@@ -15,7 +15,7 @@ export default defineCommand({
   }),
   run: async (input, context) => {
     try {
-      const response = await requestBridge(
+      const response = await requestDesktopRpc(
         createPlanCreateRequest({
           repositoryId: input.repositoryId ?? "",
           name: input.name,

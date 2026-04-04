@@ -1,8 +1,7 @@
 import { execSync } from "node:child_process";
 import { resolve } from "node:path";
 import { defineCommand } from "@lifecycle/cmd";
-import { getLifecycleDb } from "@lifecycle/db";
-import { archiveWorkspace, getRepositoryByPath, listWorkspacesByRepository } from "@lifecycle/db/queries";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
 import { removeWorktree } from "../../git-worktree";
@@ -25,16 +24,14 @@ export default defineCommand({
       }
 
       const repoPath = resolve(input.repoPath ?? process.cwd());
-      const db = await getLifecycleDb();
-      const repo = await getRepositoryByPath(db, repoPath);
-      if (!repo) {
-        context.stderr(`No repository registered at ${repoPath}`);
-        return 1;
-      }
+      const { client } = await ensureBridge();
 
-      const workspaces = await listWorkspacesByRepository(db, repo.id);
-      const ws = workspaces.find((w) => w.name === name);
-      const worktreePath = ws?.worktree_path;
+      // Find the workspace's worktree path from the repo listing
+      const res = await client.repos.$get();
+      const { repositories } = await res.json();
+      const repo = repositories.find((r) => r.path === repoPath);
+      const ws = repo?.workspaces?.find((w) => w.name === name);
+      const worktreePath = ws?.path;
 
       // Check for uncommitted changes
       if (!input.force && worktreePath) {
@@ -62,8 +59,12 @@ export default defineCommand({
         removeWorktree(repoPath, worktreePath);
       }
 
-      // Archive in db
-      await archiveWorkspace(db, repo.id, name);
+      // Archive via bridge
+      const wsId = ws?.id ?? name;
+      await client.workspaces[":id"].$delete({
+        param: { id: wsId },
+        query: { repoPath },
+      });
 
       if (input.json) {
         context.stdout(JSON.stringify({ archived: true, name, repoPath, worktreePath: worktreePath ?? null }, null, 2));
