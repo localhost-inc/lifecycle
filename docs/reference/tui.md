@@ -90,7 +90,7 @@ The TUI owns:
 3. outer-column resize via mouse drag
 4. key passthrough into the center shell when the canvas is focused
 
-The TUI forwards mouse-wheel events into the center shell when the pointer is over the canvas and the attached shell is tmux-backed. Sidebar and right-column scrolling remain TUI-owned, and full terminal mouse passthrough beyond wheel events is still incomplete.
+The TUI forwards terminal mouse input for the center canvas into the attached shell surface, including click, release, drag, motion, and wheel events when the pointer is inside the canvas. Sidebar chrome, right-column panels, and outer column-resize borders remain TUI-owned and are not forwarded into the shell.
 
 ## Activity
 

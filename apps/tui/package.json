@@ -2,22 +2,9 @@
   "name": "@lifecycle/tui",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "scripts": {
-    "dev": "bun --watch src/index.tsx",
-    "start": "bun src/index.tsx",
-    "build": "bun build src/index.tsx --target=bun --outdir=dist"
-  },
-  "dependencies": {
-    "@opentui-ui/dialog": "^0.1.2",
-    "@opentui-ui/react": "^0.0.2",
-    "@opentui/core": "*",
-    "@opentui/react": "*",
-    "bun-pty": "^0.4.8",
-    "ghostty-opentui": "*",
-    "react": "^19.0.0"
-  },
-  "devDependencies": {
-    "@types/react": "^19.0.0"
+    "build": "cargo build --release",
+    "build:debug": "cargo build",
+    "dev": "cargo watch -w src -c --no-process-group -s 'cargo run -p lifecycle-tui; stty sane'"
   }
 }
