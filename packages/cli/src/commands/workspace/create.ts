@@ -1,11 +1,8 @@
-import { basename, join, resolve } from "node:path";
-import { homedir } from "node:os";
-import { mkdirSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineCommand, defineFlag } from "@lifecycle/cmd";
 import { z } from "zod";
 
 import { ensureBridge } from "@lifecycle/bridge";
-import { createWorktree } from "../../git-worktree";
 import { failCommand, jsonFlag } from "../_shared";
 
 export default defineCommand({
@@ -18,7 +15,6 @@ export default defineCommand({
   }),
   run: async (input, context) => {
     try {
-      // Local workspace — create git worktree + register via bridge
       const name = input.args?.[0];
       if (!name) {
         context.stderr("Usage: lifecycle workspace create <name> --host local [--repo-path <path>] [--ref <branch>]");
@@ -26,31 +22,32 @@ export default defineCommand({
       }
 
       const repoPath = resolve(input.repoPath ?? process.cwd());
-      const repoSlug = basename(repoPath).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      const wsSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      const worktreePath = join(homedir(), ".lifecycle", "worktrees", repoSlug, wsSlug);
       const ref = input.ref ?? name;
 
-      mkdirSync(join(homedir(), ".lifecycle", "worktrees", repoSlug), { recursive: true });
-
-      try {
-        createWorktree(repoPath, worktreePath, ref);
-      } catch (err) {
-        context.stderr(`Failed to create worktree: ${err instanceof Error ? err.message : err}`);
-        return 1;
-      }
-
       const { client } = await ensureBridge();
-      await client.workspaces.$post({
-        json: { repoPath, name, sourceRef: ref, worktreePath },
+      const response = await client.workspaces.$post({
+        json: { repoPath, name, sourceRef: ref },
       });
+      const payload = await response.json();
 
       if (input.json) {
-        context.stdout(JSON.stringify({ name, host: "local", repoPath, worktreePath, ref }, null, 2));
+        context.stdout(JSON.stringify(payload, null, 2));
         return 0;
       }
 
-      context.stdout(`Workspace "${name}" created at ${worktreePath}`);
+      const worktreePath =
+        typeof payload === "object" &&
+        payload !== null &&
+        "worktreePath" in payload &&
+        typeof payload.worktreePath === "string"
+          ? payload.worktreePath
+          : null;
+
+      if (worktreePath) {
+        context.stdout(`Workspace "${name}" created at ${worktreePath}`);
+      } else {
+        context.stdout(`Workspace "${name}" created.`);
+      }
       return 0;
     } catch (error) {
       return failCommand(error, {

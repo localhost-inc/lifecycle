@@ -24,8 +24,9 @@ pub fn render(
     host_label: &str,
     focus: Focus,
 ) {
+    let content = Rect::new(area.x, area.y + area.height.saturating_sub(1), area.width, 1);
     let dim = Style::default().fg(Color::DarkGray);
-    let width = area.width as usize;
+    let width = content.width as usize;
 
     // Left side: logo + workspace context (or status message)
     let left_spans = match message {
@@ -58,5 +59,5 @@ pub fn render(
     spans.push(Span::styled(right_text, dim));
 
     let bar = Paragraph::new(Line::from(spans));
-    frame.render_widget(bar, area);
+    frame.render_widget(bar, content);
 }

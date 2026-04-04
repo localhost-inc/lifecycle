@@ -9,6 +9,17 @@
 
 A developer (or agent) working inside a project root or workspace checkout can use the Lifecycle CLI through a stable singular noun model: `project` scaffolds the checked-in contract, `workspace` materializes a concrete working instance, `stack` operates the live runnable graph inside that workspace, `service` targets one node inside the stack, and `context` emits the aggregate machine-readable view. The current surface priority is shell/runtime control and TUI-oriented workflows. Desktop RPC commands are explicitly secondary. No cloud, no auth, no network.
 
+## Bridge-First Rule
+
+The CLI should be a bridge client for runtime operations.
+
+Rules:
+
+1. The CLI asks the bridge to read or mutate workspace runtime state.
+2. The CLI does not reimplement host-runtime authority in leaf commands when the bridge is available.
+3. The bridge returns authoritative responses and streams lifecycle events for long-running state changes.
+4. CLI command families keep the filesystem noun tree, but their runtime handlers should map onto bridge operations consistently.
+
 ## Canonical Noun Model
 
 The CLI should use singular nouns consistently.
@@ -123,7 +134,7 @@ For local mode in M5, the CLI has two explicit operating modes.
 
 1. **Standalone project/workspace mode**: `project init`, `workspace prepare`, manifest discovery, and other project-local commands operate directly from the checkout and do not require the desktop app.
 2. **Desktop RPC mode**: `tab` and `browser` commands require the desktop app because they target app-local UI state.
-3. `stack` and `service` commands should also work without assuming "desktop already launched me" is the normal case.
+3. `stack` and `service` commands should work through the bridge without assuming "desktop already launched me" is the normal case.
 4. When a command explicitly needs the desktop app and it is unavailable, it fails with a typed `local_app_not_running` error instead of silently degrading.
 
 ### Integration Architecture

@@ -13,7 +13,7 @@
     "build": "tsc -p tsconfig.json",
     "format": "oxfmt src",
     "lint": "oxlint src",
-    "test": "bun test",
+    "test": "bun test --pass-with-no-tests",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

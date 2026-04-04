@@ -33,7 +33,7 @@ function getServiceRuntimeByName(
           entry,
         ): entry is [
           string,
-          Extract<LifecycleConfig["environment"][string], { kind: "service" }>,
+          Extract<LifecycleConfig["stack"][string], { kind: "service" }>,
         ] => entry[1].kind === "service",
       )
       .map(([name, node]) => [name, node.runtime]),
@@ -43,9 +43,9 @@ function getServiceRuntimeByName(
 /** Sort services in topological (dependency) order using config's depends_on. */
 function sortByDependencyOrder<T extends { name: string }>(
   items: T[],
-  environment: LifecycleConfig["environment"] | undefined,
+  stack: LifecycleConfig["stack"] | undefined,
 ): T[] {
-  if (!environment || items.length <= 1) return items;
+  if (!stack || items.length <= 1) return items;
 
   const inDegree = new Map<string, number>();
   const dependents = new Map<string, string[]>();
@@ -57,7 +57,7 @@ function sortByDependencyOrder<T extends { name: string }>(
   }
 
   for (const name of itemNames) {
-    const node = environment[name];
+    const node = stack[name];
     if (!node?.depends_on) continue;
     for (const dep of node.depends_on) {
       if (!itemNames.has(dep)) continue;
@@ -149,7 +149,7 @@ export function EnvironmentPanel({
     [serviceLogs],
   );
   const declaredServiceCount = useMemo(
-    () => Object.values(config?.environment ?? {}).filter((node) => node.kind === "service").length,
+    () => Object.values(config?.stack ?? {}).filter((node) => node.kind === "service").length,
     [config],
   );
   const workspaceStatus = workspace.status;
@@ -255,7 +255,7 @@ export function EnvironmentPanel({
         })),
     ];
 
-    const sortedServices = sortByDependencyOrder(services, config?.environment);
+    const sortedServices = sortByDependencyOrder(services, config?.stack);
 
     const renderedServices =
       sortedServices.length > 0 || prepareStepEntries.length > 0

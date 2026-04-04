@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createLocalDb } from "./index";
 import { applyDbMigrations } from "./migrations";
+import { getWorkspaceRecordById, insertRepository, insertWorkspace } from "./queries";
 import { createTursoDb } from "./turso";
 
 const tempDirs: string[] = [];
@@ -108,6 +109,48 @@ describe("@lifecycle/db", () => {
 
     expect(workspaceColumns.some((column) => column.name === "host")).toBe(true);
     expect(migrationVersions.map((row) => row.version)).toEqual([1]);
+
+    await db.close();
+  });
+
+  test("returns canonical workspace records directly from db queries", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "lifecycle-db-"));
+    tempDirs.push(dir);
+
+    const db = await createTursoDb({
+      path: join(dir, "app.db"),
+      clientName: "lifecycle-test",
+    });
+
+    await applyDbMigrations(db);
+
+    const repositoryId = await insertRepository(db, {
+      path: "/tmp/lifecycle-repo",
+      name: "lifecycle",
+    });
+    const workspaceId = await insertWorkspace(db, {
+      repositoryId,
+      name: "main",
+      sourceRef: "main",
+      worktreePath: "/tmp/lifecycle-repo",
+      host: "local",
+      checkoutType: "worktree",
+    });
+
+    const workspace = await getWorkspaceRecordById(db, workspaceId);
+
+    expect(workspace).toEqual(
+      expect.objectContaining({
+        id: workspaceId,
+        repository_id: repositoryId,
+        name: "main",
+        source_ref: "main",
+        worktree_path: "/tmp/lifecycle-repo",
+        host: "local",
+        checkout_type: "worktree",
+        status: "active",
+      }),
+    );
 
     await db.close();
   });

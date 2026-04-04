@@ -82,20 +82,34 @@ impl EnvironmentPanel {
 
     /// Refresh services from the bridge.
     pub fn refresh(&mut self, workspace_id: Option<&str>) {
-        let Some(ws_id) = workspace_id else {
-            self.services.clear();
-            return;
-        };
+        self.services = load_services(workspace_id);
+    }
 
-        if let Some(bridge) = LifecycleBridgeClient::from_env() {
-            if let Ok(parsed) = bridge.service_list(ws_id) {
-                self.services = parsed.services.into_iter().map(|s| ServiceEntry {
-                    name: s.name,
-                    status: s.status,
-                    port: s.assigned_port,
-                    preview_url: s.preview_url,
-                }).collect();
-            }
+    pub fn set_loading(&mut self) {
+        self.services = vec![ServiceEntry {
+            name: "loading".to_string(),
+            status: "loading".to_string(),
+            port: None,
+            preview_url: None,
+        }];
+    }
+}
+
+pub fn load_services(workspace_id: Option<&str>) -> Vec<ServiceEntry> {
+    let Some(ws_id) = workspace_id else {
+        return vec![];
+    };
+
+    if let Some(bridge) = LifecycleBridgeClient::from_env() {
+        if let Ok(parsed) = bridge.service_list(ws_id) {
+            return parsed.services.into_iter().map(|s| ServiceEntry {
+                name: s.name,
+                status: s.status,
+                port: s.assigned_port,
+                preview_url: s.preview_url,
+            }).collect();
         }
     }
+
+    vec![]
 }

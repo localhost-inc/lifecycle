@@ -147,11 +147,11 @@ The workspace extension strip, not the workspace header, is the durable affordan
 
 ### Workspace canvas
 
-The pane-based center work area inside the workspace.
+The group-based center work area inside the workspace.
 
 This is the target model for the center workspace interior.
 
-Contains: panes, pane headers, pane content
+Contains: groups, rendered surfaces, canvas layout state
 
 Avoid: workspace surface (when referring to the target split-only model)
 
@@ -159,13 +159,16 @@ Use `workspace surface` only when referring to the legacy/current mixed-tab impl
 
 Use `workspace` for the full workspace-scoped area.
 
-Use `workspace canvas` for the center pane area.
+Use `workspace canvas` for the center work area.
+
+A group owns an ordered set of surfaces plus one active surface. The canvas decides how groups are arranged in tiled or spatial modes. For terminal surfaces, the bridge/runtime informs the binding: one workspace maps to one tmux session and one terminal surface maps to one tmux window in that session.
 
 Implementation note:
 
 1. use `canvas`-prefixed module names for center-host state, restore, and orchestration
-2. use `pane`-prefixed module names for split layout and pane-local chrome
+2. use `group`-prefixed module names for surface ownership and active-surface switching
 3. use `surface` for rendered content units and feature-owned renderers only
+4. keep tiled split trees and spatial placement data on canvas layout state, not on groups
 
 ### Workspace extensions
 
@@ -215,6 +218,13 @@ Operation naming rule:
 2. examples: `workspace.get`, `workspace.list`, `workspace.activity`, `workspace.shell`, `service.get`, `service.list`, `repo.list`
 3. CLI commands and MCP tools may keep the filesystem command tree, but they should map onto the same underlying operations
 4. keep plurality in arguments and results, not in the namespace name
+
+Bridge-first rule:
+
+1. clients ask the bridge to do runtime work
+2. the bridge responds with authoritative results
+3. runtime changes stream back out of the bridge as lifecycle events
+4. clients update UI state from bridge responses and bridge events rather than inventing alternate authority paths
 
 ### Selected workspace
 
@@ -354,25 +364,27 @@ It is not: a terminal id, a provider thread id, or a provider session id
 
 Provider-owned identifiers may be attached as metadata, but `agent session` is the product object.
 
-## Panes
+## Groups
 
-### Pane
+### Group
 
-One split region inside the workspace canvas.
+A canvas-local container that owns an ordered set of surfaces and one active surface.
 
-A pane owns: one pane header, one active pane content surface
+In tiled mode, a group renders as a standard tabset inside a tile.
 
-### Pane header
+In spatial mode, the same group may render as a floating window or card.
 
-The compact strip at the top of a pane.
+### Tab
 
-Provides: local identity, local actions, split and close controls
+The visual affordance for switching surfaces inside a group.
 
-It is not a tab strip.
+It is not a first-class canvas domain object.
 
-### Pane content
+Use `tab` for chrome and interaction, `surface` for the content being rendered, and `group` for the container that owns them.
 
-The active surface shown inside a pane.
+### Active surface
+
+The currently selected surface shown inside a group.
 
 ### Preview surface
 
@@ -380,25 +392,25 @@ An embedded workspace-canvas surface that renders a URL inside the app.
 
 Service previews open in a preview surface by default.
 
-Use `preview` for the canvas document kind and `preview surface` for the rendered pane content.
+Use `preview` for the canvas document kind and `preview surface` for the rendered group content.
 
-### Empty pane
+### Empty group
 
-A pane with no active surface yet.
+A group with no active surface yet.
 
-This is a first-class state, not a fake tab.
+This is a first-class canvas state, not a fake tab.
 
 ### Split
 
-Creating a sibling pane from an existing pane.
+Creating a sibling group from an existing group.
 
 Use `split`, not `open beside`, as the canonical noun for the layout action.
 
-### Pane rearrange
+### Group rearrange
 
-Dragging a whole pane to change layout or grouping.
+Moving a whole group to change tiled or spatial layout.
 
-Use this term for split-only layout movement.
+Use this term for whole-group layout movement.
 
 Avoid: tab move, tab drag (unless the thing actually is a tab move in a real tab strip)
 
@@ -418,7 +430,7 @@ The renderer may be shared, while shell ownership still differs by access point.
 
 Example: the patch viewer renderer can open from project scope or workspace scope
 
-Implementation note: `surface` should describe what a pane shows, not the outer workspace host
+Implementation note: `surface` should describe what a group shows, not the outer workspace host
 
 ## Scope
 
@@ -442,7 +454,15 @@ Current meaning: the existing mixed-tab workspace implementation, the current co
 
 Target meaning: do not use this term for the split-only future model
 
-Use `workspace` for the full workspace-scoped area. Use `workspace canvas` for the center pane area.
+Use `workspace` for the full workspace-scoped area. Use `workspace canvas` for the center work area.
+
+### Pane
+
+Legacy/current visual term for a tiled group in older workspace canvas implementations.
+
+Do not use `pane` as the canonical data-model term for new canvas work.
+
+Use `group` for the canvas-owned container and `tab` for the UI that selects a group's active surface.
 
 ### Project surface
 
@@ -467,9 +487,10 @@ app shell
             └─ workspace
                ├─ workspace header
                ├─ workspace canvas
-               │  ├─ pane
-               │  │  ├─ pane header
-               │  │  └─ pane content
+               │  ├─ tiled layout / spatial layout
+               │  └─ group
+               │     ├─ surface tabs
+               │     └─ active surface
                ├─ workspace extension panel
                └─ workspace extension strip
 ```

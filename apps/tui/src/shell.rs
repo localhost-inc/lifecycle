@@ -102,6 +102,11 @@ pub struct WorkspaceShell {
     pub shell: ShellPlan,
 }
 
+pub fn build_workspace_shell(scope: WorkspaceScope, tmux_available: bool) -> WorkspaceShell {
+    let shell = build_shell_runtime(&scope, tmux_available);
+    WorkspaceShell { workspace: scope, shell }
+}
+
 fn build_shell_runtime(scope: &WorkspaceScope, tmux_available: bool) -> ShellPlan {
     if let Some(error) = &scope.resolution_error {
         return ShellPlan {
@@ -204,6 +209,12 @@ fn build_local_runtime(
         args.push("-n".to_string());
         args.push("shell".to_string());
     }
+    args.push(";".to_string());
+    args.push("set-option".to_string());
+    args.push("-t".to_string());
+    args.push(session_name.clone());
+    args.push("window-size".to_string());
+    args.push("latest".to_string());
 
     ShellPlan {
         backend_label: "local tmux".to_string(),
@@ -353,6 +364,10 @@ mod tests {
         assert!(spec.args.iter().any(|arg| arg == "-A"));
         assert!(spec.args.iter().any(|arg| arg == "-s"));
         assert!(spec.args.iter().any(|arg| arg == "-c"));
+        assert!(spec.args.windows(4).any(|window| {
+            window[0] == ";" && window[1] == "set-option" && window[2] == "-t" && window[3] == "my-app-feature-branch"
+        }));
+        assert!(spec.args.windows(2).any(|window| window == ["window-size", "latest"]));
     }
 
     #[test]
@@ -387,5 +402,15 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("Docker workspace shells"));
+    }
+
+    #[test]
+    fn workspace_shell_wraps_scope_and_plan() {
+        let workspace = scope(WorkspaceHost::Local);
+        let shell = build_workspace_shell(workspace.clone(), true);
+        assert_eq!(shell.workspace.workspace_id, workspace.workspace_id);
+        assert_eq!(shell.workspace.workspace_name, workspace.workspace_name);
+        assert_eq!(shell.shell.backend_label, "local tmux");
+        assert!(shell.shell.spec.is_some());
     }
 }

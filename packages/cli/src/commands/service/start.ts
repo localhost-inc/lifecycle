@@ -1,13 +1,8 @@
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
-import {
-  createServiceStartRequest,
-  loadManifestForServiceStart,
-  requestDesktopRpc,
-  resolveWorkspaceId,
-} from "../../desktop/rpc";
-import { failCommand, jsonFlag, printServiceSummary, workspaceIdFlag } from "../_shared";
+import { failCommand, jsonFlag, printServiceSummary, resolveWorkspaceId, workspaceIdFlag } from "../_shared";
 
 export default defineCommand({
   description: "Start services for the current workspace.",
@@ -21,28 +16,25 @@ export default defineCommand({
   run: async (input, context) => {
     try {
       const workspaceId = resolveWorkspaceId(input.workspaceId);
-      const manifest = await loadManifestForServiceStart();
-      const response = await requestDesktopRpc(
-        createServiceStartRequest({
-          manifestFingerprint: manifest.manifestFingerprint,
-          manifestJson: manifest.manifestJson,
-          serviceNames: input.args,
-          workspaceId,
-        }),
-      );
+      const { client } = await ensureBridge();
+      const response = await client.workspaces[":id"].services.start.$post({
+        param: { id: workspaceId },
+        json: input.args.length > 0 ? { serviceNames: input.args } : {},
+      });
+      const result = await response.json();
 
       if (input.json) {
-        context.stdout(JSON.stringify(response.result, null, 2));
+        context.stdout(JSON.stringify(result, null, 2));
         return 0;
       }
 
-      if (response.result.startedServices.length > 0) {
-        context.stdout(`Started services: ${response.result.startedServices.join(", ")}`);
+      if (result.startedServices.length > 0) {
+        context.stdout(`Started services: ${result.startedServices.join(", ")}`);
       } else {
-        context.stdout(`Started workspace services for ${response.result.workspaceId}.`);
+        context.stdout(`Started workspace services for ${result.workspaceId}.`);
       }
 
-      for (const service of response.result.services) {
+      for (const service of result.services) {
         printServiceSummary(service, context.stdout);
       }
 

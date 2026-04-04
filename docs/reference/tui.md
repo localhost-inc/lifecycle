@@ -6,6 +6,18 @@ Current repo focus: the CLI and TUI are the primary product surfaces being harde
 
 The TUI is a thin client over Lifecycle primitives. It owns terminal rendering, focus, mouse/keyboard routing, and outer column layout. It does **not** own workspace-host resolution or shell lifecycle policy.
 
+## Bridge-First Rule
+
+The TUI is a bridge client.
+
+Rules:
+
+1. The TUI asks the bridge to perform runtime reads and mutations.
+2. The TUI does not shell out to fresh `lifecycle` subprocesses for core workspace operations when the bridge is available.
+3. The bridge is the source of runtime truth.
+4. When bridge-side runtime state changes, the bridge streams lifecycle events over WebSocket and the TUI updates UI state from those events.
+5. The TUI owns only presentation state such as selection, focus, layout, scrolling, and dialogs.
+
 ## Core model
 
 The TUI is a three-column shell:
@@ -27,8 +39,8 @@ Rules:
 3. The Lifecycle bridge endpoint is passed through `LIFECYCLE_BRIDGE_URL` and `LIFECYCLE_BRIDGE_TOKEN`.
 4. The client owns selected-workspace state and may restore it from local state or an initial hint such as `LIFECYCLE_INITIAL_WORKSPACE_ID`.
 5. The TUI must not resolve workspace host, shell attach policy, or tmux session naming on its own when the bridge is available.
-6. The bridge owns authoritative workspace facts and the workspace-shell operation for a selected workspace.
-7. Bridge requests use singular dotted method names such as `repo.list`, `workspace.get`, `workspace.activity`, `service.list`, and `workspace.shell`.
+6. The bridge owns authoritative workspace facts and runtime operations for a selected workspace.
+7. Bridge requests use singular dotted method names such as `repo.list`, `workspace.get`, `workspace.activity`, `workspace.shell`, `service.list`, `service.start`, and `service.stop`.
 8. In repository development mode, the TUI and bridge must inherit the local control-plane URL from the process environment. Root `bun dev` sets `LIFECYCLE_API_URL=http://127.0.0.1:8787`, and the TUI should not silently fall back to the production API in that mode.
 
 ## Bound workspace scope
@@ -105,8 +117,8 @@ Rules:
 
 1. `lifecycle bridge start` starts the Lifecycle bridge for the current host context.
 2. The same bridge boundary is intended to run on local, remote, and cloud hosts.
-3. The bridge owns workspace-shell resolution, shared workspace reads, repository/workspace listing, workspace activity, and service snapshots.
-4. The TUI should prefer the bridge for shared reads and workspace-shell resolution instead of shelling out to fresh `lifecycle` subprocesses.
+3. The bridge owns workspace-shell resolution, shared workspace reads, repository/workspace listing, workspace activity, git status, and stack/service runtime operations.
+4. The TUI should prefer the bridge for shared reads and mutations instead of shelling out to fresh `lifecycle` subprocesses.
 5. Clients stay thin; the bridge owns stateful coordination.
 
 ## Input and layout
@@ -122,7 +134,7 @@ The TUI forwards terminal mouse and keyboard input for the center canvas through
 
 ## Activity
 
-Sidebar activity is derived from the Lifecycle bridge's workspace-activity read, not from Rust-side host-specific tmux inspection. The bridge is responsible for querying the authoritative host runtime and tmux session for each workspace. A workspace is considered busy when any pane in its tracked tmux session has a foreground command that represents real background work. Plain shells are always non-busy foregrounds. Interactive agent CLIs such as `claude` and `codex` are activity-gated foregrounds: they count as busy only while recent pane output indicates an active turn, and they return to non-busy once that output goes quiet. Shells without a tmux session may still fall back to active-PTY shell integration for the currently attached workspace only.
+Sidebar activity is derived from the Lifecycle bridge's workspace-activity read, not from Rust-side host-specific tmux inspection. The bridge is responsible for querying the authoritative host runtime and tmux session for each workspace. A workspace is considered busy when any pane in its tracked tmux session has a foreground command that represents real background work. Plain shells are always non-busy foregrounds. Interactive agent CLIs such as `claude` and `codex` are activity-gated foregrounds: they count as busy only while recent pane output indicates an active turn, and they return to non-busy once that output goes quiet. Shells without a tmux session may still fall back to active-PTY shell integration for the currently attached workspace only. Service state, stack transitions, and other runtime changes should arrive through bridge lifecycle events whenever the bridge can stream them.
 
 ## Module map
 

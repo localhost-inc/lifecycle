@@ -1,27 +1,37 @@
 import type { ServerWebSocket } from "bun";
+import type { StackClientRegistry } from "@lifecycle/stack";
 import type { WorkspaceClientRegistry } from "@lifecycle/workspace";
 import { ensureLifecycleDb } from "@lifecycle/db";
 
 import { app } from "../routed.gen";
 import { startActivityPoller } from "./activity";
+import { BridgeError } from "./errors";
 
 export interface BridgeServerOptions {
   port?: number;
+  stackRegistry: StackClientRegistry;
   workspaceRegistry: WorkspaceClientRegistry;
 }
 
+let _stackRegistry: StackClientRegistry | null = null;
 let _workspaceRegistry: WorkspaceClientRegistry | null = null;
 
 app.onError((error, ctx) => {
-  const message = error instanceof Error ? error.message : "Bridge request failed.";
+  const message =
+    error instanceof Error
+      ? error.message
+      : `Bridge request failed because a non-Error value was thrown: ${String(error)}`;
+  const status: 400 | 401 | 403 | 404 | 409 | 422 | 500 =
+    error instanceof BridgeError ? error.status : 500;
+  const code = error instanceof BridgeError ? error.code : "internal_error";
   return ctx.json(
     {
       error: {
-        code: "internal_error",
+        code,
         message,
       },
     },
-    500,
+    status,
   );
 });
 
@@ -30,6 +40,13 @@ export function getWorkspaceRegistry(): WorkspaceClientRegistry {
     throw new Error("Bridge server not initialized.");
   }
   return _workspaceRegistry;
+}
+
+export function getStackRegistry(): StackClientRegistry {
+  if (!_stackRegistry) {
+    throw new Error("Bridge server not initialized.");
+  }
+  return _stackRegistry;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +85,7 @@ export function broadcastMessage(message: object, topic?: string): void {
 
 export async function startBridgeServer(options: BridgeServerOptions) {
   await ensureLifecycleDb();
+  _stackRegistry = options.stackRegistry;
   _workspaceRegistry = options.workspaceRegistry;
 
   const server = Bun.serve<BridgeSocketData>({

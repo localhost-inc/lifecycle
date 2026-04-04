@@ -1,12 +1,13 @@
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
-import { createServiceGetRequest, requestDesktopRpc, resolveWorkspaceId } from "../../desktop/rpc";
 import {
   failCommand,
   failValidation,
   jsonFlag,
   printServiceSummary,
+  resolveWorkspaceId,
   workspaceIdFlag,
 } from "../_shared";
 
@@ -36,19 +37,22 @@ export default defineCommand({
 
     try {
       const workspaceId = resolveWorkspaceId(input.workspaceId);
-      const response = await requestDesktopRpc(
-        createServiceGetRequest({
-          service: input.args[0] ?? "",
-          workspaceId,
-        }),
-      );
+      const { client } = await ensureBridge();
+      const response = await client.workspaces[":id"].services.$get({
+        param: { id: workspaceId },
+      });
+      const result = await response.json();
+      const service = result.services.find((entry) => entry.name === (input.args[0] ?? ""));
+      if (!service) {
+        throw new Error(`Service "${input.args[0]}" was not found in workspace ${workspaceId}.`);
+      }
 
       if (input.json) {
-        context.stdout(JSON.stringify(response.result.service, null, 2));
+        context.stdout(JSON.stringify(service, null, 2));
         return 0;
       }
 
-      printServiceSummary(response.result.service, context.stdout);
+      printServiceSummary(service, context.stdout);
       return 0;
     } catch (error) {
       return failCommand(error, {

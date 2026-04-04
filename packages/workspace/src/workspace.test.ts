@@ -33,6 +33,12 @@ describe("workspace contract", () => {
     const requiredMethods: Array<keyof WorkspaceClient> = [
       "execCommand",
       "resolveShellRuntime",
+      "resolveTerminalRuntime",
+      "listTerminals",
+      "createTerminal",
+      "closeTerminal",
+      "connectTerminal",
+      "disconnectTerminal",
       "readManifest",
       "getGitCurrentBranch",
       "ensureWorkspace",
@@ -66,7 +72,7 @@ describe("workspace contract", () => {
       "mergeGitPullRequest",
     ];
 
-    expect(requiredMethods).toHaveLength(33);
+    expect(requiredMethods).toHaveLength(39);
   });
 
   test("host client exposes the full contract surface", () => {
@@ -75,6 +81,12 @@ describe("workspace contract", () => {
 
     expect(typeof client.execCommand).toBe("function");
     expect(typeof client.resolveShellRuntime).toBe("function");
+    expect(typeof client.resolveTerminalRuntime).toBe("function");
+    expect(typeof client.listTerminals).toBe("function");
+    expect(typeof client.createTerminal).toBe("function");
+    expect(typeof client.closeTerminal).toBe("function");
+    expect(typeof client.connectTerminal).toBe("function");
+    expect(typeof client.disconnectTerminal).toBe("function");
     expect(typeof client.readManifest).toBe("function");
     expect(typeof client.getGitCurrentBranch).toBe("function");
     expect(typeof client.ensureWorkspace).toBe("function");
@@ -256,6 +268,38 @@ describe("workspace contract", () => {
     });
   });
 
+  test("local host client resolves a tmux runtime that prefers the latest client size", async () => {
+    const client = new LocalWorkspaceClient({ invoke: async () => "" });
+
+    const runtime = await client.resolveShellRuntime(workspace(), {
+      sessionName: "lc-local-session",
+    });
+
+    expect(runtime.backendLabel).toBe("local tmux");
+    expect(runtime.launchError).toBeNull();
+    expect(runtime.persistent).toBe(true);
+    expect(runtime.sessionName).toBe("lc-local-session");
+    expect(runtime.spec).toEqual({
+      program: "tmux",
+      args: [
+        "new-session",
+        "-A",
+        "-s",
+        "lc-local-session",
+        "-c",
+        REPO_PATH,
+        ";",
+        "set-option",
+        "-t",
+        "lc-local-session",
+        "window-size",
+        "latest",
+      ],
+      cwd: REPO_PATH,
+      env: [["TERM", "xterm-256color"]],
+    });
+  });
+
   test("cloud host client resolves a tmux-backed shell runtime with prepare and attach steps", async () => {
     const client = new CloudWorkspaceClient({
       execWorkspaceCommand: async () => ({
@@ -302,13 +346,206 @@ describe("workspace contract", () => {
     });
   });
 
+  test("local host client lists tmux-backed terminal records through the terminal runtime", async () => {
+    const calls: Array<{ args: string[]; program: string }> = [];
+    const spawnSyncMock = ((
+      program: string,
+      args?: readonly string[],
+    ) => {
+      const commandArgs = [...(args ?? [])];
+      calls.push({ program, args: commandArgs });
+
+      if (program === "sh" && commandArgs[0] === "-lc" && commandArgs[1]?.includes("command -v tmux")) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (program === "sh" && commandArgs[0] === "-lc" && commandArgs[1]?.includes("tmux has-session")) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (program === "tmux" && commandArgs[0] === "list-windows") {
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout: "@1\tshell\t0\t1\n@2\tcodex\t1\t0\n",
+        };
+      }
+
+      return { error: undefined, status: 0, stderr: "", stdout: "" };
+    }) as unknown as NonNullable<LocalClientDeps["spawnSync"]>;
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      spawnSync: spawnSyncMock,
+    });
+
+    const terminals = await client.listTerminals(workspace(), {
+      sessionName: "lc-local-session",
+    });
+
+    expect(terminals).toEqual([
+      {
+        id: "@1",
+        title: "shell",
+        kind: "shell",
+        busy: false,
+        closable: true,
+      },
+      {
+        id: "@2",
+        title: "codex",
+        kind: "codex",
+        busy: true,
+        closable: true,
+      },
+    ]);
+    expect(calls.some((call) => call.program === "tmux" && call.args[0] === "list-windows")).toBe(
+      true,
+    );
+  });
+
+  test("local host client returns an isolated spawn connection for a terminal", async () => {
+    const spawnSyncMock = ((
+      program: string,
+      args?: readonly string[],
+    ) => {
+      if (program === "sh" && args?.[0] === "-lc" && args[1]?.includes("command -v tmux")) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      return { error: undefined, status: 0, stderr: "", stdout: "" };
+    }) as unknown as NonNullable<LocalClientDeps["spawnSync"]>;
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      spawnSync: spawnSyncMock,
+    });
+
+    const connection = await client.connectTerminal(workspace(), {
+      sessionName: "lc-local-session",
+      terminalId: "@2",
+      clientId: "surface-A",
+      access: "interactive",
+      preferredTransport: "spawn",
+    });
+
+    expect(connection.launchError).toBeNull();
+    expect(connection.connectionId).toBe("lc-local-session--conn--surface-A--_2");
+    expect(connection.transport).toEqual({
+      kind: "spawn",
+      prepare: {
+        program: "sh",
+        args: [
+          "-lc",
+          expect.stringContaining("lc-local-session--conn--surface-A--_2"),
+        ],
+        cwd: REPO_PATH,
+        env: [["TERM", "xterm-256color"]],
+      },
+      spec: {
+        program: "tmux",
+        args: ["attach-session", "-t", "lc-local-session--conn--surface-A--_2"],
+        cwd: REPO_PATH,
+        env: [["TERM", "xterm-256color"]],
+      },
+    });
+  });
+
+  test("cloud host client lists tmux-backed terminal records through remote execution", async () => {
+    const calls: string[][] = [];
+    const client = new CloudWorkspaceClient({
+      execWorkspaceCommand: async (_workspaceId, command) => {
+        calls.push(command);
+        if (command[0] === "tmux" && command[1] === "list-windows") {
+          return {
+            exitCode: 0,
+            stderr: "",
+            stdout: "@1\tshell\t0\t1\n@3\tclaude\t1\t0\n",
+          };
+        }
+        return {
+          exitCode: 0,
+          stderr: "",
+          stdout: "",
+        };
+      },
+      getShellConnection: async () => ({
+        cwd: "/workspace/repo",
+        home: "/home/lifecycle",
+        host: "ssh.app.lifecycle.test",
+        token: "tok_123",
+      }),
+    });
+
+    const terminals = await client.listTerminals(workspace({ host: "cloud" }), {
+      sessionName: "lc-cloud-session",
+    });
+
+    expect(terminals).toEqual([
+      {
+        id: "@1",
+        title: "shell",
+        kind: "shell",
+        busy: false,
+        closable: true,
+      },
+      {
+        id: "@3",
+        title: "claude",
+        kind: "claude",
+        busy: true,
+        closable: true,
+      },
+    ]);
+    expect(calls[0]?.[0]).toBe("sh");
+    expect(calls[1]?.slice(0, 2)).toEqual(["tmux", "list-windows"]);
+  });
+
+  test("cloud host client returns an ssh-backed spawn connection for a terminal", async () => {
+    const client = new CloudWorkspaceClient({
+      execWorkspaceCommand: async () => ({
+        exitCode: 0,
+        stderr: "",
+        stdout: "",
+      }),
+      getShellConnection: async () => ({
+        cwd: "/workspace/repo",
+        home: "/home/lifecycle",
+        host: "ssh.app.lifecycle.test",
+        token: "tok_123",
+      }),
+    });
+
+    const connection = await client.connectTerminal(workspace({ host: "cloud" }), {
+      sessionName: "lc-cloud-session",
+      terminalId: "@4",
+      clientId: "surface-B",
+      access: "interactive",
+      preferredTransport: "spawn",
+    });
+
+    expect(connection.launchError).toBeNull();
+    expect(connection.connectionId).toBe("lc-cloud-session--conn--surface-B--_4");
+    expect(connection.transport?.kind).toBe("spawn");
+    if (!connection.transport || connection.transport.kind !== "spawn") {
+      throw new Error("Expected a spawn transport for the cloud terminal connection.");
+    }
+    expect(connection.transport.prepare?.program).toBe("ssh");
+    expect(connection.transport.prepare?.args.at(-1)).toContain(
+      "lc-cloud-session--conn--surface-B--_4",
+    );
+    expect(connection.transport.spec?.program).toBe("ssh");
+    expect(connection.transport.spec?.args.at(-1)).toContain(
+      "tmux attach-session -t lc-cloud-session--conn--surface-B--_4",
+    );
+  });
+
   test("local host client reads lifecycle manifests through the injected file reader", async () => {
     const client = new LocalWorkspaceClient({
       invoke: async () => "",
       fileReader: {
         exists: async () => true,
         readTextFile: async () =>
-          '{"workspace":{"setup":[]},"environment":{"web":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
+          '{"workspace":{"prepare":[]},"stack":{"web":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
       },
     });
 

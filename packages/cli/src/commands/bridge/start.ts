@@ -3,6 +3,7 @@ import { startBridgeServer } from "@lifecycle/bridge/server";
 import { writePidfile, removePidfile } from "@lifecycle/bridge";
 import { z } from "zod";
 
+import { getStackClientRegistry } from "../../stack-registry";
 import { getWorkspaceClientRegistry } from "../../workspace-registry";
 
 export default defineCommand({
@@ -13,6 +14,7 @@ export default defineCommand({
   async run(input, context) {
     const { port } = await startBridgeServer({
       ...(input.port != null ? { port: input.port } : {}),
+      stackRegistry: getStackClientRegistry(),
       workspaceRegistry: getWorkspaceClientRegistry(),
     });
 

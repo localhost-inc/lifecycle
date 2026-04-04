@@ -1,8 +1,8 @@
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
-import { createServiceStopRequest, requestDesktopRpc, resolveWorkspaceId } from "../../desktop/rpc";
-import { failCommand, jsonFlag, printServiceSummary, workspaceIdFlag } from "../_shared";
+import { failCommand, jsonFlag, printServiceSummary, resolveWorkspaceId, workspaceIdFlag } from "../_shared";
 
 export default defineCommand({
   description: "Stop services for the current workspace.",
@@ -16,27 +16,27 @@ export default defineCommand({
   run: async (input, context) => {
     try {
       const workspaceId = resolveWorkspaceId(input.workspaceId);
-      const response = await requestDesktopRpc(
-        createServiceStopRequest({
-          ...(input.args.length > 0 ? { serviceNames: input.args } : {}),
-          workspaceId,
-        }),
-      );
+      const { client } = await ensureBridge();
+      const response = await client.workspaces[":id"].services.stop.$post({
+        param: { id: workspaceId },
+        json: input.args.length > 0 ? { serviceNames: input.args } : {},
+      });
+      const result = await response.json();
 
       if (input.json) {
-        context.stdout(JSON.stringify(response.result, null, 2));
+        context.stdout(JSON.stringify(result, null, 2));
         return 0;
       }
 
-      if (response.result.stoppedServices.length === 0) {
+      if (result.stoppedServices.length === 0) {
         context.stdout("No services were running.");
         return 0;
       }
 
-      context.stdout(`Stopped: ${response.result.stoppedServices.join(", ")}`);
+      context.stdout(`Stopped: ${result.stoppedServices.join(", ")}`);
       context.stdout("");
 
-      response.result.services.forEach((service, index) => {
+      result.services.forEach((service, index) => {
         if (index > 0) {
           context.stdout("");
         }

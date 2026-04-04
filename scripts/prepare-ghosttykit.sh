@@ -3,11 +3,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TAURI_DIR="$ROOT_DIR/apps/desktop/src-tauri"
-GENERATED_DIR="$TAURI_DIR/.generated/ghostty"
+DEFAULT_GENERATED_DIR="$ROOT_DIR/apps/desktop/src-tauri/.generated/ghostty"
+GENERATED_DIR="${LIFECYCLE_GHOSTTY_GENERATED_DIR:-$DEFAULT_GENERATED_DIR}"
 SOURCE_DIR="${LIFECYCLE_GHOSTTY_SOURCE_DIR:-$GENERATED_DIR/source}"
-OUTPUT_DIR="$GENERATED_DIR/GhosttyKit.xcframework"
-STAMP_FILE="$GENERATED_DIR/ghosttykit.stamp"
+OUTPUT_DIR="${LIFECYCLE_GHOSTTYKIT_OUTPUT_DIR:-$GENERATED_DIR/GhosttyKit.xcframework}"
+STAMP_FILE="${LIFECYCLE_GHOSTTY_STAMP_FILE:-$GENERATED_DIR/ghosttykit.stamp}"
 LOCK_FILE="$ROOT_DIR/vendor/ghostty.lock"
 
 read_lock_value() {

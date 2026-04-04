@@ -1,6 +1,6 @@
 pub mod render;
 
-use std::process::Command;
+use crate::bridge::LifecycleBridgeClient;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VcTab {
@@ -93,77 +93,104 @@ impl VersionControlPanel {
     }
 
     /// Refresh git state from a worktree path.
-    pub fn refresh(&mut self, worktree_path: Option<&str>) {
-        let Some(cwd) = worktree_path else {
-            self.git = GitState {
-                branch: "(no repo)".into(),
-                dirty: false,
-                ahead: 0,
-                behind: 0,
-                files: vec![],
-                commits: vec![],
-            };
-            return;
+    pub fn refresh(&mut self, workspace_id: Option<&str>) {
+        self.git = load_git_state(workspace_id);
+    }
+
+    pub fn set_loading(&mut self) {
+        self.git = GitState {
+            branch: "(loading…)".into(),
+            dirty: false,
+            ahead: 0,
+            behind: 0,
+            files: vec![],
+            commits: vec![],
         };
-
-        self.git.branch = git_cmd(cwd, &["rev-parse", "--abbrev-ref", "HEAD"])
-            .unwrap_or_else(|| "HEAD".into());
-
-        let status_output = git_cmd(cwd, &["status", "--porcelain"]).unwrap_or_default();
-        self.git.files = status_output
-            .lines()
-            .filter(|l| !l.is_empty())
-            .map(|line| {
-                let (status, path) = line.split_at(3.min(line.len()));
-                GitFileStatus {
-                    status: status.trim().to_string(),
-                    path: path.trim().to_string(),
-                }
-            })
-            .collect();
-        self.git.dirty = !self.git.files.is_empty();
-
-        // ahead/behind
-        if let Some(counts) = git_cmd(cwd, &["rev-list", "--left-right", "--count", "HEAD...@{upstream}"]) {
-            let parts: Vec<&str> = counts.split_whitespace().collect();
-            if parts.len() == 2 {
-                self.git.ahead = parts[0].parse().unwrap_or(0);
-                self.git.behind = parts[1].parse().unwrap_or(0);
-            }
-        }
-
-        // recent commits
-        let log_output = git_cmd(cwd, &[
-            "log", "--oneline", "--format=%h\t%s\t%an\t%cr", "-10",
-        ]).unwrap_or_default();
-        self.git.commits = log_output
-            .lines()
-            .filter(|l| !l.is_empty())
-            .filter_map(|line| {
-                let parts: Vec<&str> = line.splitn(4, '\t').collect();
-                if parts.len() == 4 {
-                    Some(GitCommitEntry {
-                        sha: parts[0].to_string(),
-                        message: parts[1].to_string(),
-                        author: parts[2].to_string(),
-                        relative_time: parts[3].to_string(),
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect();
     }
 }
 
-fn git_cmd(cwd: &str, args: &[&str]) -> Option<String> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
+pub fn load_git_state(workspace_id: Option<&str>) -> GitState {
+    let Some(workspace_id) = workspace_id else {
+        return GitState {
+            branch: "(no repo)".into(),
+            dirty: false,
+            ahead: 0,
+            behind: 0,
+            files: vec![],
+            commits: vec![],
+        };
+    };
+
+    let Some(bridge) = LifecycleBridgeClient::from_env() else {
+        return GitState {
+            branch: "(bridge unavailable)".into(),
+            dirty: false,
+            ahead: 0,
+            behind: 0,
+            files: vec![],
+            commits: vec![],
+        };
+    };
+
+    let Ok(payload) = bridge.workspace_git(workspace_id) else {
+        return GitState {
+            branch: "(git unavailable)".into(),
+            dirty: false,
+            ahead: 0,
+            behind: 0,
+            files: vec![],
+            commits: vec![],
+        };
+    };
+
+    let files = payload
+        .status
+        .files
+        .into_iter()
+        .map(|file| GitFileStatus {
+            status: summarize_git_file_status(&file),
+            path: file.path,
+        })
+        .collect::<Vec<_>>();
+    let dirty = !files.is_empty();
+
+    let commits = payload
+        .commits
+        .into_iter()
+        .map(|entry| GitCommitEntry {
+            sha: entry.short_sha,
+            message: entry.message,
+            author: entry.author,
+            relative_time: relative_time(&entry.timestamp),
+        })
+        .collect();
+
+    GitState {
+        branch: payload.status.branch.unwrap_or_else(|| "HEAD".into()),
+        dirty,
+        ahead: payload.status.ahead,
+        behind: payload.status.behind,
+        files,
+        commits,
     }
-    Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn summarize_git_file_status(file: &crate::bridge::GitFileStatusPayload) -> String {
+    if let Some(index) = &file.index_status {
+        return index.clone();
+    }
+    if let Some(worktree) = &file.worktree_status {
+        return worktree.clone();
+    }
+    if file.staged {
+        return "staged".to_string();
+    }
+    if file.unstaged {
+        return "modified".to_string();
+    }
+    "changed".to_string()
+}
+
+fn relative_time(timestamp: &str) -> String {
+    timestamp.to_string()
 }

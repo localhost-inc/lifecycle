@@ -14,6 +14,7 @@ export {
   listWorkspacesByRepository,
   listAllWorkspaces,
   getWorkspaceById,
+  getWorkspaceRecordById,
   insertWorkspace,
   archiveWorkspace,
   insertWorkspaceStatement,
@@ -24,3 +25,12 @@ export {
   type WorkspaceInsertOptions,
   type RepositoryWithWorkspaces,
 } from "./workspaces";
+
+export {
+  listServiceRowsByWorkspace,
+  listServiceRecordsByWorkspace,
+  serviceRecordFromRow,
+  upsertServiceStatement,
+  upsertServiceRow,
+  type ServiceRow,
+} from "./services";

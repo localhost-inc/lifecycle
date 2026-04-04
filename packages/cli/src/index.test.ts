@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -49,7 +50,7 @@ async function withEnvironment<T>(
   }
 }
 
-async function withBridge<T>(
+async function withDesktopRpc<T>(
   handler: (request: unknown) => Promise<unknown> | unknown,
   run: (bridgePath: string) => Promise<T>,
 ): Promise<T> {
@@ -94,6 +95,82 @@ async function withBridge<T>(
       });
     });
     await rm(sandboxDir, { force: true, recursive: true });
+  }
+}
+
+async function withHttpBridge<T>(
+  handler: (request: {
+    body: unknown;
+    method: string;
+    pathname: string;
+    search: URLSearchParams;
+  }) => Promise<{ body: unknown; status?: number } | unknown>,
+  run: () => Promise<T>,
+): Promise<T> {
+  const homeDir = await mkdtemp(join(tmpdir(), "lifecycle-cli-home-"));
+  const server = createHttpServer(async (request, response) => {
+    if (!request.url || !request.method) {
+      response.writeHead(500, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: { message: "Malformed bridge request." } }));
+      return;
+    }
+
+    const url = new URL(request.url, "http://127.0.0.1");
+    if (url.pathname === "/health") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ healthy: true }));
+      return;
+    }
+
+    let input = "";
+    for await (const chunk of request) {
+      input += chunk.toString("utf8");
+    }
+
+    const result = await handler({
+      body: input.length > 0 ? JSON.parse(input) : null,
+      method: request.method,
+      pathname: url.pathname,
+      search: url.searchParams,
+    });
+    const shaped =
+      result && typeof result === "object" && "body" in result
+        ? (result as { body: unknown; status?: number })
+        : { body: result, status: 200 };
+
+    response.writeHead(shaped.status ?? 200, { "content-type": "application/json" });
+    response.end(JSON.stringify(shaped.body));
+  });
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => resolve());
+    });
+
+    const address = server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Mock bridge failed to expose a TCP port.");
+    }
+
+    return await withEnvironment(
+      {
+        HOME: homeDir,
+        LIFECYCLE_BRIDGE_URL: `http://127.0.0.1:${address.port}`,
+      },
+      run,
+    );
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+    await rm(homeDir, { force: true, recursive: true });
   }
 }
 
@@ -154,7 +231,7 @@ describe("lifecycle cli", () => {
 
   test("parses tab open commands", async () => {
     const sink = createIo();
-    await withBridge(
+    await withDesktopRpc(
       (request) => {
         expect(request).toMatchObject({
           method: "tab.open",
@@ -214,7 +291,7 @@ describe("lifecycle cli", () => {
 
   test("opens preview tabs with an explicit workspace id and no shell session token", async () => {
     const sink = createIo();
-    await withBridge(
+    await withDesktopRpc(
       (request) => {
         const typedRequest = request as {
           id: string;
@@ -285,24 +362,18 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual(["--surface preview requires --url."]);
   });
 
-  test("parses service info positional arguments", async () => {
+  test("parses service info positional arguments through the bridge", async () => {
     const sink = createIo();
-    await withBridge(
-      (request) => {
+    await withHttpBridge(
+      async (request) => {
         expect(request).toMatchObject({
-          method: "service.get",
-          params: {
-            service: "api",
-            workspaceId: "ws_123",
-          },
+          method: "GET",
+          pathname: "/workspaces/ws_123/services",
         });
 
         return {
-          id: (request as { id: string }).id,
-          method: "service.get",
-          ok: true,
-          result: {
-            service: {
+          services: [
+            {
               assigned_port: 3000,
               created_at: "2026-03-21T00:00:00.000Z",
               id: "svc_123",
@@ -313,13 +384,12 @@ describe("lifecycle cli", () => {
               updated_at: "2026-03-21T00:00:00.000Z",
               workspace_id: "ws_123",
             },
-          },
+          ],
         };
       },
-      async (bridgePath) => {
+      async () => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_DESKTOP_SOCKET: bridgePath,
             LIFECYCLE_WORKSPACE_ID: "ws_123",
           },
           async () => await main(["service", "info", "api"], sink.io),
@@ -338,53 +408,45 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual([]);
   });
 
-  test("lists services through the desktop rpc", async () => {
+  test("lists services through the bridge", async () => {
     const sink = createIo();
-    await withBridge(
-      (request) => {
+    await withHttpBridge(
+      async (request) => {
         expect(request).toMatchObject({
-          method: "service.list",
-          params: {
-            workspaceId: "ws_123",
-          },
+          method: "GET",
+          pathname: "/workspaces/ws_123/services",
         });
 
         return {
-          id: (request as { id: string }).id,
-          method: "service.list",
-          ok: true,
-          result: {
-            services: [
-              {
-                assigned_port: 3000,
-                created_at: "2026-03-21T00:00:00.000Z",
-                id: "svc_123",
-                name: "api",
-                preview_url: "http://control-plane.lifecycle.localhost",
-                status: "ready",
-                status_reason: null,
-                updated_at: "2026-03-21T00:00:00.000Z",
-                workspace_id: "ws_123",
-              },
-              {
-                assigned_port: 6379,
-                created_at: "2026-03-21T00:00:00.000Z",
-                id: "svc_456",
-                name: "redis",
-                preview_url: null,
-                status: "starting",
-                status_reason: null,
-                updated_at: "2026-03-21T00:00:00.000Z",
-                workspace_id: "ws_123",
-              },
-            ],
-          },
+          services: [
+            {
+              assigned_port: 3000,
+              created_at: "2026-03-21T00:00:00.000Z",
+              id: "svc_123",
+              name: "api",
+              preview_url: "http://control-plane.lifecycle.localhost",
+              status: "ready",
+              status_reason: null,
+              updated_at: "2026-03-21T00:00:00.000Z",
+              workspace_id: "ws_123",
+            },
+            {
+              assigned_port: 6379,
+              created_at: "2026-03-21T00:00:00.000Z",
+              id: "svc_456",
+              name: "redis",
+              preview_url: null,
+              status: "starting",
+              status_reason: null,
+              updated_at: "2026-03-21T00:00:00.000Z",
+              workspace_id: "ws_123",
+            },
+          ],
         };
       },
-      async (bridgePath) => {
+      async () => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_DESKTOP_SOCKET: bridgePath,
             LIFECYCLE_WORKSPACE_ID: "ws_123",
           },
           async () => await main(["service", "list"], sink.io),
@@ -407,61 +469,35 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual([]);
   });
 
-  test("starts services through the desktop rpc", async () => {
+  test("starts services through the bridge", async () => {
     const sink = createIo();
-    const worktreePath = await mkdtemp(join(tmpdir(), "lifecycle-cli-worktree-"));
     let receivedRequest: unknown = null;
 
-    await mkdir(worktreePath, { recursive: true });
-    await writeFile(
-      join(worktreePath, "lifecycle.json"),
-      JSON.stringify({
-        environment: {
-          api: {
-            command: "bun run dev",
-            kind: "service",
-            runtime: "process",
-          },
-        },
-        workspace: {
-          prepare: [],
-        },
-      }),
-    );
-
-    try {
-      await withBridge(
-        (request) => {
+    await withHttpBridge(
+      async (request) => {
           receivedRequest = request;
           return {
-            id: (request as { id: string }).id,
-            method: "service.start",
-            ok: true,
-            result: {
-              services: [
-                {
-                  assigned_port: 3000,
-                  created_at: "2026-03-21T00:00:00.000Z",
-                  id: "svc_123",
-                  name: "api",
-                  preview_url: "http://control-plane.lifecycle.localhost",
-                  status: "ready",
-                  status_reason: null,
-                  updated_at: "2026-03-21T00:00:00.000Z",
-                  workspace_id: "ws_123",
-                },
-              ],
-              startedServices: ["api"],
-              workspaceId: "ws_123",
-            },
+            services: [
+              {
+                assigned_port: 3000,
+                created_at: "2026-03-21T00:00:00.000Z",
+                id: "svc_123",
+                name: "api",
+                preview_url: "http://control-plane.lifecycle.localhost",
+                status: "ready",
+                status_reason: null,
+                updated_at: "2026-03-21T00:00:00.000Z",
+                workspace_id: "ws_123",
+              },
+            ],
+            startedServices: ["api"],
+            workspaceId: "ws_123",
           };
         },
-        async (bridgePath) => {
+        async () => {
           const code = await withEnvironment(
             {
-              LIFECYCLE_DESKTOP_SOCKET: bridgePath,
               LIFECYCLE_WORKSPACE_ID: "ws_123",
-              LIFECYCLE_WORKSPACE_PATH: worktreePath,
             },
             async () => await main(["service", "start", "api"], sink.io),
           );
@@ -471,24 +507,10 @@ describe("lifecycle cli", () => {
       );
 
       expect(receivedRequest).toMatchObject({
-        method: "service.start",
-        params: {
+        method: "POST",
+        pathname: "/workspaces/ws_123/services/start",
+        body: {
           serviceNames: ["api"],
-          workspaceId: "ws_123",
-        },
-      });
-      expect(
-        (receivedRequest as { params: { manifestFingerprint: string } }).params.manifestFingerprint,
-      ).not.toHaveLength(0);
-      expect(
-        JSON.parse((receivedRequest as { params: { manifestJson: string } }).params.manifestJson),
-      ).toMatchObject({
-        environment: {
-          api: {
-            command: "bun run dev",
-            kind: "service",
-            runtime: "process",
-          },
         },
       });
       expect(sink.stdout).toEqual([
@@ -499,14 +521,11 @@ describe("lifecycle cli", () => {
         "preview: http://control-plane.lifecycle.localhost",
       ]);
       expect(sink.stderr).toEqual([]);
-    } finally {
-      await rm(worktreePath, { force: true, recursive: true });
-    }
   });
 
   test("prints structured context by default", async () => {
     const sink = createIo();
-    await withBridge(
+    await withDesktopRpc(
       (request) => {
         expect(request).toMatchObject({
           method: "context.read",
@@ -665,7 +684,7 @@ describe("lifecycle cli", () => {
 
   test("prints workspace status as json", async () => {
     const sink = createIo();
-    await withBridge(
+    await withDesktopRpc(
       (request) => {
         expect(request).toMatchObject({
           method: "workspace.get",
@@ -761,7 +780,7 @@ describe("lifecycle cli", () => {
     const repoPath = await mkdtemp(join(tmpdir(), "lifecycle-cli-init-"));
 
     try {
-      await mkdir(join(repoPath, "apps", "api"), { recursive: true });
+      await mkdir(join(repoPath, "apps", "control-plane"), { recursive: true });
       await mkdir(join(repoPath, "apps", "web"), { recursive: true });
       await writeFile(
         join(repoPath, "package.json"),
@@ -772,7 +791,7 @@ describe("lifecycle cli", () => {
         }),
       );
       await writeFile(
-        join(repoPath, "apps", "api", "package.json"),
+        join(repoPath, "apps", "control-plane", "package.json"),
         JSON.stringify({
           name: "@example/control-plane",
           scripts: {
@@ -790,7 +809,30 @@ describe("lifecycle cli", () => {
         }),
       );
 
-      const code = await main(["repo", "init", "--path", repoPath, "--json"], sink.io);
+      const code = await withHttpBridge(
+        async ({ method, pathname, body }) => {
+          expect(method).toBe("POST");
+          expect(pathname).toBe("/repos");
+          expect(body).toMatchObject({
+            path: repoPath,
+            name: expect.any(String),
+            rootWorkspace: {
+              name: expect.any(String),
+              sourceRef: expect.any(String),
+              worktreePath: repoPath,
+            },
+          });
+
+          return {
+            body: {
+              created: true,
+              id: "repo_123",
+            },
+            status: 201,
+          };
+        },
+        async () => await main(["repo", "init", "--path", repoPath, "--json"], sink.io),
+      );
 
       expect(code).toBe(0);
       const manifestText = await readFile(join(repoPath, "lifecycle.json"), "utf8");
@@ -809,7 +851,7 @@ describe("lifecycle cli", () => {
         },
       ]);
       expect(parsed.config.stack).toMatchObject({
-        api: {
+        "control-plane": {
           command: "bun run dev",
           cwd: "apps/control-plane",
           kind: "service",
@@ -827,7 +869,7 @@ describe("lifecycle cli", () => {
         manifestPath: join(repoPath, "lifecycle.json"),
         packageManager: "bun",
         services: [
-          { cwd: "apps/control-plane", name: "api" },
+          { cwd: "apps/control-plane", name: "control-plane" },
           { cwd: "apps/web", name: "web" },
         ],
       });
@@ -884,7 +926,7 @@ describe("lifecycle cli", () => {
               },
             ],
           },
-          environment: {},
+          stack: {},
         }),
       );
 
@@ -931,7 +973,7 @@ describe("lifecycle cli", () => {
     const sink = createIo();
     let receivedRequest: unknown = null;
 
-    await withBridge(
+    await withDesktopRpc(
       (request) => {
         receivedRequest = request;
         return {
@@ -985,7 +1027,7 @@ describe("lifecycle cli", () => {
   test("creates a plan with json output", async () => {
     const sink = createIo();
 
-    await withBridge(
+    await withDesktopRpc(
       (request) => {
         return {
           id: (request as { id: string }).id,
@@ -1043,7 +1085,7 @@ describe("lifecycle cli", () => {
     const sink = createIo();
     let receivedRequest: unknown = null;
 
-    await withBridge(
+    await withDesktopRpc(
       (request) => {
         receivedRequest = request;
         return {
@@ -1113,7 +1155,7 @@ describe("lifecycle cli", () => {
     const sink = createIo();
     let receivedRequest: unknown = null;
 
-    await withBridge(
+    await withDesktopRpc(
       (request) => {
         receivedRequest = request;
         return {

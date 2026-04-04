@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { AgentSessionState } from "@lifecycle/agents";
-import { createElement, forwardRef } from "react";
+import { createContext, createElement, forwardRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const openTab = mock(() => {});
@@ -10,25 +10,28 @@ const resolveApproval = mock(async () => {});
 const setClaudeHarnessSettings = mock(() => {});
 const setCodexHarnessSettings = mock(() => {});
 
-mock.module("@/features/settings/state/settings-context", () => ({
-  useSettings: () => ({
-    harnesses: {
-      claude: {
-        effort: "default",
-        loginMethod: "browser",
-        model: "claude-sonnet-4-5",
-        permissionMode: "acceptEdits",
-      },
-      codex: {
-        model: "gpt-5-codex",
-        reasoningEffort: "default",
-        sandboxMode: "workspace-write",
-      },
+const mockedSettingsValue = {
+  harnesses: {
+    claude: {
+      effort: "default",
+      loginMethod: "browser",
+      model: "claude-sonnet-4-5",
+      permissionMode: "acceptEdits",
     },
-    resolvedTheme: "dark",
-    setClaudeHarnessSettings,
-    setCodexHarnessSettings,
-  }),
+    codex: {
+      model: "gpt-5-codex",
+      reasoningEffort: "default",
+      sandboxMode: "workspace-write",
+    },
+  },
+  resolvedTheme: "dark" as const,
+  setClaudeHarnessSettings,
+  setCodexHarnessSettings,
+};
+
+mock.module("@/features/settings/state/settings-context", () => ({
+  SettingsContext: createContext(mockedSettingsValue),
+  useSettings: () => mockedSettingsValue,
 }));
 
 mock.module("@/features/agents/hooks", () => ({
@@ -74,15 +77,33 @@ mock.module("@lifecycle/agents/react", () => ({
     },
     workspaceId: "workspace_1",
   }),
-}));
-
-mock.module("@/store/hooks", () => ({
-  useWorkspace: () => ({
-    worktree_path: "/tmp/workspace_1",
+  useAgentStatusIndex: () => ({
+    clearAgentSessionResponseReady: () => {},
+    clearWorkspaceAgentResponseReady: () => {},
+    hasWorkspaceResponseReady: () => false,
+    hasWorkspaceRunningTurn: () => false,
+    isAgentSessionResponseReady: () => false,
+    isAgentSessionRunning: () => false,
+    storeVersion: 0,
   }),
 }));
 
+mock.module("@/store/hooks", () => ({
+  useRepositories: () => [],
+  useRepository: () => undefined,
+  useWorkspaces: () => [],
+  useWorkspace: () => ({
+    worktree_path: "/tmp/workspace_1",
+  }),
+  useWorkspacesByRepository: () => ({}),
+  useWorkspaceServices: () => [],
+  useAgentSessions: () => [],
+  useAgentMessages: () => ({ data: [], error: null }),
+  useAgentSessionRefresh: () => () => {},
+}));
+
 mock.module("@/features/workspaces/state/workspace-open-requests", () => ({
+  WorkspaceOpenRequestsProvider: ({ children }: { children: React.ReactNode }) => children,
   useWorkspaceOpenRequests: () => ({
     clearTabRequest: () => {},
     openTab,

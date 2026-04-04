@@ -116,12 +116,98 @@ export interface WorkspaceShellRuntime {
   spec: WorkspaceShellLaunchSpec | null;
 }
 
+export interface ResolveWorkspaceTerminalRuntimeInput {
+  cwd?: string | null;
+  sessionName?: string | null;
+  syncEnvironment?: string[];
+}
+
+export interface WorkspaceTerminalRuntime {
+  backendLabel: string;
+  runtimeId: string | null;
+  launchError: string | null;
+  persistent: boolean;
+  supportsCreate: boolean;
+  supportsClose: boolean;
+  supportsConnect: boolean;
+  supportsRename: boolean;
+}
+
+export type WorkspaceTerminalKind = "shell" | "claude" | "codex" | "custom";
+
+export interface WorkspaceTerminalRecord {
+  id: string;
+  title: string;
+  kind: WorkspaceTerminalKind;
+  busy: boolean;
+  closable: boolean;
+}
+
+export interface CreateWorkspaceTerminalInput extends ResolveWorkspaceTerminalRuntimeInput {
+  kind?: WorkspaceTerminalKind;
+  title?: string | null;
+}
+
+export interface WorkspaceTerminalConnectionInput {
+  terminalId: string;
+  clientId: string;
+  access: "interactive" | "observe";
+  preferredTransport: "spawn" | "stream";
+}
+
+export type WorkspaceTerminalTransport =
+  | {
+      kind: "spawn";
+      prepare: WorkspaceShellLaunchSpec | null;
+      spec: WorkspaceShellLaunchSpec | null;
+    }
+  | {
+      kind: "stream";
+      streamId: string;
+      websocketPath: string;
+      token: string;
+      protocol: "vt";
+    };
+
+export interface WorkspaceTerminalConnection {
+  connectionId: string;
+  terminalId: string;
+  transport: WorkspaceTerminalTransport | null;
+  launchError: string | null;
+}
+
 export interface WorkspaceClient {
   execCommand(workspace: WorkspaceRecord, command: string[]): Promise<ExecCommandResult>;
   resolveShellRuntime(
     workspace: WorkspaceRecord,
     input?: ResolveWorkspaceShellInput,
   ): Promise<WorkspaceShellRuntime>;
+  resolveTerminalRuntime(
+    workspace: WorkspaceRecord,
+    input?: ResolveWorkspaceTerminalRuntimeInput,
+  ): Promise<WorkspaceTerminalRuntime>;
+  listTerminals(
+    workspace: WorkspaceRecord,
+    input?: ResolveWorkspaceTerminalRuntimeInput,
+  ): Promise<WorkspaceTerminalRecord[]>;
+  createTerminal(
+    workspace: WorkspaceRecord,
+    input?: CreateWorkspaceTerminalInput,
+  ): Promise<WorkspaceTerminalRecord>;
+  closeTerminal(
+    workspace: WorkspaceRecord,
+    terminalId: string,
+    input?: ResolveWorkspaceTerminalRuntimeInput,
+  ): Promise<void>;
+  connectTerminal(
+    workspace: WorkspaceRecord,
+    input: WorkspaceTerminalConnectionInput & ResolveWorkspaceTerminalRuntimeInput,
+  ): Promise<WorkspaceTerminalConnection>;
+  disconnectTerminal(
+    workspace: WorkspaceRecord,
+    connectionId: string,
+    input?: ResolveWorkspaceTerminalRuntimeInput,
+  ): Promise<void>;
   readManifest(dirPath: string): Promise<ManifestStatus>;
   getGitCurrentBranch(repoPath: string): Promise<string>;
   ensureWorkspace(input: EnsureWorkspaceInput): Promise<WorkspaceRecord>;

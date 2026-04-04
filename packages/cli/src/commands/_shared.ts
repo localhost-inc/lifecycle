@@ -1,4 +1,5 @@
 import { defineCommand, defineFlag } from "@lifecycle/cmd";
+import { LIFECYCLE_WORKSPACE_ID_ENV } from "@lifecycle/contracts";
 import { z } from "zod";
 
 import { LifecycleCliError } from "../errors";
@@ -17,6 +18,20 @@ export const repositoryIdFlag = z
   .string()
   .optional()
   .describe("Repository id. If omitted, resolve from local context when supported.");
+
+export function resolveWorkspaceId(explicitWorkspaceId?: string): string {
+  const workspaceId = explicitWorkspaceId ?? process.env[LIFECYCLE_WORKSPACE_ID_ENV];
+  if (!workspaceId) {
+    throw new LifecycleCliError({
+      code: "workspace_unresolved",
+      message: "Lifecycle could not resolve a workspace for this command.",
+      suggestedAction:
+        "Pass --workspace-id or run the command from a Lifecycle-launched workspace session.",
+    });
+  }
+
+  return workspaceId;
+}
 
 export function createStubCommand<Input extends z.ZodObject<z.ZodRawShape>>(options: {
   commandName: string;

@@ -43,34 +43,121 @@ function createBridgeFetch() {
       return response;
     }
 
-    const payload = await response.json().catch(() => null);
-    const message =
-      typeof payload === "object" &&
-      payload !== null &&
-      "error" in payload &&
-      typeof payload.error === "object" &&
-      payload.error !== null &&
-      "message" in payload.error &&
-      typeof payload.error.message === "string"
-        ? payload.error.message
-        : `Bridge error ${response.status}`;
+    const message = formatBridgeFailure(
+      response.status,
+      await response.text().catch(() => ""),
+    );
 
     throw new Error(message);
   };
 }
 
+type BridgeErrorEnvelope =
+  | { error: string; target?: string; issues?: Array<{ message?: string; path?: Array<string | number> }> }
+  | { error: { message?: string } };
+
+export function formatBridgeFailure(status: number, body: string): string {
+  const payload = parseBridgeFailure(body);
+  if (payload) {
+    return payload;
+  }
+
+  const rawBody = body.trim();
+  if (!rawBody) {
+    return `Bridge request failed with status ${status}.`;
+  }
+
+  return `Bridge request failed with status ${status}: ${rawBody}`;
+}
+
+function parseBridgeFailure(body: string): string | null {
+  if (!body.trim()) {
+    return null;
+  }
+
+  let payload: BridgeErrorEnvelope;
+  try {
+    payload = JSON.parse(body) as BridgeErrorEnvelope;
+  } catch {
+    return null;
+  }
+  if (typeof payload.error === "string") {
+    const target =
+      "target" in payload && typeof payload.target === "string" ? payload.target : null;
+    const issues =
+      "issues" in payload && Array.isArray(payload.issues)
+        ? formatBridgeIssues(payload.issues)
+        : "";
+    const prefix = target ? `Bridge ${target} validation failed` : "Bridge request failed";
+    return issues ? `${prefix}: ${issues}` : `${prefix}: ${payload.error}`;
+  }
+
+  if (
+    typeof payload.error === "object" &&
+    payload.error !== null &&
+    typeof payload.error.message === "string" &&
+    payload.error.message.trim()
+  ) {
+    return payload.error.message;
+  }
+
+  return null;
+}
+
+function formatBridgeIssues(issues: Array<{ message?: string; path?: Array<string | number> }>): string {
+  return issues
+    .flatMap((issue) => {
+      if (typeof issue.message !== "string" || !issue.message.trim()) {
+        return [];
+      }
+
+      const path = Array.isArray(issue.path) ? formatBridgeIssuePath(issue.path) : "";
+      return [path ? `${path}: ${issue.message}` : issue.message];
+    })
+    .join("; ");
+}
+
+function formatBridgeIssuePath(path: Array<string | number>): string {
+  let formatted = "";
+  for (const segment of path) {
+    if (typeof segment === "number") {
+      formatted += `[${segment}]`;
+      continue;
+    }
+
+    if (formatted) {
+      formatted += ".";
+    }
+    formatted += segment;
+  }
+  return formatted;
+}
+
 export type BridgeClient = ReturnType<typeof hc<AppType>>;
 
-export function createBridgeClient(port: number): BridgeClient {
-  return hc<AppType>(`http://127.0.0.1:${port}`, {
+function defaultPortForProtocol(protocol: string): number {
+  return protocol === "https:" ? 443 : 80;
+}
+
+export function createBridgeClient(baseUrl: string): BridgeClient {
+  return hc<AppType>(baseUrl, {
     fetch: createBridgeFetch() as typeof fetch,
   });
 }
 
 export async function ensureBridge(): Promise<{ port: number; client: BridgeClient }> {
+  const explicitBridgeUrl = process.env.LIFECYCLE_BRIDGE_URL;
+  if (explicitBridgeUrl) {
+    const url = new URL(explicitBridgeUrl);
+    return {
+      port: url.port ? Number.parseInt(url.port, 10) : defaultPortForProtocol(url.protocol),
+      client: createBridgeClient(explicitBridgeUrl),
+    };
+  }
+
   const existing = await readPidfile();
   if (existing && (await isHealthy(existing.port))) {
-    return { port: existing.port, client: createBridgeClient(existing.port) };
+    return { port: existing.port, client: createBridgeClient(`http://127.0.0.1:${existing.port}`) };
   }
 
   spawnBridge();
@@ -79,7 +166,7 @@ export async function ensureBridge(): Promise<{ port: number; client: BridgeClie
     await sleep(STARTUP_WAIT_MS);
     const pidfile = await readPidfile();
     if (pidfile && (await isHealthy(pidfile.port))) {
-      return { port: pidfile.port, client: createBridgeClient(pidfile.port) };
+      return { port: pidfile.port, client: createBridgeClient(`http://127.0.0.1:${pidfile.port}`) };
     }
   }
 

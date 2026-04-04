@@ -41,6 +41,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@lifecycle/contracts": "workspace:*",
     "@tursodatabase/sync": "^0.5.1",
     "@tursodatabase/sync-common": "^0.5.1"
   }

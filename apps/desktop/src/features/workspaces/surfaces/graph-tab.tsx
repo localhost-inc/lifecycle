@@ -35,8 +35,8 @@ const PADDING_X = 28;
 const PADDING_Y = 28;
 const STATUS_DOT_R = 3.5;
 
-function computeLayout(environment: LifecycleConfig["environment"]): GraphLayout {
-  const entries = Object.entries(environment);
+function computeLayout(stack: LifecycleConfig["stack"]): GraphLayout {
+  const entries = Object.entries(stack);
   const nodes = new Map<string, GraphNode>();
   const edges: GraphEdge[] = [];
   const adjacency = new Map<string, string[]>();

@@ -185,6 +185,15 @@ fn run_loop(
         if let Some(err) = sidebar_error {
             app.set_status(err, 5);
         }
+        if app.poll_workspace_switch() {
+            app.needs_draw = true;
+        }
+        if app.poll_panel_refresh() {
+            app.needs_draw = true;
+        }
+        if app.poll_stack_action() {
+            app.needs_draw = true;
+        }
         if app.tick_spinner() || app.tick_status() {
             app.needs_draw = true;
         }
@@ -199,9 +208,9 @@ fn run_loop(
             app.needs_draw = false;
             term.draw(|frame| {
                 let rows = ratatui::layout::Layout::vertical([
-                    ratatui::layout::Constraint::Length(1),
+                    ratatui::layout::Constraint::Length(2),
                     ratatui::layout::Constraint::Min(0),
-                    ratatui::layout::Constraint::Length(1),
+                    ratatui::layout::Constraint::Length(2),
                 ])
                 .split(frame.area());
                 let columns = ratatui::layout::Layout::horizontal([
@@ -264,26 +273,25 @@ fn handle_key(app: &mut App, key: KeyEvent) {
 }
 
 fn handle_mouse(app: &mut App, mouse: MouseEvent, total_width: u16) {
-    if let Some(border) = app.border_at(mouse.column) {
+    if app.dragging.is_some() {
         match mouse.kind {
-            MouseEventKind::Down(MouseButton::Left) => {
-                app.dragging = Some(border);
-                return;
-            }
             MouseEventKind::Drag(MouseButton::Left) => {
-                if app.dragging.is_some() {
-                    app.handle_drag(mouse.column, total_width);
-                }
+                app.handle_drag(mouse.column, total_width);
                 return;
             }
             MouseEventKind::Up(MouseButton::Left) => {
-                if app.dragging.is_some() {
-                    app.dragging = None;
-                    app.flush_pending_resize();
-                }
+                app.dragging = None;
+                app.flush_pending_resize();
                 return;
             }
             _ => {}
+        }
+    }
+
+    if let Some(border) = app.border_at(mouse.column) {
+        if let MouseEventKind::Down(MouseButton::Left) = mouse.kind {
+            app.dragging = Some(border);
+            return;
         }
     }
 
@@ -677,6 +685,52 @@ fn legacy_key_to_bytes(key: KeyEvent) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::{DragBorder, DEFAULT_EXTENSIONS_WIDTH};
+    use std::sync::{Mutex, OnceLock};
+
+    fn test_env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[test]
+    fn keeps_resizing_after_cursor_leaves_divider_column() {
+        let _guard = test_env_lock().lock().expect("env lock");
+        std::env::set_var("LIFECYCLE_BRIDGE_URL", "http://127.0.0.1:9");
+        let mut app = App::new().expect("app should initialize with bridge url");
+        std::env::remove_var("LIFECYCLE_BRIDGE_URL");
+
+        app.sidebar_width = 34;
+        app.extensions_width = DEFAULT_EXTENSIONS_WIDTH;
+        app.divider_rects[0] = Rect::new(34, 1, 1, 20);
+        app.dragging = Some(DragBorder::Left);
+
+        handle_mouse(
+            &mut app,
+            MouseEvent {
+                kind: MouseEventKind::Drag(MouseButton::Left),
+                column: 50,
+                row: 10,
+                modifiers: KeyModifiers::empty(),
+            },
+            160,
+        );
+
+        assert_eq!(app.sidebar_width, 50);
+
+        handle_mouse(
+            &mut app,
+            MouseEvent {
+                kind: MouseEventKind::Up(MouseButton::Left),
+                column: 50,
+                row: 10,
+                modifiers: KeyModifiers::empty(),
+            },
+            160,
+        );
+
+        assert!(app.dragging.is_none());
+    }
 
     #[test]
     fn forwards_left_click_inside_canvas() {

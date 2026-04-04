@@ -21,6 +21,8 @@ Lifecycle is a workspace runtime and agent orchestration platform. The working p
 
 The system has two modes: **interactive** (human in a tmux-backed shell, optionally running an agent) and **background** (headless agent in a sandbox, orchestrated by the control plane). Both share the same workspace contract. See `docs/reference/architecture.md` for the full system design.
 
+Bridge-first execution rule: treat the bridge as the single runtime authority boundary for CLI and TUI work. Clients ask the bridge to do runtime reads and mutations. The bridge streams lifecycle events back to clients. Do not add side paths that shell out to ad hoc `lifecycle` subprocesses or duplicate runtime orchestration in clients when bridge ownership is the intended model.
+
 ## Core References
 
 1. `README.md`
@@ -105,6 +107,7 @@ Use this section to route work before implementation.
 5. Preserve local-first operation for local workflows (no mandatory auth/network dependency).
 6. Keep provider boundaries explicit; avoid leaking provider-specific behavior across interfaces.
 7. Do not add silent fallback paths that hide failures or misconfiguration.
+8. Preserve the bridge-first client model: runtime reads, mutations, and streamed state changes should flow through bridge unless a contract explicitly says otherwise.
 
 ## Change Workflow
 

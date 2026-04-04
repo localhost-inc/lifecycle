@@ -149,7 +149,7 @@ describe("EnvironmentPanel", () => {
     const { markup } = await renderEnvironmentPanel({
       config: {
         workspace: { prepare: [], teardown: [] },
-        environment: {
+        stack: {
           web: { kind: "service", runtime: "process", command: "bun run dev" },
           api: { kind: "service", runtime: "process", command: "bun run api" },
         },

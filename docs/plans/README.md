@@ -10,6 +10,7 @@ Current plan priority: local CLI, control plane, sandbox providers, and OpenCode
 2. [Local CLI](./local-cli.md) — CLI command contract, workspace/stack/service operations, context dump
 3. [Kin Cloud V1](./kin-cloud-v1.md) — auth, orgs, cloud workspace provisioning, shell attach, PR workflow
 4. [Cloud Hardening](./cloud-hardening.md) — sleep/wake restore, TTL enforcement, quotas, cloud lifecycle SLOs
+5. [Terminal Runtime](./terminal-runtime.md) — richer terminal runtime for desktop/web clients while preserving `workspace shell` for TUI/CLI
 
 ## Archived Plans
 

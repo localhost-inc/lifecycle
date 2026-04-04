@@ -1,8 +1,8 @@
 import { defineCommand, defineFlag } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
-import { createWorkspaceRunRequest, requestDesktopRpc, resolveWorkspaceId } from "../../desktop/rpc";
-import { failCommand, jsonFlag, printServiceSummary, workspaceIdFlag } from "../_shared";
+import { failCommand, jsonFlag, printServiceSummary, resolveWorkspaceId, workspaceIdFlag } from "../_shared";
 
 export default defineCommand({
   description: "Start or restart workspace services.",
@@ -17,24 +17,24 @@ export default defineCommand({
   run: async (input, context) => {
     try {
       const workspaceId = resolveWorkspaceId(input.workspaceId);
-      const response = await requestDesktopRpc(
-        createWorkspaceRunRequest({
-          ...(input.service ? { serviceNames: input.service } : {}),
-          workspaceId,
-        }),
-      );
+      const { client } = await ensureBridge();
+      const response = await client.workspaces[":id"].services.start.$post({
+        param: { id: workspaceId },
+        json: input.service ? { serviceNames: input.service } : {},
+      });
+      const result = await response.json();
 
       if (input.json) {
-        context.stdout(JSON.stringify(response.result, null, 2));
+        context.stdout(JSON.stringify(result, null, 2));
         return 0;
       }
 
-      if (response.result.startedServices.length > 0) {
-        context.stdout(`Started: ${response.result.startedServices.join(", ")}`);
+      if (result.startedServices.length > 0) {
+        context.stdout(`Started: ${result.startedServices.join(", ")}`);
         context.stdout("");
       }
 
-      response.result.services.forEach((service, index) => {
+      result.services.forEach((service, index) => {
         if (index > 0) {
           context.stdout("");
         }

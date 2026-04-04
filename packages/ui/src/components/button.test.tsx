@@ -12,7 +12,7 @@ describe("buttonVariants", () => {
     expect(className).toContain("text-[var(--foreground)]");
     expect(className).toContain("h-8");
     expect(className).toContain("px-3");
-    expect(className).toContain("rounded-xl");
+    expect(className).toContain("rounded-lg");
   });
 
   test("uses the shared outline treatment", () => {

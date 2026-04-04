@@ -3,9 +3,9 @@ import { readManifestFromPath } from "./manifest";
 
 const VALID_MANIFEST = JSON.stringify({
   workspace: {
-    setup: [{ name: "install", command: "bun install", timeout_seconds: 120 }],
+    prepare: [{ name: "install", command: "bun install", timeout_seconds: 120 }],
   },
-  environment: {
+  stack: {
     api: {
       kind: "service",
       runtime: "process",

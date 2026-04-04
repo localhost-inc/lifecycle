@@ -15,11 +15,13 @@ import {
 import { spawnSync as nodeSpawnSync } from "node:child_process";
 import type {
   ArchiveWorkspaceInput,
+  CreateWorkspaceTerminalInput,
   EnsureWorkspaceInput,
   ExecCommandResult,
   GitDiffInput,
   OpenInAppId,
   ResolveWorkspaceShellInput,
+  ResolveWorkspaceTerminalRuntimeInput,
   RenameWorkspaceInput,
   SubscribeWorkspaceFileEventsInput,
   WorkspaceFileEventListener,
@@ -28,12 +30,27 @@ import type {
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
   WorkspaceClient,
+  WorkspaceTerminalConnection,
+  WorkspaceTerminalConnectionInput,
+  WorkspaceTerminalRecord,
+  WorkspaceTerminalRuntime,
   WorkspaceShellRuntime,
   WorkspaceOpenInAppInfo,
 } from "../../workspace";
 import { readManifestFromPath, type FileReader, type ManifestStatus } from "../../manifest";
 import { computeArchiveInput } from "../../policy/workspace-archive";
 import { computeRenameInput } from "../../policy/workspace-rename";
+import {
+  buildEnsureTmuxConnectionCommand,
+  buildEnsureTmuxSessionCommand,
+  buildSafeKillTmuxSessionCommand,
+  buildTmuxCloseTerminalArgs,
+  buildTmuxConnectionId,
+  buildTmuxCreateTerminalArgs,
+  buildTmuxListTerminalArgs,
+  normalizeTerminalTitle,
+  parseTmuxTerminalRecords,
+} from "../shared/tmux-terminal-runtime";
 
 export interface LocalClientDeps {
   invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -51,13 +68,6 @@ function requireWorktreePath(workspace: WorkspaceRecord): string {
     throw new Error(`Workspace "${workspace.id}" has no worktree path.`);
   }
   return workspace.worktree_path;
-}
-
-function commandAvailable(program: string): boolean {
-  const result = nodeSpawnSync("sh", ["-lc", `command -v ${program} >/dev/null 2>&1`], {
-    stdio: "ignore",
-  });
-  return result.status === 0;
 }
 
 export class LocalWorkspaceClient implements WorkspaceClient {
@@ -138,7 +148,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
       };
     }
 
-    if (!commandAvailable("tmux")) {
+    if (!this.commandAvailable("tmux")) {
       return {
         backendLabel: "local tmux",
         launchError:
@@ -158,11 +168,194 @@ export class LocalWorkspaceClient implements WorkspaceClient {
       prepare: null,
       spec: {
         program: "tmux",
-        args: ["new-session", "-A", "-s", sessionName, "-c", cwd],
+        args: [
+          "new-session",
+          "-A",
+          "-s",
+          sessionName,
+          "-c",
+          cwd,
+          ";",
+          "set-option",
+          "-t",
+          sessionName,
+          "window-size",
+          "latest",
+        ],
         cwd,
         env: [["TERM", "xterm-256color"]],
       },
     };
+  }
+
+  async resolveTerminalRuntime(
+    workspace: WorkspaceRecord,
+    input: ResolveWorkspaceTerminalRuntimeInput = {},
+  ): Promise<WorkspaceTerminalRuntime> {
+    const cwd = input.cwd ?? workspace.worktree_path ?? null;
+    const sessionName = input.sessionName?.trim() || null;
+
+    if (!cwd || !sessionName) {
+      return {
+        backendLabel: "local tmux",
+        runtimeId: null,
+        launchError: "Lifecycle could not resolve the local terminal runtime for this workspace.",
+        persistent: false,
+        supportsCreate: false,
+        supportsClose: false,
+        supportsConnect: false,
+        supportsRename: false,
+      };
+    }
+
+    if (!this.commandAvailable("tmux")) {
+      return {
+        backendLabel: "local tmux",
+        runtimeId: null,
+        launchError:
+          "tmux is required for the Lifecycle local terminal runtime. Install tmux or launch from an environment where tmux is available.",
+        persistent: false,
+        supportsCreate: false,
+        supportsClose: false,
+        supportsConnect: false,
+        supportsRename: false,
+      };
+    }
+
+    return {
+      backendLabel: "local tmux",
+      runtimeId: sessionName,
+      launchError: null,
+      persistent: true,
+      supportsCreate: true,
+      supportsClose: true,
+      supportsConnect: true,
+      supportsRename: false,
+    };
+  }
+
+  async listTerminals(
+    workspace: WorkspaceRecord,
+    input: ResolveWorkspaceTerminalRuntimeInput = {},
+  ): Promise<WorkspaceTerminalRecord[]> {
+    const context = await this.requireTerminalContext(workspace, input);
+    await this.ensureTmuxSession(workspace, context);
+
+    const result = await this.execCommand(workspace, [
+      "tmux",
+      ...buildTmuxListTerminalArgs(context.sessionName),
+    ]);
+    this.throwIfCommandFailed(result, "Lifecycle could not list local terminals for this workspace.");
+    return parseTmuxTerminalRecords(result.stdout);
+  }
+
+  async createTerminal(
+    workspace: WorkspaceRecord,
+    input: CreateWorkspaceTerminalInput = {},
+  ): Promise<WorkspaceTerminalRecord> {
+    const context = await this.requireTerminalContext(workspace, input);
+    await this.ensureTmuxSession(workspace, context);
+
+    const title = normalizeTerminalTitle(input.title, input.kind);
+    const result = await this.execCommand(workspace, [
+      "tmux",
+      ...buildTmuxCreateTerminalArgs(context.sessionName, context.cwd, title),
+    ]);
+    this.throwIfCommandFailed(result, "Lifecycle could not create a local terminal for this workspace.");
+
+    const created = parseTmuxTerminalRecords(result.stdout).at(0);
+    if (!created) {
+      throw new Error("Lifecycle could not parse the created local terminal record.");
+    }
+
+    const terminals = await this.listTerminals(workspace, context);
+    return terminals.find((terminal) => terminal.id === created.id) ?? created;
+  }
+
+  async closeTerminal(
+    workspace: WorkspaceRecord,
+    terminalId: string,
+    input: ResolveWorkspaceTerminalRuntimeInput = {},
+  ): Promise<void> {
+    const context = await this.requireTerminalContext(workspace, input);
+    const terminals = await this.listTerminals(workspace, context);
+    if (terminals.length <= 1) {
+      throw new Error("Lifecycle will not close the last terminal in a workspace runtime.");
+    }
+
+    const result = await this.execCommand(workspace, [
+      "tmux",
+      ...buildTmuxCloseTerminalArgs(context.sessionName, terminalId),
+    ]);
+    this.throwIfCommandFailed(result, `Lifecycle could not close local terminal "${terminalId}".`);
+  }
+
+  async connectTerminal(
+    workspace: WorkspaceRecord,
+    input: WorkspaceTerminalConnectionInput & ResolveWorkspaceTerminalRuntimeInput,
+  ): Promise<WorkspaceTerminalConnection> {
+    const context = await this.requireTerminalContext(workspace, input);
+    const connectionId = buildTmuxConnectionId(
+      context.sessionName,
+      input.clientId,
+      input.terminalId,
+    );
+
+    if (input.preferredTransport === "stream") {
+      return {
+        connectionId,
+        terminalId: input.terminalId,
+        transport: null,
+        launchError: "Lifecycle does not support streamed local terminal connections yet.",
+      };
+    }
+
+    return {
+      connectionId,
+      terminalId: input.terminalId,
+      transport: {
+        kind: "spawn",
+        prepare: {
+          program: "sh",
+          args: [
+            "-lc",
+            buildEnsureTmuxConnectionCommand(
+              context.sessionName,
+              connectionId,
+              input.terminalId,
+              context.cwd,
+            ),
+          ],
+          cwd: context.cwd,
+          env: [["TERM", "xterm-256color"]],
+        },
+        spec: {
+          program: "tmux",
+          args: ["attach-session", "-t", connectionId],
+          cwd: context.cwd,
+          env: [["TERM", "xterm-256color"]],
+        },
+      },
+      launchError: null,
+    };
+  }
+
+  async disconnectTerminal(
+    workspace: WorkspaceRecord,
+    connectionId: string,
+    input: ResolveWorkspaceTerminalRuntimeInput = {},
+  ): Promise<void> {
+    await this.requireTerminalContext(workspace, input);
+    const result = await this.execCommand(workspace, [
+      "sh",
+      "-lc",
+      buildSafeKillTmuxSessionCommand(connectionId),
+    ]);
+    this.throwIfCommandFailed(
+      result,
+      `Lifecycle could not disconnect local terminal connection "${connectionId}".`,
+      { allowNoopSuccess: true },
+    );
   }
 
   async readManifest(dirPath: string): Promise<ManifestStatus> {
@@ -539,4 +732,63 @@ export class LocalWorkspaceClient implements WorkspaceClient {
       pullRequestNumber,
     }) as Promise<GitPullRequestSummary>;
   }
+
+  private async ensureTmuxSession(
+    workspace: WorkspaceRecord,
+    context: LocalTerminalContext,
+  ): Promise<void> {
+    const result = await this.execCommand(workspace, [
+      "sh",
+      "-lc",
+      buildEnsureTmuxSessionCommand(context.sessionName, context.cwd),
+    ]);
+    this.throwIfCommandFailed(result, "Lifecycle could not prepare the local terminal runtime.");
+  }
+
+  private commandAvailable(program: string): boolean {
+    const result = this.spawnSync("sh", ["-lc", `command -v ${program} >/dev/null 2>&1`], {
+      stdio: "ignore",
+    });
+    return result.status === 0;
+  }
+
+  private async requireTerminalContext(
+    workspace: WorkspaceRecord,
+    input: ResolveWorkspaceTerminalRuntimeInput,
+  ): Promise<LocalTerminalContext> {
+    const runtime = await this.resolveTerminalRuntime(workspace, input);
+    if (runtime.launchError || !runtime.runtimeId) {
+      throw new Error(
+        runtime.launchError ??
+          "Lifecycle could not resolve the local terminal runtime for this workspace.",
+      );
+    }
+
+    return {
+      cwd: input.cwd ?? requireWorktreePath(workspace),
+      sessionName: runtime.runtimeId,
+    };
+  }
+
+  private throwIfCommandFailed(
+    result: ExecCommandResult,
+    message: string,
+    options?: { allowNoopSuccess?: boolean },
+  ): void {
+    if (result.exitCode === 0) {
+      return;
+    }
+
+    if (options?.allowNoopSuccess && /no server running|can't find session/i.test(result.stderr)) {
+      return;
+    }
+
+    const detail = [result.stderr.trim(), result.stdout.trim()].find((value) => value.length > 0);
+    throw new Error(detail ? `${message} ${detail}` : message);
+  }
+}
+
+interface LocalTerminalContext {
+  cwd: string;
+  sessionName: string;
 }

@@ -183,7 +183,7 @@ describe("WorkspaceShell", () => {
             valid: true,
             config: {
               workspace: { prepare: [], teardown: [] },
-              environment: {
+              stack: {
                 www: {
                   kind: "service",
                   runtime: "process",
@@ -249,7 +249,7 @@ describe("WorkspaceShell", () => {
                 prepare: [{ command: "bun install", name: "install", timeout_seconds: 60 }],
                 teardown: [],
               },
-              environment: {
+              stack: {
                 www: {
                   kind: "service",
                   runtime: "process",

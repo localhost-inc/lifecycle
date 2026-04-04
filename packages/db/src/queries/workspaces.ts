@@ -1,22 +1,33 @@
+import type {
+  WorkspaceCheckoutType,
+  WorkspaceFailureReason,
+  WorkspaceHost,
+  WorkspaceRecord,
+  WorkspaceStatus,
+} from "@lifecycle/contracts";
 import type { SqlDriver, SqlStatement } from "../types";
 
 export interface WorkspaceRow {
   id: string;
   repository_id: string;
   name: string;
-  checkout_type: string;
+  checkout_type: WorkspaceCheckoutType;
   source_ref: string;
   git_sha: string | null;
   worktree_path: string | null;
-  host: string;
+  host: WorkspaceHost;
   manifest_fingerprint: string | null;
   prepared_at: string | null;
-  status: string;
-  failure_reason: string | null;
+  status: WorkspaceStatus;
+  failure_reason: WorkspaceFailureReason | null;
   failed_at: string | null;
   created_at: string;
   updated_at: string;
   last_active_at: string;
+}
+
+export function workspaceRecordFromRow(row: WorkspaceRow): WorkspaceRecord {
+  return row;
 }
 
 const WORKSPACE_COLUMNS = `
@@ -57,6 +68,14 @@ export async function getWorkspaceById(
   return rows[0];
 }
 
+export async function getWorkspaceRecordById(
+  db: SqlDriver,
+  workspaceId: string,
+): Promise<WorkspaceRecord | undefined> {
+  const row = await getWorkspaceById(db, workspaceId);
+  return row ? workspaceRecordFromRow(row) : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Statements — pure SQL + params, no driver. Used by store collections
 // for transaction batching and by the direct-execution functions below.
@@ -68,7 +87,7 @@ export interface WorkspaceInsertOptions {
 }
 
 export function insertWorkspaceStatement(
-  workspace: WorkspaceRow,
+  workspace: WorkspaceRecord,
   options?: WorkspaceInsertOptions,
 ): SqlStatement {
   return {
@@ -162,8 +181,8 @@ export async function insertWorkspace(
     name: string;
     sourceRef: string;
     worktreePath?: string | null;
-    host?: string;
-    checkoutType?: "root" | "worktree";
+    host?: WorkspaceHost;
+    checkoutType?: WorkspaceCheckoutType;
   },
 ): Promise<string> {
   const id = crypto.randomUUID();

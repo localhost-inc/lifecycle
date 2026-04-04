@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -73,45 +74,107 @@ async function withTempHome<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-async function withMockFetch<T>(
-  handler: (input: Request | string | URL, init?: RequestInit) => Promise<Response>,
+async function withMockBridge<T>(
+  handler: (request: {
+    body: unknown;
+    method: string;
+    pathname: string;
+    search: URLSearchParams;
+  }) => Promise<{ body: unknown; status?: number } | unknown>,
   run: () => Promise<T>,
 ): Promise<T> {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = handler as typeof fetch;
+  const homeDir = process.env.HOME;
+  if (!homeDir) {
+    throw new Error("HOME must be set before starting the mock bridge.");
+  }
+
+  const server = createServer(async (request, response) => {
+    if (!request.url || !request.method) {
+      response.writeHead(500, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: { message: "Malformed bridge request." } }));
+      return;
+    }
+
+    const url = new URL(request.url, "http://127.0.0.1");
+    if (url.pathname === "/health") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ healthy: true }));
+      return;
+    }
+
+    let input = "";
+    for await (const chunk of request) {
+      input += chunk.toString("utf8");
+    }
+
+    const result = await handler({
+      body: input.length > 0 ? JSON.parse(input) : null,
+      method: request.method,
+      pathname: url.pathname,
+      search: url.searchParams,
+    });
+    const shaped =
+      result && typeof result === "object" && "body" in result
+        ? (result as { body: unknown; status?: number })
+        : { body: result, status: 200 };
+
+    response.writeHead(shaped.status ?? 200, { "content-type": "application/json" });
+    response.end(JSON.stringify(shaped.body));
+  });
 
   try {
-    return await run();
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => resolve());
+    });
+
+    const address = server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Mock bridge failed to expose a TCP port.");
+    }
+
+    return await withEnvironment(
+      {
+        LIFECYCLE_BRIDGE_URL: `http://127.0.0.1:${address.port}`,
+      },
+      run,
+    );
   } finally {
-    globalThis.fetch = originalFetch;
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
   }
 }
 
 describe("cloud CLI commands", () => {
-  test("passes PR create fields through to the API", async () => {
+  test("passes PR create fields through to the bridge", async () => {
     const sink = createIo();
     let requestBody: unknown;
-    let requestUrl = "";
+    let requestMethod = "";
+    let requestPath = "";
 
     await withTempHome(async () =>
-      await withEnvironment({ LIFECYCLE_API_URL: "https://api.lifecycle.test" }, async () =>
-        await withMockFetch(async (input, init) => {
-          requestUrl = String(input);
-          requestBody = JSON.parse(String(init?.body ?? "{}"));
+      await withMockBridge(async ({ body, method, pathname }) => {
+        requestMethod = method;
+        requestPath = pathname;
+        requestBody = body;
 
-          return new Response(
-            JSON.stringify({
+        return {
+          body: {
               number: 42,
               url: "https://github.com/acme/repo/pull/42",
               headBranch: "feature/branch",
               baseBranch: "develop",
-            }),
-            {
-              headers: { "content-type": "application/json" },
-              status: 201,
             },
-          );
-        }, async () => {
+          status: 201,
+        };
+      }, async () => {
           const code = await main(
             [
               "pr",
@@ -130,10 +193,10 @@ describe("cloud CLI commands", () => {
 
           expect(code).toBe(0);
         }),
-      ),
     );
 
-    expect(requestUrl).toBe("https://api.lifecycle.test/workspaces/ws_123/pr");
+    expect(requestMethod).toBe("POST");
+    expect(requestPath).toBe("/workspaces/ws_123/pr");
     expect(requestBody).toEqual({
       baseBranch: "develop",
       body: "Ready for review",
@@ -150,29 +213,26 @@ describe("cloud CLI commands", () => {
   test("returns workspace exec exit code and prints command output", async () => {
     const sink = createIo();
     let requestBody: unknown;
-    let requestUrl = "";
+    let requestMethod = "";
+    let requestPath = "";
 
     await withTempHome(async () =>
-      await withEnvironment({ LIFECYCLE_API_URL: "https://api.lifecycle.test" }, async () =>
-        await withMockFetch(async (input, init) => {
-          requestUrl = String(input);
-          requestBody = JSON.parse(String(init?.body ?? "{}"));
+      await withMockBridge(async ({ body, method, pathname }) => {
+        requestMethod = method;
+        requestPath = pathname;
+        requestBody = body;
 
-          return new Response(
-            JSON.stringify({
+        return {
+          body: {
               command: ["git", "status"],
               cwd: "/workspace",
               exitCode: 3,
               output: "out\nerr\n",
               stderr: "err\n",
               stdout: "out\n",
-            }),
-            {
-              headers: { "content-type": "application/json" },
-              status: 200,
             },
-          );
-        }, async () => {
+        };
+      }, async () => {
           const code = await main(
             ["workspace", "exec", "ws_123", "--", "git", "status"],
             sink.io,
@@ -180,10 +240,10 @@ describe("cloud CLI commands", () => {
 
           expect(code).toBe(3);
         }),
-      ),
     );
 
-    expect(requestUrl).toBe("https://api.lifecycle.test/workspaces/ws_123/exec");
+    expect(requestMethod).toBe("POST");
+    expect(requestPath).toBe("/workspaces/ws_123/exec");
     expect(requestBody).toEqual({ command: ["git", "status"] });
     expect(sink.stdout).toEqual(["out"]);
     expect(sink.stderr).toEqual(["err"]);
@@ -191,26 +251,44 @@ describe("cloud CLI commands", () => {
 
   test("resolves workspace shell through the cloud workspace client runtime", async () => {
     const sink = createIo();
-    const requestUrls: string[] = [];
+    const requests: Array<{ method: string; pathname: string }> = [];
 
     await withTempHome(async () =>
-      await withEnvironment({ LIFECYCLE_API_URL: "https://api.lifecycle.test" }, async () =>
-        await withMockFetch(async (input) => {
-          requestUrls.push(String(input));
+      await withMockBridge(async ({ method, pathname }) => {
+        requests.push({ method, pathname });
 
-          return new Response(
-            JSON.stringify({
-              cwd: "/workspace/repo",
-              home: "/home/lifecycle",
-              host: "ssh.app.lifecycle.test",
-              token: "tok_123",
-            }),
-            {
-              headers: { "content-type": "application/json" },
-              status: 200,
+        return {
+          body: {
+            workspace: {
+              binding: "bound",
+              workspace_id: "ws_cloud_123",
+              workspace_name: "Cloud Workspace",
+              repo_name: "example-repo",
+              host: "cloud",
+              status: "active",
+              source_ref: "feature/branch",
+              cwd: null,
+              worktree_path: null,
+              services: [],
+              resolution_note: null,
+              resolution_error: null,
             },
-          );
-        }, async () => {
+            shell: {
+              backend_label: "cloud shell",
+              launch_error: null,
+              persistent: false,
+              session_name: null,
+              prepare: null,
+              spec: {
+                program: "ssh",
+                args: ["tok_123@ssh.app.lifecycle.test"],
+                cwd: null,
+                env: [],
+              },
+            },
+          },
+        };
+      }, async () => {
           const code = await main(
             ["workspace", "shell", "ws_cloud_123", "--json"],
             sink.io,
@@ -218,36 +296,33 @@ describe("cloud CLI commands", () => {
 
           expect(code).toBe(0);
         }),
-      ),
     );
 
-    expect(requestUrls).toEqual([
-      "https://api.lifecycle.test/workspaces/ws_cloud_123/shell",
-    ]);
+    expect(requests).toEqual([{ method: "POST", pathname: "/workspaces/ws_cloud_123/shell" }]);
     expect(JSON.parse(sink.stdout.join("\n"))).toEqual({
       workspace: {
+        binding: "bound",
+        workspace_id: "ws_cloud_123",
+        workspace_name: "Cloud Workspace",
+        repo_name: "example-repo",
         host: "cloud",
-        id: "ws_cloud_123",
-        worktreePath: null,
+        status: "active",
+        source_ref: "feature/branch",
+        cwd: null,
+        worktree_path: null,
+        services: [],
+        resolution_note: null,
+        resolution_error: null,
       },
       shell: {
-        backendLabel: "cloud shell",
-        launchError: null,
+        backend_label: "cloud shell",
+        launch_error: null,
         persistent: false,
-        sessionName: null,
-        prepare: expect.any(Object),
+        session_name: null,
+        prepare: null,
         spec: {
           program: "ssh",
-          args: [
-            "-tt",
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
-            "-o",
-            "LogLevel=ERROR",
-            "tok_123@ssh.app.lifecycle.test",
-          ],
+          args: ["tok_123@ssh.app.lifecycle.test"],
           cwd: null,
           env: [],
         },

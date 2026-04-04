@@ -4,18 +4,17 @@ use ratatui::{
 };
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc};
-use std::time::{Duration, Instant};
+use std::sync::mpsc;
+use std::time::Instant;
 
 use crossterm::event::KeyEvent;
 
 use crate::bridge::LifecycleBridgeClient;
 use crate::events::{ActivityWorkspace, BridgeEvent, BridgeEventStream};
-use crate::panels::environment::EnvironmentPanel;
-use crate::panels::version_control::VersionControlPanel;
+use crate::panels::environment::{load_services, EnvironmentPanel, ServiceEntry};
+use crate::panels::version_control::{load_git_state, GitState, VersionControlPanel};
 use crate::selection::{load_workspace_selection, save_workspace_selection};
-use crate::shell::{INITIAL_WORKSPACE_ID_ENV, ShellPlan, WorkspaceBinding, WorkspaceHost, WorkspaceScope};
+use crate::shell::{build_workspace_shell, INITIAL_WORKSPACE_ID_ENV, ShellPlan, WorkspaceBinding, WorkspaceHost, WorkspaceScope, WorkspaceShell};
 use crate::sidebar::SidebarState;
 use crate::terminal::PtySession;
 use crate::vt::{ActiveBackend, VtGrid, VtMouseEvent};
@@ -52,6 +51,29 @@ pub struct GitDialogState {
     pub is_busy: bool,
     pub is_loading: bool,
     pub error: Option<String>,
+}
+
+pub enum PanelRefreshMessage {
+    Loaded {
+        workspace_id: Option<String>,
+        git: GitState,
+        services: Vec<ServiceEntry>,
+    },
+}
+
+pub enum WorkspaceSwitchMessage {
+    Resolved {
+        repo_name: String,
+        workspace_id: String,
+        result: Result<WorkspaceShell, String>,
+    },
+}
+
+pub enum StackActionMessage {
+    Finished {
+        workspace_id: String,
+        result: Result<Vec<ServiceEntry>, String>,
+    },
 }
 
 impl Focus {
@@ -136,6 +158,14 @@ fn empty_shell() -> ShellPlan {
     }
 }
 
+fn command_available(command: &str) -> bool {
+    std::process::Command::new(command)
+        .arg("-V")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
 // ---------------------------------------------------------------------------
 // Git background operations
 // ---------------------------------------------------------------------------
@@ -199,6 +229,14 @@ pub struct App {
     /// Receiver for git dialog background results.
     git_bg_rx: mpsc::Receiver<GitBgMessage>,
     git_bg_tx: mpsc::Sender<GitBgMessage>,
+    panel_refresh_rx: mpsc::Receiver<PanelRefreshMessage>,
+    panel_refresh_tx: mpsc::Sender<PanelRefreshMessage>,
+    workspace_switch_rx: mpsc::Receiver<WorkspaceSwitchMessage>,
+    workspace_switch_tx: mpsc::Sender<WorkspaceSwitchMessage>,
+    stack_action_rx: mpsc::Receiver<StackActionMessage>,
+    stack_action_tx: mpsc::Sender<StackActionMessage>,
+    pending_workspace_switch: Option<String>,
+    tmux_available: bool,
 }
 
 impl App {
@@ -212,6 +250,9 @@ impl App {
         env_panel.refresh(None);
 
         let (git_bg_tx, git_bg_rx) = mpsc::channel();
+        let (panel_refresh_tx, panel_refresh_rx) = mpsc::channel();
+        let (workspace_switch_tx, workspace_switch_rx) = mpsc::channel();
+        let (stack_action_tx, stack_action_rx) = mpsc::channel();
         let mut app = Self {
             running: true,
             focus: Focus::Sidebar,
@@ -245,6 +286,14 @@ impl App {
             stack_button_rect: Rect::default(),
             git_bg_rx,
             git_bg_tx,
+            panel_refresh_rx,
+            panel_refresh_tx,
+            workspace_switch_rx,
+            workspace_switch_tx,
+            stack_action_rx,
+            stack_action_tx,
+            pending_workspace_switch: None,
+            tmux_available: command_available("tmux"),
         };
 
         let restored_workspace_id = std::env::var(INITIAL_WORKSPACE_ID_ENV)
@@ -279,6 +328,40 @@ impl App {
                 }
                 BridgeEvent::Connected { client_id } => {
                     crate::debug::log(format!("bridge connected as {client_id}"));
+                }
+                BridgeEvent::ServiceStarted {
+                    workspace_id,
+                    service,
+                } => {
+                    if self.workspace.workspace_id.as_deref() == Some(workspace_id.as_str()) {
+                        self.refresh_workspace_panels_async();
+                        self.set_status(format!("Service ready: {service}"), 3);
+                    }
+                    changed = true;
+                }
+                BridgeEvent::ServiceStopped {
+                    workspace_id,
+                    service,
+                } => {
+                    if self.workspace.workspace_id.as_deref() == Some(workspace_id.as_str()) {
+                        self.refresh_workspace_panels_async();
+                        self.set_status(format!("Service stopped: {service}"), 3);
+                    }
+                    changed = true;
+                }
+                BridgeEvent::ServiceFailed {
+                    workspace_id,
+                    service,
+                    error,
+                } => {
+                    if self.workspace.workspace_id.as_deref() == Some(workspace_id.as_str()) {
+                        self.refresh_workspace_panels_async();
+                        let message = error
+                            .map(|detail| format!("Service failed: {service} ({detail})"))
+                            .unwrap_or_else(|| format!("Service failed: {service}"));
+                        self.set_status(message, 5);
+                    }
+                    changed = true;
                 }
                 _ => {
                     crate::debug::log(format!("bridge event: {:?}", event));
@@ -327,36 +410,142 @@ impl App {
         let Some((repo, ws)) = self.sidebar_state.selected_workspace() else {
             return;
         };
-        let Some(workspace_id) = ws.id.as_deref() else {
+        let Some(workspace_id) = ws.id.as_deref().map(str::to_string) else {
             self.set_status("Selected workspace is missing an id.".to_string(), 5);
             return;
         };
-
         let repo_name = repo.name.clone();
-        let workspace_shell = match self.bridge.workspace_shell(workspace_id) {
-            Ok(result) => result,
-            Err(error) => {
-                self.set_status(error, 5);
-                return;
-            }
-        };
+        let workspace_name = ws.name.clone();
+        let workspace_host = ws.host.clone();
+        let workspace_status = ws.status.clone();
+        let workspace_source_ref = ws.source_ref.clone();
+        let workspace_path = ws.worktree_path.clone();
 
-        // Detach the old tmux client cleanly before dropping the PTY.
-        // Without this, dropping the PTY kills the child process which sends
-        // EOF to the tmux session, showing ^D in the pane.
-        if let Some(ref session_name) = self.shell.session_name {
-            let _ = std::process::Command::new("tmux")
-                .args(["detach-client", "-t", session_name])
-                .output();
+        if self.pending_workspace_switch.as_deref() == Some(workspace_id.as_str()) {
+            return;
+        }
+        if self.workspace.workspace_id.as_deref() == Some(workspace_id.as_str()) && self.pty.is_some() {
+            self.focus = Focus::Canvas;
+            return;
         }
 
+        save_workspace_selection(Some(&workspace_id));
+
+        let mut workspace_scope = WorkspaceScope {
+            binding: WorkspaceBinding::Bound,
+            workspace_id: Some(workspace_id.to_string()),
+            workspace_name,
+            repo_name: Some(repo_name.clone()),
+            host: match workspace_host.as_str() {
+                "local" => WorkspaceHost::Local,
+                "docker" => WorkspaceHost::Docker,
+                "cloud" => WorkspaceHost::Cloud,
+                "remote" => WorkspaceHost::Remote,
+                _ => WorkspaceHost::Unknown,
+            },
+            status: Some(workspace_status),
+            source_ref: Some(workspace_source_ref),
+            cwd: workspace_path.clone(),
+            worktree_path: workspace_path,
+            services: vec![],
+            resolution_note: Some("Opening workspace shell…".to_string()),
+            resolution_error: None,
+        };
+
+        let key = ws_key(&repo_name, &workspace_scope.workspace_name);
+        self.active_workspace_key = Some(key.clone());
+        self.workspace_activity.insert(key, WorkspaceActivity::Idle);
+
+        // Refresh right column panels in the background so workspace switching
+        // stays responsive even when git/service lookups are slow.
+        self.vc_panel.set_loading();
+        self.env_panel.set_loading();
+        self.refresh_workspace_panels_async();
+
+        if matches!(workspace_scope.host, WorkspaceHost::Local) {
+            workspace_scope.resolution_note = None;
+            self.pending_workspace_switch = None;
+            self.apply_workspace_shell(repo_name, build_workspace_shell(workspace_scope, self.tmux_available));
+        } else {
+            self.pending_workspace_switch = Some(workspace_id.to_string());
+            self.workspace = workspace_scope;
+            self.shell = empty_shell();
+            self.pty = None;
+            self.cached_grid = None;
+            self.resolve_workspace_shell_async(repo_name, workspace_id);
+        }
+
+        self.needs_draw = true;
+    }
+
+    fn resolve_workspace_shell_async(&self, repo_name: String, workspace_id: String) {
+        let bridge = self.bridge.clone();
+        let tx = self.workspace_switch_tx.clone();
+        std::thread::spawn(move || {
+            let result = bridge.workspace_shell(&workspace_id);
+            let _ = tx.send(WorkspaceSwitchMessage::Resolved {
+                repo_name,
+                workspace_id,
+                result,
+            });
+        });
+    }
+
+    pub fn poll_workspace_switch(&mut self) -> bool {
+        let mut changed = false;
+
+        while let Ok(message) = self.workspace_switch_rx.try_recv() {
+            match message {
+                WorkspaceSwitchMessage::Resolved {
+                    repo_name,
+                    workspace_id,
+                    result,
+                } => {
+                    if self.pending_workspace_switch.as_deref() != Some(workspace_id.as_str()) {
+                        continue;
+                    }
+
+                    self.pending_workspace_switch = None;
+
+                    let workspace_shell = match result {
+                        Ok(result) => result,
+                        Err(error) => {
+                            self.workspace.resolution_note = None;
+                            self.workspace.resolution_error = Some(error.clone());
+                            self.shell.launch_error = Some(error.clone());
+                            self.shell.spec = None;
+                            self.set_status(error, 5);
+                            changed = true;
+                            continue;
+                        }
+                    };
+
+                    self.apply_workspace_shell(repo_name, workspace_shell);
+                    changed = true;
+                }
+            }
+        }
+
+        changed
+    }
+
+    fn apply_workspace_shell(&mut self, repo_name: String, workspace_shell: WorkspaceShell) {
+        let old_session_name = self.shell.session_name.clone();
         self.workspace = workspace_shell.workspace;
         self.shell = workspace_shell.shell;
         self.pty = None;
         self.cached_grid = None;
-        save_workspace_selection(Some(workspace_id));
 
-        // Track active workspace and clear its attention state.
+        if let Some(session_name) = old_session_name {
+            if self.shell.session_name.as_deref() != Some(session_name.as_str()) {
+                std::thread::spawn(move || {
+                    let _ = std::process::Command::new("tmux")
+                        .args(["detach-client", "-t", &session_name])
+                        .output();
+                });
+            }
+        }
+
         let key = ws_key(&repo_name, &self.workspace.workspace_name);
         self.active_workspace_key = Some(key.clone());
         self.workspace_activity.insert(key, WorkspaceActivity::Idle);
@@ -365,12 +554,6 @@ impl App {
         if rows > 0 && cols > 0 {
             self.init_pty(rows, cols);
         }
-
-        // Refresh right column panels
-        self.vc_panel.refresh(self.workspace.cwd.as_deref());
-        self.env_panel.refresh(self.workspace.workspace_id.as_deref());
-
-        self.needs_draw = true;
     }
 
     pub fn init_pty(&mut self, rows: u16, cols: u16) {
@@ -389,12 +572,15 @@ impl App {
             }
             Err(error) => {
                 self.shell.launch_error = Some(format!("Failed to spawn shell: {error}"));
+                self.shell.spec = None;
                 crate::debug::log(format!("init_pty error: {error}"));
             }
         }
     }
 
     pub fn process_pty(&mut self) {
+        let mut shell_exited = false;
+
         if let Some(pty) = &mut self.pty {
             crate::debug::log("process_pty start");
             let (alive, had_data, activity) = pty.process_pending();
@@ -402,7 +588,7 @@ impl App {
                 "process_pty end alive={alive} had_data={had_data} activity={activity:?}"
             ));
             if !alive {
-                self.running = false;
+                shell_exited = true;
             }
             if had_data {
                 self.needs_draw = true;
@@ -427,6 +613,24 @@ impl App {
                     }
                 }
             }
+        }
+
+        if shell_exited {
+            crate::debug::log("process_pty shell exited");
+            let workspace_name = self.workspace.workspace_name.clone();
+            self.pty = None;
+            self.cached_grid = None;
+            self.shell.launch_error = Some(format!(
+                "Shell exited for workspace \"{workspace_name}\"."
+            ));
+            self.shell.spec = None;
+            if let Some(key) = self.active_workspace_key.clone() {
+                self.workspace_activity.insert(key, WorkspaceActivity::Idle);
+            }
+            self.set_status(
+                format!("Shell exited for {workspace_name}. Re-select the workspace to reopen it."),
+                8,
+            );
         }
     }
 
@@ -511,6 +715,51 @@ impl App {
                 pty.resize(rows, cols);
             }
         }
+    }
+
+    fn refresh_workspace_panels_async(&self) {
+        let workspace_id = self.workspace.workspace_id.clone();
+        let tx = self.panel_refresh_tx.clone();
+
+        std::thread::spawn(move || {
+            let git = load_git_state(workspace_id.as_deref());
+            let services = load_services(workspace_id.as_deref());
+            let _ = tx.send(PanelRefreshMessage::Loaded {
+                workspace_id,
+                git,
+                services,
+            });
+        });
+    }
+
+    pub fn poll_panel_refresh(&mut self) -> bool {
+        let mut changed = false;
+
+        while let Ok(message) = self.panel_refresh_rx.try_recv() {
+            match message {
+                PanelRefreshMessage::Loaded {
+                    workspace_id,
+                    git,
+                    services,
+                } => {
+                    if workspace_id == self.workspace.workspace_id {
+                        self.vc_panel.git = git;
+                        self.workspace.services = services
+                            .iter()
+                            .map(|service| crate::shell::ServiceSummary {
+                                name: service.name.clone(),
+                                preview_url: service.preview_url.clone(),
+                                status: service.status.clone(),
+                            })
+                            .collect();
+                        self.env_panel.services = services;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        changed
     }
 
     pub fn write_to_pty(&mut self, bytes: &[u8]) {
@@ -660,82 +909,32 @@ impl App {
 
     /// Fetch git status in a background thread.
     fn refresh_git_status(&self) {
-        let cwd = self
-            .workspace
-            .cwd
-            .clone()
-            .or_else(|| self.workspace.worktree_path.clone());
+        let workspace_id = self.workspace.workspace_id.clone();
+        let bridge = self.bridge.clone();
         let tx = self.git_bg_tx.clone();
 
         std::thread::spawn(move || {
-            let dir = cwd.unwrap_or_else(|| ".".to_string());
+            let Some(workspace_id) = workspace_id else {
+                return;
+            };
+            let Ok(payload) = bridge.workspace_git(&workspace_id) else {
+                return;
+            };
 
-            // Branch name
-            let branch = std::process::Command::new("git")
-                .args(["-C", &dir, "rev-parse", "--abbrev-ref", "HEAD"])
-                .output()
-                .ok()
-                .filter(|o| o.status.success())
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
-
-            // Porcelain status for file counts
-            let status_output = std::process::Command::new("git")
-                .args(["-C", &dir, "status", "--porcelain"])
-                .output();
-
-            let (mut staged, mut unstaged) = (0usize, 0usize);
-            if let Ok(o) = &status_output {
-                if o.status.success() {
-                    for line in String::from_utf8_lossy(&o.stdout).lines() {
-                        if line.len() < 2 {
-                            continue;
-                        }
-                        let idx = line.as_bytes()[0];
-                        let wt = line.as_bytes()[1];
-                        if idx != b' ' && idx != b'?' {
-                            staged += 1;
-                        }
-                        if wt != b' ' && wt != b'?' {
-                            unstaged += 1;
-                        }
-                    }
+            let branch = payload.status.branch.clone();
+            let mut staged = 0usize;
+            let mut unstaged = 0usize;
+            let mut ins = 0usize;
+            let mut del = 0usize;
+            for file in payload.status.files {
+                if file.staged {
+                    staged += 1;
                 }
-            }
-
-            // Diff stats
-            let diff_output = std::process::Command::new("git")
-                .args(["-C", &dir, "diff", "--cached", "--numstat"])
-                .output();
-
-            let (mut ins, mut del) = (0usize, 0usize);
-            if let Ok(o) = &diff_output {
-                if o.status.success() {
-                    for line in String::from_utf8_lossy(&o.stdout).lines() {
-                        let parts: Vec<&str> = line.split('\t').collect();
-                        if parts.len() >= 2 {
-                            ins += parts[0].parse::<usize>().unwrap_or(0);
-                            del += parts[1].parse::<usize>().unwrap_or(0);
-                        }
-                    }
+                if file.unstaged {
+                    unstaged += 1;
                 }
-            }
-
-            // Also include unstaged diff stats if no staged changes
-            if staged == 0 {
-                let unstaged_diff = std::process::Command::new("git")
-                    .args(["-C", &dir, "diff", "--numstat"])
-                    .output();
-                if let Ok(o) = &unstaged_diff {
-                    if o.status.success() {
-                        for line in String::from_utf8_lossy(&o.stdout).lines() {
-                            let parts: Vec<&str> = line.split('\t').collect();
-                            if parts.len() >= 2 {
-                                ins += parts[0].parse::<usize>().unwrap_or(0);
-                                del += parts[1].parse::<usize>().unwrap_or(0);
-                            }
-                        }
-                    }
-                }
+                ins += file.stats.insertions.unwrap_or(0) as usize;
+                del += file.stats.deletions.unwrap_or(0) as usize;
             }
 
             let _ = tx.send(GitBgMessage::StatusLoaded {
@@ -770,31 +969,19 @@ impl App {
         state.error = None;
 
         let push = state.push_after_commit;
-        let cwd = self
-            .workspace
-            .cwd
-            .clone()
-            .or_else(|| self.workspace.worktree_path.clone())
-            .unwrap_or_else(|| ".".to_string());
+        let Some(workspace_id) = self.workspace.workspace_id.clone() else {
+            return;
+        };
         let stage_all = !has_staged && has_unstaged;
+        let bridge = self.bridge.clone();
         let tx = self.git_bg_tx.clone();
 
         std::thread::spawn(move || {
-            // Stage all if nothing is staged
-            if stage_all {
-                let _ = std::process::Command::new("git")
-                    .args(["-C", &cwd, "add", "-A"])
-                    .output();
-            }
+            let result = bridge.workspace_git_commit(&workspace_id, &msg, push, stage_all);
 
-            let commit = std::process::Command::new("git")
-                .args(["-C", &cwd, "commit", "-m", &msg])
-                .output();
-
-            let commit_err = match &commit {
-                Ok(o) if o.status.success() => None,
-                Ok(o) => Some(String::from_utf8_lossy(&o.stderr).trim().to_string()),
-                Err(e) => Some(e.to_string()),
+            let commit_err = match &result {
+                Ok(_) => None,
+                Err(error) => Some(error.clone()),
             };
 
             if let Some(err) = commit_err {
@@ -805,14 +992,15 @@ impl App {
             let _ = tx.send(GitBgMessage::CommitDone { error: None });
 
             if push {
-                let push_result = std::process::Command::new("git")
-                    .args(["-C", &cwd, "push"])
-                    .output();
-
-                let push_err = match &push_result {
-                    Ok(o) if o.status.success() => None,
-                    Ok(o) => Some(String::from_utf8_lossy(&o.stderr).trim().to_string()),
-                    Err(e) => Some(e.to_string()),
+                let push_err = match result {
+                    Ok(payload) => {
+                        if payload.push.is_some() {
+                            None
+                        } else {
+                            Some("Push did not complete.".to_string())
+                        }
+                    }
+                    Err(error) => Some(error),
                 };
                 let _ = tx.send(GitBgMessage::PushDone { error: push_err });
             }
@@ -849,7 +1037,7 @@ impl App {
                         }
                     } else {
                         // Commit succeeded — refresh VC panel
-                        self.vc_panel.refresh(self.workspace.cwd.as_deref());
+                        self.vc_panel.refresh(self.workspace.workspace_id.as_deref());
                         // If not pushing, close the dialog
                         if let AppDialog::GitCommit(ref state) = self.dialog {
                             if !state.push_after_commit {
@@ -880,27 +1068,81 @@ impl App {
     // -----------------------------------------------------------------------
 
     pub fn toggle_stack(&mut self) {
-        if self.workspace.workspace_id.is_none() {
+        let Some(workspace_id) = self.workspace.workspace_id.clone() else {
             self.set_status("Select a workspace first.".to_string(), 3);
             return;
-        }
+        };
 
-        let running = !self.workspace.services.is_empty()
-            && self.workspace.services.iter().any(|s| s.status == "running");
+        let running = self
+            .env_panel
+            .services
+            .iter()
+            .any(|service| matches!(service.status.as_str(), "starting" | "ready"));
+        let bridge = self.bridge.clone();
+        let tx = self.stack_action_tx.clone();
+        let action_label = if running { "stopping" } else { "starting" };
 
-        let action = if running { "down" } else { "up" };
-        let ws_name = self.workspace.workspace_name.clone();
-
-        self.set_status(
-            format!("Stack {}...", if running { "stopping" } else { "starting" }),
-            10,
-        );
+        self.env_panel.set_loading();
+        self.workspace.services = vec![];
+        self.set_status(format!("Stack {action_label}..."), 10);
+        self.needs_draw = true;
 
         std::thread::spawn(move || {
-            let _ = std::process::Command::new("lifecycle")
-                .args(["stack", action, "--workspace", &ws_name])
-                .output();
+            let result = if running {
+                bridge.service_stop(&workspace_id, &[])
+            } else {
+                bridge.service_start(&workspace_id, &[])
+            }
+            .map(|payload| {
+                payload
+                    .services
+                    .into_iter()
+                    .map(|service| ServiceEntry {
+                        name: service.name,
+                        status: service.status,
+                        port: service.assigned_port,
+                        preview_url: service.preview_url,
+                    })
+                    .collect::<Vec<_>>()
+            });
+            let _ = tx.send(StackActionMessage::Finished { workspace_id, result });
         });
+    }
+
+    pub fn poll_stack_action(&mut self) -> bool {
+        let mut changed = false;
+
+        while let Ok(message) = self.stack_action_rx.try_recv() {
+            match message {
+                StackActionMessage::Finished { workspace_id, result } => {
+                    if self.workspace.workspace_id.as_deref() != Some(workspace_id.as_str()) {
+                        continue;
+                    }
+
+                    match result {
+                        Ok(services) => {
+                            self.workspace.services = services
+                                .iter()
+                                .map(|service| crate::shell::ServiceSummary {
+                                    name: service.name.clone(),
+                                    preview_url: service.preview_url.clone(),
+                                    status: service.status.clone(),
+                                })
+                                .collect();
+                            self.env_panel.services = services;
+                            self.set_status("Stack updated.".to_string(), 3);
+                        }
+                        Err(error) => {
+                            self.set_status(error, 5);
+                            self.refresh_workspace_panels_async();
+                        }
+                    }
+                    changed = true;
+                }
+            }
+        }
+
+        changed
     }
 
     // -----------------------------------------------------------------------
@@ -909,9 +1151,9 @@ impl App {
 
     pub fn render(&mut self, frame: &mut Frame) {
         let rows = Layout::vertical([
-            Constraint::Length(1), // header
+            Constraint::Length(2), // header + bottom border
             Constraint::Min(0),   // main body
-            Constraint::Length(1), // status bar
+            Constraint::Length(2), // status bar + top border
         ])
         .split(frame.area());
 
@@ -941,6 +1183,10 @@ impl App {
 
         self.col_rects = [columns[0], columns[2], columns[4]];
         self.divider_rects = [columns[1], columns[3]];
+
+        let divider_xs = [columns[1].x, columns[3].x];
+        render_horizontal_rule(frame, Rect::new(rows[0].x, rows[0].bottom().saturating_sub(1), rows[0].width, 1), &divider_xs, '┬');
+        render_horizontal_rule(frame, Rect::new(rows[2].x, rows[2].y, rows[2].width, 1), &divider_xs, '┴');
 
         // Render dividers
         render_divider(frame, columns[1], self.dragging == Some(DragBorder::Left));
@@ -1006,6 +1252,32 @@ fn render_divider(frame: &mut Frame, area: Rect, active: bool) {
     for y in area.y..area.bottom() {
         if let Some(cell) = buf.cell_mut((area.x, y)) {
             cell.set_char('│').set_style(style);
+        }
+    }
+}
+
+fn render_horizontal_rule(frame: &mut Frame, area: Rect, divider_xs: &[u16], junction: char) {
+    use ratatui::style::{Color, Style};
+
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let style = Style::default().fg(Color::DarkGray);
+    let buf = frame.buffer_mut();
+    let y = area.y;
+
+    for x in area.x..area.right() {
+        if let Some(cell) = buf.cell_mut((x, y)) {
+            cell.set_char('─').set_style(style);
+        }
+    }
+
+    for &x in divider_xs {
+        if x >= area.x && x < area.right() {
+            if let Some(cell) = buf.cell_mut((x, y)) {
+                cell.set_char(junction).set_style(style);
+            }
         }
     }
 }

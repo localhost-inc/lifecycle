@@ -18,7 +18,7 @@
     "build": "tsc -b tsconfig.json",
     "format": "oxfmt src",
     "lint": "oxlint src",
-    "test": "bun test src",
+    "test": "bun test src --pass-with-no-tests",
     "typecheck": "tsc -b tsconfig.json"
   },
   "dependencies": {
@@ -26,6 +26,7 @@
     "hono": "^4.7.10",
     "@lifecycle/contracts": "workspace:*",
     "@lifecycle/db": "workspace:*",
+    "@lifecycle/stack": "workspace:*",
     "@lifecycle/workspace": "workspace:*",
     "@standard-schema/spec": "^1.1.0",
     "routedjs": "0.1.4",

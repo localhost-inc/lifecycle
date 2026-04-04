@@ -4,6 +4,18 @@ Lifecycle is a workspace runtime and agent orchestration platform. It manages th
 
 This document defines the canonical system architecture.
 
+## Bridge-First Rule
+
+Lifecycle clients should treat the bridge as the single runtime authority boundary.
+
+Rules:
+
+1. CLI and TUI clients ask the bridge for reads and mutations.
+2. The bridge owns host-local orchestration: workspace records, shell attach, stack/service runtime control, git status, activity, and host-aware execution.
+3. When a bridge-handled request needs cloud or organization authority, the bridge calls the control plane.
+4. When bridge-side runtime state changes, the bridge emits lifecycle events over WebSocket and clients update UI state from those events.
+5. Clients own presentation state such as selection, focus, and layout. They do not create alternate authority paths by shelling out to ad hoc `lifecycle` subprocesses or bypassing the bridge for normal runtime operations.
+
 ## Two Modes
 
 Lifecycle supports two modes of operation over the same workspace contract.
@@ -35,7 +47,7 @@ Both modes share the same workspace contract, the same `lifecycle.json`, the sam
 
 ### 1. Clients
 
-Clients are thin surfaces that talk to the control plane or directly to a local workspace.
+Interactive clients are thin surfaces that talk to the bridge. Background-triggering clients such as Slack, Linear, GitHub, web, and external API consumers talk to the control plane, which then coordinates with the appropriate bridge.
 
 | Client | Mode | Description |
 |---|---|---|
@@ -47,15 +59,33 @@ Clients are thin surfaces that talk to the control plane or directly to a local 
 | GitHub | Background | PR comment and event-triggered sessions. |
 | API | Both | Programmatic access for custom integrations and automation. |
 
-Clients are interchangeable. State lives in the control plane and workspaces, not in clients.
+Clients are interchangeable. State lives in the bridge, control plane, and workspaces, not in clients.
 
-For interactive hosts, Lifecycle also runs a host-local Lifecycle bridge near the workspace. `lifecycle bridge start` starts that bridge, and `lifecycle` launches the TUI as a client of it. The client owns its selected workspace in local state. When it needs to open a shell for that selection, it asks the bridge for the workspace shell. The same bridge boundary is intended to run on local, remote, and cloud hosts so clients can reuse one authority surface across environments.
+For interactive hosts, Lifecycle runs a host-local bridge near the workspace. `lifecycle bridge start` starts that bridge, and `lifecycle` launches the TUI as a client of it. The client owns its selected workspace in local state. When it needs to read or mutate workspace state, it asks the bridge. The same bridge boundary is intended to run on local, remote, and cloud hosts so clients can reuse one authority surface across environments.
 
 In repository development mode, the control plane defaults to the local API dev server instead of `https://control-plane.lifecycle.dev`. The root `bun dev` command exports `LIFECYCLE_DEV=1` and `LIFECYCLE_API_URL=http://127.0.0.1:8787`, `apps/control-plane` listens on `127.0.0.1:8787`, and bridge / CLI API clients resolve their control-plane base URL from that shared process environment.
 
-Operation naming should stay consistent at the semantic layer. Bridge and API methods use singular dotted names such as `workspace.get`, `workspace.list`, `workspace.activity`, `workspace.shell`, `service.get`, `service.list`, and `repo.list`. CLI commands and MCP tools keep the filesystem command tree, but they should map cleanly onto the same underlying operations.
+Operation naming should stay consistent at the semantic layer. Bridge and control-plane methods use singular dotted names such as `workspace.get`, `workspace.list`, `workspace.activity`, `workspace.shell`, `service.get`, `service.list`, and `repo.list`. CLI commands and MCP tools keep the filesystem command tree, but they should map cleanly onto the same underlying operations.
 
-### 2. Control Plane
+Bridge eventing follows the same rule: bridge-side changes stream as lifecycle events, and clients should update their UI models from that stream instead of inventing a second polling or subprocess-based source of truth.
+
+### 2. Bridge
+
+The bridge is the authoritative host-local or host-near runtime process for Lifecycle clients.
+
+**Responsibilities:**
+
+1. Workspace record lookup and host-aware workspace resolution
+2. Shell attach and tmux session orchestration
+3. Stack and service runtime operations
+4. Git and activity reads
+5. Local DB-backed state and runtime coordination
+6. WebSocket lifecycle event streaming to clients
+7. Upstream calls to the control plane when a request needs cloud or organization authority
+
+The bridge is the runtime authority. Clients should not bypass it for normal workspace operations.
+
+### 3. Control Plane
 
 The control plane runs on Cloudflare Workers with Durable Objects and D1.
 
@@ -83,7 +113,7 @@ The control plane runs on Cloudflare Workers with Durable Objects and D1.
 3. Prompt queuing decouples submission from execution. Clients fire and forget.
 4. The control plane never executes code. It orchestrates sandboxes that do.
 
-### 3. Sandbox Providers
+### 4. Sandbox Providers
 
 Sandbox providers are pluggable execution environments. Each provider knows how to provision a workspace runtime, start an agent process inside it, and support shell attach.
 
@@ -118,7 +148,7 @@ Every provider implements:
 7. `snapshot(workspace)` — capture current state (where supported)
 8. `restore(workspace, snapshot)` — restore from snapshot (where supported)
 
-#### Bridge Process
+#### Sandbox Bridge Process
 
 In background mode, a bridge process runs alongside OpenCode inside each sandbox. It:
 
@@ -129,7 +159,7 @@ In background mode, a bridge process runs alongside OpenCode inside each sandbox
 5. Buffers events during disconnects and flushes on reconnect
 6. Uses ACK protocol for critical events (execution complete, errors, snapshots)
 
-The bridge is not needed for interactive mode. It exists only to connect headless sandboxes to the control plane.
+This sandbox bridge is still part of the same bridge concept: it is the runtime-facing process nearest the workspace, and it relays lifecycle events upstream.
 
 ## OpenCode
 

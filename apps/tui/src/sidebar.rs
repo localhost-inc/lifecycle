@@ -4,7 +4,7 @@ use std::process::Command;
 use std::sync::mpsc;
 use std::thread;
 
-use crate::bridge::{LifecycleBridgeClient, RepoListPayload};
+use crate::bridge::LifecycleBridgeClient;
 
 #[derive(Debug, Clone)]
 pub struct SidebarRepo {

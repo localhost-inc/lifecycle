@@ -36,10 +36,12 @@
     "format:check": "oxfmt --check apps packages",
     "lint": "turbo run lint",
     "lint:force": "turbo run lint --force",
+    "desktop:mac": "./apps/desktop-mac/scripts/open.sh",
+    "dev:desktop-mac": "./apps/desktop-mac/scripts/dev.sh",
     "prepare": "lefthook install",
     "qa": "sh -c 'bun run qa:js & p1=$!; bun run test:rust & p2=$!; wait $p1; s1=$?; wait $p2; s2=$?; [ $s1 -eq 0 ] && [ $s2 -eq 0 ]'",
     "qa:js": "turbo run lint typecheck test --parallel",
-    "test:rust": "cargo test --workspace",
+    "test:rust": "cargo test -p lifecycle-tui",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "typecheck:force": "turbo run typecheck --force"

@@ -1,5 +1,7 @@
 # App Shell v2 — Repository Shell, Workspace Canvas
 
+> Historical note: this archived workspace-canvas spec uses an older pane-based model. The current target vocabulary is `canvas > group > surface`; see [docs/reference/vocabulary.md](/Users/kyle/dev/lifecycle/docs/reference/vocabulary.md).
+
 This document defines the desktop shell model as Lifecycle composes a repository-first shell that can later grow into an organization-first shell.
 
 Status note: the desktop shell is not the current execution focus. The CLI and TUI own the active shell/runtime delivery lane right now, and this document should be treated as maintenance guidance unless work explicitly targets the desktop app shell.

@@ -2,9 +2,11 @@ import {
   createWorkspaceClientRegistry,
   type WorkspaceClientRegistry,
 } from "@lifecycle/workspace";
+import { access, readFile } from "node:fs/promises";
 import { CloudWorkspaceClient } from "@lifecycle/workspace/internal/cloud";
 import { LocalWorkspaceClient } from "@lifecycle/workspace/internal/local";
 import { createControlPlaneClient } from "./control-plane-client";
+import { invokeLocalWorkspaceCommand } from "./workspace/local-invoke";
 
 let registry: WorkspaceClientRegistry | null = null;
 
@@ -21,11 +23,17 @@ let registry: WorkspaceClientRegistry | null = null;
 export function getWorkspaceClientRegistry(): WorkspaceClientRegistry {
   if (!registry) {
     const localClient = new LocalWorkspaceClient({
-      invoke: async (cmd) => {
-        throw new Error(
-          `LocalWorkspaceClient.invoke("${cmd}") is not available in the CLI. ` +
-          `Use execCommand() or a CLI-native code path instead.`,
-        );
+      invoke: invokeLocalWorkspaceCommand,
+      fileReader: {
+        exists: async (path) => {
+          try {
+            await access(path);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        readTextFile: (path) => readFile(path, "utf8"),
       },
     });
     const cloudClient = new CloudWorkspaceClient({

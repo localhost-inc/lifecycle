@@ -1,10 +1,17 @@
 import { createRoute } from "routedjs";
+import { z } from "zod";
+
+import { listBridgeServices } from "../../../src/services";
 
 export default createRoute({
-  handler: async () => {
-    // Services are managed by the workspace runtime, not the bridge db.
-    // This endpoint exists for TUI compatibility — returns an empty list
-    // until service tracking is implemented in the bridge.
-    return { services: [] };
+  schemas: {
+    params: z.object({
+      id: z.string().min(1),
+    }),
+  },
+  handler: async ({ params, ctx }) => {
+    const db = ctx.get("db");
+    const workspaceRegistry = ctx.get("workspaceRegistry");
+    return { services: await listBridgeServices(db, workspaceRegistry, params.id) };
   },
 });
