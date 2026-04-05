@@ -233,7 +233,12 @@ export function createAgentSessionHistoryObserver(input: {
           provider: event.session.provider,
           providerSessionId: event.session.provider_session_id,
         });
-        upsertAgentSessionInCollection(input.agentSessionRegistry, input.driver, event.workspaceId, event.session);
+        upsertAgentSessionInCollection(
+          input.agentSessionRegistry,
+          input.driver,
+          event.workspaceId,
+          event.session,
+        );
       }
 
       await persistObservedEvent(input.driver, state, event, now);
@@ -241,7 +246,12 @@ export function createAgentSessionHistoryObserver(input: {
       const message = await state.messageProjection.processEvent(event);
       if (message) {
         await upsertAgentMessageWithParts(input.driver, message);
-        upsertAgentMessageInCollection(input.agentMessageRegistry, input.driver, message.session_id, message);
+        upsertAgentMessageInCollection(
+          input.agentMessageRegistry,
+          input.driver,
+          message.session_id,
+          message,
+        );
       }
 
       if (event.kind === "agent.session.updated") {

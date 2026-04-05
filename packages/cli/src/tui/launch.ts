@@ -25,6 +25,14 @@ function findTuiBinary(): string | null {
   return null;
 }
 
+function currentCliEntrypoint(): string | null {
+  const entrypoint = process.argv[1];
+  if (!entrypoint) {
+    return null;
+  }
+  return resolve(entrypoint);
+}
+
 export async function launchTui(
   input: {
     cwd?: string;
@@ -41,6 +49,7 @@ export async function launchTui(
   }
 
   const { port } = await ensureBridge();
+  const cliEntrypoint = currentCliEntrypoint();
 
   const result = spawnSync(binary, {
     ...(input.cwd ? { cwd: input.cwd } : {}),
@@ -48,6 +57,8 @@ export async function launchTui(
     env: {
       ...input.env,
       LIFECYCLE_BRIDGE_URL: `http://127.0.0.1:${port}`,
+      LIFECYCLE_BRIDGE_CLI_RUNTIME: process.execPath,
+      ...(cliEntrypoint ? { LIFECYCLE_BRIDGE_CLI_ENTRYPOINT: cliEntrypoint } : {}),
       ...(input.workspaceId ? { LIFECYCLE_INITIAL_WORKSPACE_ID: input.workspaceId } : {}),
     },
   });

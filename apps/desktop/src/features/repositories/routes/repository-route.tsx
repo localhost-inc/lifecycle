@@ -44,7 +44,10 @@ export function RepositoryRoute() {
 
     return workspacesByRepositoryId[repositoryId] ?? [];
   }, [repositoryId, workspacesByRepositoryId]);
-  const repositoryWorkspace = useMemo(() => resolveRepositoryRootWorkspace(workspaces), [workspaces]);
+  const repositoryWorkspace = useMemo(
+    () => resolveRepositoryRootWorkspace(workspaces),
+    [workspaces],
+  );
 
   // Workspace prev/next shortcuts
   useShortcutRegistration({

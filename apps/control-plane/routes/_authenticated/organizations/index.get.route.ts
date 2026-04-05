@@ -7,7 +7,10 @@ export default createRoute({
     const db = ctx.get("db");
     const userId = ctx.get("userId");
 
-    const memberships = await db.select().from(organizationMembership).where(eq(organizationMembership.userId, userId));
+    const memberships = await db
+      .select()
+      .from(organizationMembership)
+      .where(eq(organizationMembership.userId, userId));
 
     if (memberships.length === 0) {
       return { organizations: [] as { id: string; name: string; slug: string; role: string }[] };

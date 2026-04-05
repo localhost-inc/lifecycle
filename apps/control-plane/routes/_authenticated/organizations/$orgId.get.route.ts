@@ -12,13 +12,30 @@ export default createRoute({
     const db = ctx.get("db");
     const userId = ctx.get("userId");
 
-    const result = await db.select().from(organization).where(eq(organization.id, params.orgId)).limit(1);
+    const result = await db
+      .select()
+      .from(organization)
+      .where(eq(organization.id, params.orgId))
+      .limit(1);
     const org = result[0];
     if (!org) throw notFound("organization_not_found", `Organization ${params.orgId} not found.`);
 
-    const memberships = await db.select().from(organizationMembership).where(and(eq(organizationMembership.organizationId, params.orgId), eq(organizationMembership.userId, userId))).limit(1);
+    const memberships = await db
+      .select()
+      .from(organizationMembership)
+      .where(
+        and(
+          eq(organizationMembership.organizationId, params.orgId),
+          eq(organizationMembership.userId, userId),
+        ),
+      )
+      .limit(1);
     const mem = memberships[0];
-    if (!mem) throw forbidden("organization_membership_missing", "You are not a member of this organization.");
+    if (!mem)
+      throw forbidden(
+        "organization_membership_missing",
+        "You are not a member of this organization.",
+      );
 
     return { ...org, role: mem.role };
   },

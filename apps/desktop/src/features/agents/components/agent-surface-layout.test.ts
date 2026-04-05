@@ -11,9 +11,7 @@ describe("agent-surface transcript layout", () => {
 
     expect(transcriptSource).toContain('className="bg-[var(--surface-hover)]/50 px-4 py-3"');
     expect(surfaceSource).toContain('className="px-4 py-3 text-[13px]');
-    expect(surfaceSource).toContain(
-      'className="agent-message-list relative min-h-0 flex-1"',
-    );
+    expect(surfaceSource).toContain('className="agent-message-list relative min-h-0 flex-1"');
     expect(surfaceSource).not.toContain(
       'className="agent-message-list flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-4 pb-6 pt-3"',
     );

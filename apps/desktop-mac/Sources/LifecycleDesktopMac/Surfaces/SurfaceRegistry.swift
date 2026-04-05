@@ -25,6 +25,8 @@ struct SurfaceResolutionContext {
   let workspaceID: String
   let workingDirectory: String
   let themeConfigPath: String
+  let terminalBackgroundHexColor: String
+  let terminalDarkAppearance: Bool
   let backendLabel: String
   let persistent: Bool
   let terminalsByID: [String: BridgeTerminalRecord]
@@ -47,19 +49,24 @@ struct ResolvedSurface {
   let isClosable: Bool
 }
 
+struct SurfaceRenderState: Equatable {
+  let isFocused: Bool
+  let isVisible: Bool
+}
+
 // MARK: - AnySurfaceContent
 
 struct AnySurfaceContent {
   let id: String
-  private let _body: (_ isFocused: Bool) -> AnyView
+  private let _body: (_ renderState: SurfaceRenderState) -> AnyView
 
-  init<V: View>(id: String, @ViewBuilder body: @escaping (_ isFocused: Bool) -> V) {
+  init<V: View>(id: String, @ViewBuilder body: @escaping (_ renderState: SurfaceRenderState) -> V) {
     self.id = id
-    self._body = { isFocused in AnyView(body(isFocused)) }
+    self._body = { renderState in AnyView(body(renderState)) }
   }
 
-  func body(isFocused: Bool) -> AnyView {
-    _body(isFocused)
+  func body(renderState: SurfaceRenderState) -> AnyView {
+    _body(renderState)
   }
 }
 

@@ -88,7 +88,8 @@ fn prepare_ghosttykit() -> Result<PathBuf, String> {
 
 #[cfg(target_os = "macos")]
 fn cached_ghosttykit_xcframework_path() -> Option<PathBuf> {
-    let path = PathBuf::from(GENERATED_GHOSTTYKIT_XCFRAMEWORK);
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").ok()?);
+    let path = manifest_dir.join(GENERATED_GHOSTTYKIT_XCFRAMEWORK);
     path.exists().then_some(path)
 }
 

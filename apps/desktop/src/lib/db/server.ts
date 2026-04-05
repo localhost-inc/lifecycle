@@ -161,9 +161,13 @@ async function requestDbServer<TResult>(
 
 async function isHealthy(registration: DbServerRegistration): Promise<boolean> {
   try {
-    const result = await requestDbServer<DbServerHealthResult>(registration, {
-      kind: "health",
-    }, 1_500);
+    const result = await requestDbServer<DbServerHealthResult>(
+      registration,
+      {
+        kind: "health",
+      },
+      1_500,
+    );
     return result.ok && result.dbPath === registration.dbPath;
   } catch {
     return false;

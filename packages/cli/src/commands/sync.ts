@@ -50,12 +50,26 @@ export default defineCommand({
       const profile = detectEnvironment();
 
       if (input.json) {
-        context.stdout(JSON.stringify({
-          git: profile.git ? { name: profile.git.name, email: profile.git.email, aliases: profile.git.aliasCount } : null,
-          claude: profile.claude ? { authenticated: true, plan: profile.claude.subscriptionType } : null,
-          codex: profile.codex ? { authenticated: true } : null,
-          claudeConfig: profile.claudeConfig ? { found: true } : null,
-        }, null, 2));
+        context.stdout(
+          JSON.stringify(
+            {
+              git: profile.git
+                ? {
+                    name: profile.git.name,
+                    email: profile.git.email,
+                    aliases: profile.git.aliasCount,
+                  }
+                : null,
+              claude: profile.claude
+                ? { authenticated: true, plan: profile.claude.subscriptionType }
+                : null,
+              codex: profile.codex ? { authenticated: true } : null,
+              claudeConfig: profile.claudeConfig ? { found: true } : null,
+            },
+            null,
+            2,
+          ),
+        );
         return 0;
       }
 
@@ -119,21 +133,29 @@ export default defineCommand({
       const { client } = await ensureBridge();
       await client.users.me.environment.$put({
         json: {
-          git: accepted.git ? {
-            name: accepted.git.name,
-            email: accepted.git.email,
-            configBase64: accepted.git.configBase64,
-          } : undefined,
-          claude: accepted.claude ? {
-            accessToken: accepted.claude.accessToken,
-            refreshToken: accepted.claude.refreshToken,
-          } : undefined,
-          claudeConfig: accepted.claudeConfig ? {
-            settingsBase64: accepted.claudeConfig.settingsBase64,
-          } : undefined,
-          codex: accepted.codex ? {
-            authBase64: accepted.codex.authBase64,
-          } : undefined,
+          git: accepted.git
+            ? {
+                name: accepted.git.name,
+                email: accepted.git.email,
+                configBase64: accepted.git.configBase64,
+              }
+            : undefined,
+          claude: accepted.claude
+            ? {
+                accessToken: accepted.claude.accessToken,
+                refreshToken: accepted.claude.refreshToken,
+              }
+            : undefined,
+          claudeConfig: accepted.claudeConfig
+            ? {
+                settingsBase64: accepted.claudeConfig.settingsBase64,
+              }
+            : undefined,
+          codex: accepted.codex
+            ? {
+                authBase64: accepted.codex.authBase64,
+              }
+            : undefined,
         },
       });
 

@@ -14,7 +14,8 @@ Rules:
 2. The bridge owns host-local orchestration: workspace records, shell attach, stack/service runtime control, git status, activity, and host-aware execution.
 3. When a bridge-handled request needs cloud or organization authority, the bridge calls the control plane.
 4. When bridge-side runtime state changes, the bridge emits lifecycle events over WebSocket and clients update UI state from those events.
-5. Clients own presentation state such as selection, focus, and layout. They do not create alternate authority paths by shelling out to ad hoc `lifecycle` subprocesses or bypassing the bridge for normal runtime operations.
+5. Interactive bridge clients must self-heal bridge discovery. If the pinned bridge endpoint dies or the bridge registration in `~/.lifecycle/bridge.json` changes, clients rediscover the current bridge, retry the request, and may start the bridge when no healthy instance exists.
+6. Clients own presentation state such as selection, focus, and layout. They do not create alternate authority paths by shelling out to ad hoc `lifecycle` subprocesses or bypassing the bridge for normal runtime operations.
 
 ## Two Modes
 

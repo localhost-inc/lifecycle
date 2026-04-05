@@ -55,16 +55,12 @@
       "indexes": {
         "organization_workos_organization_id_unique": {
           "name": "organization_workos_organization_id_unique",
-          "columns": [
-            "workos_organization_id"
-          ],
+          "columns": ["workos_organization_id"],
           "isUnique": true
         },
         "organization_slug_unique": {
           "name": "organization_slug_unique",
-          "columns": [
-            "slug"
-          ],
+          "columns": ["slug"],
           "isUnique": true
         }
       },
@@ -172,12 +168,8 @@
           "name": "organization_cloud_account_organization_id_organization_id_fk",
           "tableFrom": "organization_cloud_account",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -185,12 +177,8 @@
           "name": "organization_cloud_account_created_by_user_id_fk",
           "tableFrom": "organization_cloud_account",
           "tableTo": "user",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -258,9 +246,7 @@
       "indexes": {
         "organization_membership_workos_membership_id_unique": {
           "name": "organization_membership_workos_membership_id_unique",
-          "columns": [
-            "workos_membership_id"
-          ],
+          "columns": ["workos_membership_id"],
           "isUnique": true
         }
       },
@@ -269,12 +255,8 @@
           "name": "organization_membership_organization_id_organization_id_fk",
           "tableFrom": "organization_membership",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -282,12 +264,8 @@
           "name": "organization_membership_user_id_user_id_fk",
           "tableFrom": "organization_membership",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -395,12 +373,8 @@
           "name": "repository_organization_id_organization_id_fk",
           "tableFrom": "repository",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -460,9 +434,7 @@
       "indexes": {
         "user_workos_user_id_unique": {
           "name": "user_workos_user_id_unique",
-          "columns": [
-            "workos_user_id"
-          ],
+          "columns": ["workos_user_id"],
           "isUnique": true
         }
       },
@@ -584,12 +556,8 @@
           "name": "workspace_organization_id_organization_id_fk",
           "tableFrom": "workspace",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -597,12 +565,8 @@
           "name": "workspace_repository_id_repository_id_fk",
           "tableFrom": "workspace",
           "tableTo": "repository",
-          "columnsFrom": [
-            "repository_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repository_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -610,12 +574,8 @@
           "name": "workspace_created_by_user_id_fk",
           "tableFrom": "workspace",
           "tableTo": "user",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }

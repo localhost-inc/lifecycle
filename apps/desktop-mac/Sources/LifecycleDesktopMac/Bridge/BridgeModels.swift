@@ -64,6 +64,40 @@ struct BridgeWorkspaceTerminalConnectionEnvelope: Decodable {
   let connection: BridgeTerminalConnection
 }
 
+struct BridgeSettingsEnvelope: Decodable {
+  let settings: BridgeSettings
+  let settingsPath: String
+
+  enum CodingKeys: String, CodingKey {
+    case settings
+    case settingsPath = "settings_path"
+  }
+}
+
+struct BridgeSettings: Decodable, Equatable {
+  let appearance: BridgeAppearanceSettings
+  let terminal: BridgeTerminalSettings
+}
+
+struct BridgeAppearanceSettings: Decodable, Equatable {
+  let theme: String
+}
+
+struct BridgeTerminalSettings: Decodable, Equatable {
+  let command: BridgeTerminalCommandSettings
+  let persistence: BridgeTerminalPersistenceSettings
+}
+
+struct BridgeTerminalCommandSettings: Decodable, Equatable {
+  let program: String?
+}
+
+struct BridgeTerminalPersistenceSettings: Decodable, Equatable {
+  let backend: String
+  let mode: String
+  let executablePath: String?
+}
+
 struct BridgeWorkspaceScope: Decodable, Hashable {
   let binding: String
   let workspaceID: String?
@@ -220,6 +254,11 @@ struct BridgeShellLaunchSpec: Decodable, Hashable {
   var displayCommand: String {
     ([program] + args).map(shellEscape).joined(separator: " ")
   }
+
+  var shellCommand: String {
+    let envArgs = envPairs.map { "\($0.0)=\($0.1)" }
+    return (["env"] + envArgs + [program] + args).map(shellEscape).joined(separator: " ")
+  }
 }
 
 func bridgeTerminalCommandText(_ connection: BridgeTerminalConnection) -> String? {
@@ -236,8 +275,8 @@ func bridgeTerminalCommandText(_ connection: BridgeTerminalConnection) -> String
 }
 
 private func bridgeSpawnShellCommand(_ transport: BridgeTerminalSpawnTransport) -> String? {
-  let prepareCommand = transport.prepare?.displayCommand
-  let execCommand = transport.spec.map { "exec \($0.displayCommand)" }
+  let prepareCommand = transport.prepare?.shellCommand
+  let execCommand = transport.spec.map { "exec \($0.shellCommand)" }
 
   let script: String?
   switch (prepareCommand, execCommand) {

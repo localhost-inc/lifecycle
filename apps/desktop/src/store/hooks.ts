@@ -174,8 +174,7 @@ export function useAgentMessages(sessionId: string): {
   }
 
   // If session changed, don't serve stale data from a different session.
-  const cached =
-    cacheRef.current.sessionId === sessionId ? cacheRef.current.messages : [];
+  const cached = cacheRef.current.sessionId === sessionId ? cacheRef.current.messages : [];
 
   return {
     data: isReady ? resolved : cached,

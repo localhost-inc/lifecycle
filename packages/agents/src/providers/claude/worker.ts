@@ -116,11 +116,7 @@ function emitWorkerEvent(event: AgentWorkerEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
 }
 
-function emitRawProviderEvent(
-  eventType: string,
-  payload: unknown,
-  turnId?: string | null,
-): void {
+function emitRawProviderEvent(eventType: string, payload: unknown, turnId?: string | null): void {
   emitWorkerEvent({
     kind: "provider.raw_event",
     eventType,

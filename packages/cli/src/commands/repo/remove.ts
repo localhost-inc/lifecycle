@@ -10,10 +10,7 @@ export default defineCommand({
   input: z.object({
     json: jsonFlag,
     "repo-id": z.string().optional().describe("Repository ID to remove."),
-    path: z
-      .string()
-      .optional()
-      .describe("Repository path. Defaults to the current directory."),
+    path: z.string().optional().describe("Repository path. Defaults to the current directory."),
   }),
   run: async (input, context) => {
     try {
@@ -49,7 +46,9 @@ export default defineCommand({
       await client.repos[":repoId"].$delete({ param: { repoId: repo.id } });
 
       if (input.json) {
-        context.stdout(JSON.stringify({ removed: true, id: repo.id, name: repo.name, path: repo.path }));
+        context.stdout(
+          JSON.stringify({ removed: true, id: repo.id, name: repo.name, path: repo.path }),
+        );
         return 0;
       }
 

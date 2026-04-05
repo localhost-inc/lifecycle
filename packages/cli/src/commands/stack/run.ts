@@ -15,11 +15,13 @@ function lifecycleStatePath(): string {
 }
 
 function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "") || "unnamed";
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "") || "unnamed"
+  );
 }
 
 export default defineCommand({
@@ -98,7 +100,11 @@ export default defineCommand({
           writeFileSync(resolve(stateDir, `${started.name}.pid`), String(pid), "utf8");
         }
         if (started.assignedPort !== null) {
-          writeFileSync(resolve(stateDir, `${started.name}.port`), String(started.assignedPort), "utf8");
+          writeFileSync(
+            resolve(stateDir, `${started.name}.port`),
+            String(started.assignedPort),
+            "utf8",
+          );
         }
       }
 
@@ -117,7 +123,9 @@ export default defineCommand({
 
       // Foreground mode: stay alive so the user can Ctrl+C to stop.
       if (result.startedServices.length > 0 && !input.json) {
-        context.stdout(`\n${result.startedServices.length} service(s) running. Press Ctrl+C to stop.`);
+        context.stdout(
+          `\n${result.startedServices.length} service(s) running. Press Ctrl+C to stop.`,
+        );
 
         await new Promise<void>((waitResolve) => {
           const onSignal = () => {

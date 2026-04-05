@@ -21,7 +21,9 @@ export default defineCommand({
       }
 
       if (repositories.length === 0) {
-        context.stdout("No repositories. Run `lifecycle repo init` in a project directory to add one.");
+        context.stdout(
+          "No repositories. Run `lifecycle repo init` in a project directory to add one.",
+        );
         return 0;
       }
 

@@ -79,10 +79,10 @@ function detectClaude(): ClaudeCredentials | null {
   if (platform() !== "darwin") return null;
 
   try {
-    const raw = execSync(
-      'security find-generic-password -s "Claude Code-credentials" -w',
-      { encoding: "utf8", timeout: 5000 },
-    ).trim();
+    const raw = execSync('security find-generic-password -s "Claude Code-credentials" -w', {
+      encoding: "utf8",
+      timeout: 5000,
+    }).trim();
 
     const parsed = JSON.parse(raw);
     const oauth = parsed?.claudeAiOauth;
@@ -129,11 +129,11 @@ export function serializeProfile(profile: EnvironmentProfile): string[] {
   }
 
   if (profile.claude) {
-    const envLines = [
-      `export CLAUDE_CODE_OAUTH_TOKEN=${shellQuote(profile.claude.accessToken)}`,
-    ];
+    const envLines = [`export CLAUDE_CODE_OAUTH_TOKEN=${shellQuote(profile.claude.accessToken)}`];
     if (profile.claude.refreshToken) {
-      envLines.push(`export CLAUDE_CODE_OAUTH_REFRESH_TOKEN=${shellQuote(profile.claude.refreshToken)}`);
+      envLines.push(
+        `export CLAUDE_CODE_OAUTH_REFRESH_TOKEN=${shellQuote(profile.claude.refreshToken)}`,
+      );
     }
     const encoded = Buffer.from(envLines.join("\n")).toString("base64");
     cmds.push(

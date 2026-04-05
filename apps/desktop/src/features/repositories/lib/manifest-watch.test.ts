@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { getManifestPath, watchEventTouchesManifest } from "@/features/repositories/lib/manifest-watch";
+import {
+  getManifestPath,
+  watchEventTouchesManifest,
+} from "@/features/repositories/lib/manifest-watch";
 
 describe("manifest watch helpers", () => {
   test("builds the canonical lifecycle.json path for any watched directory", () => {

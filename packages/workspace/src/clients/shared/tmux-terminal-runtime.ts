@@ -1,10 +1,75 @@
 import type {
-  WorkspaceTerminalKind,
-  WorkspaceTerminalRecord,
-} from "../../workspace";
+  LifecycleTerminalPersistenceBackend,
+  LifecycleTerminalPersistenceMode,
+} from "@lifecycle/contracts";
+import type { WorkspaceTerminalKind, WorkspaceTerminalRecord } from "../../workspace";
 
 export const TMUX_TERMINAL_RECORD_FORMAT =
   "#{window_id}\t#{window_name}\t#{window_activity_flag}\t#{window_active}";
+const MANAGED_TMUX_PROFILE_VERSION = 2;
+// tmux server options live for the lifetime of the socket. Bump the managed
+// socket namespace when Lifecycle changes its expected managed profile so new
+// clients do not inherit stale option state from an older server instance.
+export const MANAGED_TMUX_SOCKET_NAME =
+  `lifecycle-managed-v${MANAGED_TMUX_PROFILE_VERSION}`;
+
+export interface TmuxRuntimeProfile {
+  baseArgs: string[];
+  backend: LifecycleTerminalPersistenceBackend;
+  mode: LifecycleTerminalPersistenceMode;
+  program: string;
+}
+
+export interface ResolveTmuxRuntimeProfileInput {
+  persistenceBackend?: LifecycleTerminalPersistenceBackend;
+  persistenceMode?: LifecycleTerminalPersistenceMode;
+  persistenceExecutablePath?: string | null;
+}
+
+export function resolveTmuxRuntimeProfile(
+  input: ResolveTmuxRuntimeProfileInput = {},
+): TmuxRuntimeProfile {
+  const backend = input.persistenceBackend ?? "tmux";
+  const fallbackProgram = backend === "zellij" ? "zellij" : "tmux";
+  const program = input.persistenceExecutablePath?.trim() || fallbackProgram;
+  const mode = input.persistenceMode ?? "inherit";
+
+  if (backend === "tmux" && mode === "managed") {
+    return {
+      baseArgs: ["-L", MANAGED_TMUX_SOCKET_NAME, "-f", "/dev/null"],
+      backend,
+      mode,
+      program,
+    };
+  }
+
+  return {
+    baseArgs: [],
+    backend,
+    mode,
+    program,
+  };
+}
+
+export function buildTmuxCommand(profile: TmuxRuntimeProfile, args: string[]): string[] {
+  return [profile.program, ...profile.baseArgs, ...args];
+}
+
+export function buildTmuxCommandText(profile: TmuxRuntimeProfile, args: string[]): string {
+  return buildTmuxCommand(profile, args).map(shellEscape).join(" ");
+}
+
+export function buildTmuxLaunchEnv(profile: TmuxRuntimeProfile): Array<[string, string]> {
+  const env: Array<[string, string]> = [["TERM", "xterm-256color"]];
+
+  if (profile.mode === "managed") {
+    // Managed tmux should not inherit an outer tmux client context when the
+    // app or CLI itself was launched from inside tmux.
+    env.push(["TMUX", ""], ["TMUX_PANE", ""]);
+  }
+
+  return env;
+}
 
 export function buildTmuxConnectionId(
   sessionName: string,
@@ -20,50 +85,63 @@ export function buildTmuxConnectionId(
 }
 
 export function buildEnsureTmuxSessionCommand(
+  profile: TmuxRuntimeProfile,
   sessionName: string,
   cwd: string,
   initialTitle = "shell",
 ): string {
-  return [
-    "tmux has-session -t",
-    shellEscape(sessionName),
-    "2>/dev/null || tmux new-session -d -s",
-    shellEscape(sessionName),
-    "-c",
-    shellEscape(cwd),
-    "-n",
-    shellEscape(initialTitle),
-  ].join(" ");
+  const commands = [
+    [
+      buildTmuxCommandText(profile, ["has-session", "-t", sessionName]),
+      "2>/dev/null ||",
+      buildTmuxCommandText(profile, [
+        "new-session",
+        "-d",
+        "-s",
+        sessionName,
+        "-c",
+        cwd,
+        "-n",
+        initialTitle,
+      ]),
+    ].join(" "),
+    ...buildTmuxSessionOptionCommands(profile, sessionName),
+  ];
+
+  return commands.join("; ");
 }
 
 export function buildEnsureTmuxConnectionCommand(
+  profile: TmuxRuntimeProfile,
   sessionName: string,
   connectionId: string,
   terminalId: string,
   cwd: string,
 ): string {
   return [
-    buildEnsureTmuxSessionCommand(sessionName, cwd),
+    buildEnsureTmuxSessionCommand(profile, sessionName, cwd),
     [
-      "tmux has-session -t",
-      shellEscape(connectionId),
-      "2>/dev/null || tmux new-session -d -t",
-      shellEscape(sessionName),
-      "-s",
-      shellEscape(connectionId),
+      buildTmuxCommandText(profile, ["has-session", "-t", connectionId]),
+      "2>/dev/null ||",
+      buildTmuxCommandText(profile, ["new-session", "-d", "-t", sessionName, "-s", connectionId]),
     ].join(" "),
-    ["tmux select-window -t", shellEscape(buildTmuxTerminalTarget(connectionId, terminalId))].join(
-      " ",
-    ),
+    ...buildTmuxSessionOptionCommands(profile, connectionId),
+    buildTmuxCommandText(profile, [
+      "select-window",
+      "-t",
+      buildTmuxTerminalTarget(connectionId, terminalId),
+    ]),
   ].join("; ");
 }
 
-export function buildSafeKillTmuxSessionCommand(connectionId: string): string {
+export function buildSafeKillTmuxSessionCommand(
+  profile: TmuxRuntimeProfile,
+  connectionId: string,
+): string {
   return [
-    "tmux has-session -t",
-    shellEscape(connectionId),
-    "2>/dev/null && tmux kill-session -t",
-    shellEscape(connectionId),
+    buildTmuxCommandText(profile, ["has-session", "-t", connectionId]),
+    "2>/dev/null &&",
+    buildTmuxCommandText(profile, ["kill-session", "-t", connectionId]),
     "|| true",
   ].join(" ");
 }
@@ -152,6 +230,23 @@ export function shellEscape(value: string): string {
 
 function buildTmuxTerminalTarget(sessionName: string, terminalId: string): string {
   return `${sessionName}:${terminalId}`;
+}
+
+function buildTmuxSessionOptionCommands(
+  profile: TmuxRuntimeProfile,
+  sessionName: string,
+): string[] {
+  const commands = [
+    buildTmuxCommandText(profile, ["set-option", "-t", sessionName, "window-size", "latest"]),
+  ];
+
+  if (profile.mode === "managed") {
+    commands.unshift(
+      buildTmuxCommandText(profile, ["set-option", "-t", sessionName, "status", "off"]),
+    );
+  }
+
+  return commands;
 }
 
 function inferTerminalKind(title: string): WorkspaceTerminalKind {

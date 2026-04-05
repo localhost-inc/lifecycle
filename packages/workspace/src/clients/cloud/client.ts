@@ -39,6 +39,8 @@ import type {
 import type { ManifestStatus } from "../../manifest";
 import { buildCloudShellSshArgs, type CloudShellConnection } from "./shell";
 import {
+  buildTmuxCommand,
+  buildTmuxCommandText,
   buildEnsureTmuxConnectionCommand,
   buildEnsureTmuxSessionCommand,
   buildSafeKillTmuxSessionCommand,
@@ -48,16 +50,12 @@ import {
   buildTmuxListTerminalArgs,
   normalizeTerminalTitle,
   parseTmuxTerminalRecords,
+  resolveTmuxRuntimeProfile,
 } from "../shared/tmux-terminal-runtime";
 
 export interface CloudClientDeps {
-  execWorkspaceCommand: (
-    workspaceId: string,
-    command: string[],
-  ) => Promise<ExecCommandResult>;
-  getShellConnection: (
-    workspaceId: string,
-  ) => Promise<CloudShellConnection>;
+  execWorkspaceCommand: (workspaceId: string, command: string[]) => Promise<ExecCommandResult>;
+  getShellConnection: (workspaceId: string) => Promise<CloudShellConnection>;
 }
 
 function requireWorkspaceId(workspace: WorkspaceRecord): string {
@@ -68,9 +66,7 @@ function requireWorkspaceId(workspace: WorkspaceRecord): string {
 }
 
 function unsupported(method: string): never {
-  throw new Error(
-    `CloudWorkspaceClient.${method} is not implemented in @lifecycle/workspace yet.`,
-  );
+  throw new Error(`CloudWorkspaceClient.${method} is not implemented in @lifecycle/workspace yet.`);
 }
 
 export class CloudWorkspaceClient implements WorkspaceClient {
@@ -82,10 +78,7 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     this.getShellConnection = deps.getShellConnection;
   }
 
-  async execCommand(
-    workspace: WorkspaceRecord,
-    command: string[],
-  ): Promise<ExecCommandResult> {
+  async execCommand(workspace: WorkspaceRecord, command: string[]): Promise<ExecCommandResult> {
     return this.execWorkspaceCommand(requireWorkspaceId(workspace), command);
   }
 
@@ -99,6 +92,7 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     const syncEnvironment = (input.syncEnvironment ?? [])
       .map((command) => command.trim())
       .filter((command) => command.length > 0);
+    const tmuxProfile = resolveTmuxRuntimeProfile(input);
 
     if (!sessionName) {
       return {
@@ -106,16 +100,17 @@ export class CloudWorkspaceClient implements WorkspaceClient {
         launchError: null,
         persistent: false,
         sessionName: null,
-        prepare: syncEnvironment.length > 0
-          ? {
-            program: "ssh",
-            args: buildCloudShellSshArgs(connection, {
-              entryCommandText: [...syncEnvironment, "exit"].join("; "),
-            }),
-            cwd: null,
-            env: [],
-          }
-          : null,
+        prepare:
+          syncEnvironment.length > 0
+            ? {
+                program: "ssh",
+                args: buildCloudShellSshArgs(connection, {
+                  entryCommandText: [...syncEnvironment, "exit"].join("; "),
+                }),
+                cwd: null,
+                env: [],
+              }
+            : null,
         spec: {
           program: "ssh",
           args: buildCloudShellSshArgs(connection),
@@ -125,13 +120,24 @@ export class CloudWorkspaceClient implements WorkspaceClient {
       };
     }
 
-    const quotedSession = shellEscape(sessionName);
+    if (tmuxProfile.backend !== "tmux") {
+      return {
+        backendLabel: "cloud shell",
+        launchError: unsupportedPersistenceBackendError(tmuxProfile.backend),
+        persistent: false,
+        sessionName: null,
+        prepare: null,
+        spec: null,
+      };
+    }
+
+    const cwd = input.cwd ?? connection.cwd ?? "/workspace";
     const prepareCommand = [
       ...syncEnvironment,
-      `tmux has-session -t ${quotedSession} 2>/dev/null || tmux new-session -d -s ${quotedSession}`,
-      `printf %s ${quotedSession} > /tmp/.lifecycle-tmux-attach`,
+      buildEnsureTmuxSessionCommand(tmuxProfile, sessionName, cwd),
       "exit",
     ].join("; ");
+    const attachCommand = buildTmuxCommandText(tmuxProfile, ["attach-session", "-t", sessionName]);
 
     return {
       backendLabel: "cloud tmux",
@@ -148,7 +154,9 @@ export class CloudWorkspaceClient implements WorkspaceClient {
       },
       spec: {
         program: "ssh",
-        args: buildCloudShellSshArgs(connection),
+        args: buildCloudShellSshArgs(connection, {
+          entryCommandText: attachCommand,
+        }),
         cwd: null,
         env: [],
       },
@@ -160,11 +168,25 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     input: ResolveWorkspaceTerminalRuntimeInput = {},
   ): Promise<WorkspaceTerminalRuntime> {
     const sessionName = input.sessionName?.trim() || null;
+    const tmuxProfile = resolveTmuxRuntimeProfile(input);
     if (!sessionName) {
       return {
         backendLabel: "cloud tmux",
         runtimeId: null,
         launchError: "Lifecycle could not resolve the cloud terminal runtime for this workspace.",
+        persistent: false,
+        supportsCreate: false,
+        supportsClose: false,
+        supportsConnect: false,
+        supportsRename: false,
+      };
+    }
+
+    if (tmuxProfile.backend !== "tmux") {
+      return {
+        backendLabel: "cloud shell",
+        runtimeId: null,
+        launchError: unsupportedPersistenceBackendError(tmuxProfile.backend),
         persistent: false,
         supportsCreate: false,
         supportsClose: false,
@@ -192,11 +214,14 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     const context = await this.requireTerminalContext(workspace, input);
     await this.ensureTmuxSession(workspace, context);
 
-    const result = await this.execWorkspaceCommand(requireWorkspaceId(workspace), [
-      "tmux",
-      ...buildTmuxListTerminalArgs(context.sessionName),
-    ]);
-    this.throwIfCommandFailed(result, "Lifecycle could not list cloud terminals for this workspace.");
+    const result = await this.execWorkspaceCommand(
+      requireWorkspaceId(workspace),
+      buildTmuxCommand(context.profile, buildTmuxListTerminalArgs(context.sessionName)),
+    );
+    this.throwIfCommandFailed(
+      result,
+      "Lifecycle could not list cloud terminals for this workspace.",
+    );
     return parseTmuxTerminalRecords(result.stdout);
   }
 
@@ -208,11 +233,17 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     await this.ensureTmuxSession(workspace, context);
 
     const title = normalizeTerminalTitle(input.title, input.kind);
-    const result = await this.execWorkspaceCommand(requireWorkspaceId(workspace), [
-      "tmux",
-      ...buildTmuxCreateTerminalArgs(context.sessionName, context.cwd, title),
-    ]);
-    this.throwIfCommandFailed(result, "Lifecycle could not create a cloud terminal for this workspace.");
+    const result = await this.execWorkspaceCommand(
+      requireWorkspaceId(workspace),
+      buildTmuxCommand(
+        context.profile,
+        buildTmuxCreateTerminalArgs(context.sessionName, context.cwd, title),
+      ),
+    );
+    this.throwIfCommandFailed(
+      result,
+      "Lifecycle could not create a cloud terminal for this workspace.",
+    );
 
     const created = parseTmuxTerminalRecords(result.stdout).at(0);
     if (!created) {
@@ -234,10 +265,13 @@ export class CloudWorkspaceClient implements WorkspaceClient {
       throw new Error("Lifecycle will not close the last terminal in a workspace runtime.");
     }
 
-    const result = await this.execWorkspaceCommand(requireWorkspaceId(workspace), [
-      "tmux",
-      ...buildTmuxCloseTerminalArgs(context.sessionName, terminalId),
-    ]);
+    const result = await this.execWorkspaceCommand(
+      requireWorkspaceId(workspace),
+      buildTmuxCommand(
+        context.profile,
+        buildTmuxCloseTerminalArgs(context.sessionName, terminalId),
+      ),
+    );
     this.throwIfCommandFailed(result, `Lifecycle could not close cloud terminal "${terminalId}".`);
   }
 
@@ -268,6 +302,7 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     const prepareCommand = [
       ...syncEnvironment,
       buildEnsureTmuxConnectionCommand(
+        context.profile,
         context.sessionName,
         connectionId,
         input.terminalId,
@@ -292,7 +327,11 @@ export class CloudWorkspaceClient implements WorkspaceClient {
         spec: {
           program: "ssh",
           args: buildCloudShellSshArgs(connection, {
-            entryCommandText: `tmux attach-session -t ${connectionId}`,
+            entryCommandText: buildTmuxCommandText(context.profile, [
+              "attach-session",
+              "-t",
+              connectionId,
+            ]),
           }),
           cwd: null,
           env: [],
@@ -307,11 +346,11 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     connectionId: string,
     input: ResolveWorkspaceTerminalRuntimeInput = {},
   ): Promise<void> {
-    await this.requireTerminalContext(workspace, input);
+    const context = await this.requireTerminalContext(workspace, input);
     const result = await this.execWorkspaceCommand(requireWorkspaceId(workspace), [
       "sh",
       "-lc",
-      buildSafeKillTmuxSessionCommand(connectionId),
+      buildSafeKillTmuxSessionCommand(context.profile, connectionId),
     ]);
     this.throwIfCommandFailed(
       result,
@@ -344,10 +383,7 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     throw unsupported("archiveWorkspace");
   }
 
-  async readFile(
-    _workspace: WorkspaceRecord,
-    _filePath: string,
-  ): Promise<WorkspaceFileReadResult> {
+  async readFile(_workspace: WorkspaceRecord, _filePath: string): Promise<WorkspaceFileReadResult> {
     throw unsupported("readFile");
   }
 
@@ -386,10 +422,7 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     throw unsupported("getGitStatus");
   }
 
-  async getGitScopePatch(
-    _workspace: WorkspaceRecord,
-    _scope: GitDiffScope,
-  ): Promise<string> {
+  async getGitScopePatch(_workspace: WorkspaceRecord, _scope: GitDiffScope): Promise<string> {
     throw unsupported("getGitScopePatch");
   }
 
@@ -401,16 +434,11 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     throw unsupported("getGitDiff");
   }
 
-  async listGitLog(
-    _workspace: WorkspaceRecord,
-    _limit: number,
-  ): Promise<GitLogEntry[]> {
+  async listGitLog(_workspace: WorkspaceRecord, _limit: number): Promise<GitLogEntry[]> {
     throw unsupported("listGitLog");
   }
 
-  async listGitPullRequests(
-    _workspace: WorkspaceRecord,
-  ): Promise<GitPullRequestListResult> {
+  async listGitPullRequests(_workspace: WorkspaceRecord): Promise<GitPullRequestListResult> {
     throw unsupported("listGitPullRequests");
   }
 
@@ -421,9 +449,7 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     throw unsupported("getGitPullRequest");
   }
 
-  async getCurrentGitPullRequest(
-    _workspace: WorkspaceRecord,
-  ): Promise<GitBranchPullRequestResult> {
+  async getCurrentGitPullRequest(_workspace: WorkspaceRecord): Promise<GitBranchPullRequestResult> {
     throw unsupported("getCurrentGitPullRequest");
   }
 
@@ -446,31 +472,19 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     throw unsupported("getGitPullRequestPatch");
   }
 
-  async getGitCommitPatch(
-    _workspace: WorkspaceRecord,
-    _sha: string,
-  ): Promise<GitCommitDiffResult> {
+  async getGitCommitPatch(_workspace: WorkspaceRecord, _sha: string): Promise<GitCommitDiffResult> {
     throw unsupported("getGitCommitPatch");
   }
 
-  async stageGitFiles(
-    _workspace: WorkspaceRecord,
-    _filePaths: string[],
-  ): Promise<void> {
+  async stageGitFiles(_workspace: WorkspaceRecord, _filePaths: string[]): Promise<void> {
     throw unsupported("stageGitFiles");
   }
 
-  async unstageGitFiles(
-    _workspace: WorkspaceRecord,
-    _filePaths: string[],
-  ): Promise<void> {
+  async unstageGitFiles(_workspace: WorkspaceRecord, _filePaths: string[]): Promise<void> {
     throw unsupported("unstageGitFiles");
   }
 
-  async commitGit(
-    _workspace: WorkspaceRecord,
-    _message: string,
-  ): Promise<GitCommitResult> {
+  async commitGit(_workspace: WorkspaceRecord, _message: string): Promise<GitCommitResult> {
     throw unsupported("commitGit");
   }
 
@@ -478,9 +492,7 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     throw unsupported("pushGit");
   }
 
-  async createGitPullRequest(
-    _workspace: WorkspaceRecord,
-  ): Promise<GitPullRequestSummary> {
+  async createGitPullRequest(_workspace: WorkspaceRecord): Promise<GitPullRequestSummary> {
     throw unsupported("createGitPullRequest");
   }
 
@@ -498,7 +510,7 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     const result = await this.execWorkspaceCommand(requireWorkspaceId(workspace), [
       "sh",
       "-lc",
-      buildEnsureTmuxSessionCommand(context.sessionName, context.cwd),
+      buildEnsureTmuxSessionCommand(context.profile, context.sessionName, context.cwd),
     ]);
     this.throwIfCommandFailed(result, "Lifecycle could not prepare the cloud terminal runtime.");
   }
@@ -518,6 +530,7 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     const connection = await this.getShellConnection(requireWorkspaceId(workspace));
     return {
       cwd: input.cwd ?? connection.cwd ?? "/workspace",
+      profile: resolveTmuxRuntimeProfile(input),
       sessionName: runtime.runtimeId,
     };
   }
@@ -542,9 +555,10 @@ export class CloudWorkspaceClient implements WorkspaceClient {
 
 interface CloudTerminalContext {
   cwd: string;
+  profile: ReturnType<typeof resolveTmuxRuntimeProfile>;
   sessionName: string;
 }
 
-function shellEscape(value: string): string {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
+function unsupportedPersistenceBackendError(backend: string): string {
+  return `Lifecycle terminal persistence backend "${backend}" is not supported yet.`;
 }

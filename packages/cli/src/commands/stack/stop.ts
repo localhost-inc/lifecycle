@@ -23,8 +23,12 @@ function readPidFile(stateDir: string, service: string): number | null {
 }
 
 function cleanStateFiles(stateDir: string, service: string): void {
-  try { unlinkSync(resolve(stateDir, `${service}.pid`)); } catch {}
-  try { unlinkSync(resolve(stateDir, `${service}.port`)); } catch {}
+  try {
+    unlinkSync(resolve(stateDir, `${service}.pid`));
+  } catch {}
+  try {
+    unlinkSync(resolve(stateDir, `${service}.port`));
+  } catch {}
 }
 
 export default defineCommand({

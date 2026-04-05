@@ -478,9 +478,7 @@ export function createWorkspaceRunRequest(input: {
   };
 }
 
-export function createWorkspaceGetRequest(input: {
-  workspaceId?: string;
-}): WorkspaceGetRequest {
+export function createWorkspaceGetRequest(input: { workspaceId?: string }): WorkspaceGetRequest {
   return {
     id: randomUUID(),
     method: WORKSPACE_GET_OPERATION,

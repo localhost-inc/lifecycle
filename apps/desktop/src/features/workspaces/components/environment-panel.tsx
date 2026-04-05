@@ -31,10 +31,8 @@ function getServiceRuntimeByName(
       .filter(
         (
           entry,
-        ): entry is [
-          string,
-          Extract<LifecycleConfig["stack"][string], { kind: "service" }>,
-        ] => entry[1].kind === "service",
+        ): entry is [string, Extract<LifecycleConfig["stack"][string], { kind: "service" }>] =>
+          entry[1].kind === "service",
       )
       .map(([name, node]) => [name, node.runtime]),
   );

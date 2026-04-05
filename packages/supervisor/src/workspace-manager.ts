@@ -1,11 +1,7 @@
 import { readFileSync, watch, type FSWatcher } from "node:fs";
 import { resolve } from "node:path";
 import { parseManifest, type LifecycleConfig } from "@lifecycle/contracts";
-import {
-  type StartStackInput,
-  type StartedService,
-  declaredServiceNames,
-} from "@lifecycle/stack";
+import { type StartStackInput, type StartedService, declaredServiceNames } from "@lifecycle/stack";
 import { LocalStackClient } from "@lifecycle/stack/internal/local";
 
 import { hashWorkspacePath, workspaceLogDir } from "./paths";
@@ -252,9 +248,11 @@ export class WorkspaceManager {
 }
 
 function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "") || "unnamed";
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "") || "unnamed"
+  );
 }

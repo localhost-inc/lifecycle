@@ -21,9 +21,7 @@ function createPersonalShellContext(persisted: boolean, displayName?: string | n
   };
 }
 
-export function resolveRepositoryShellContextId(
-  _repository: Pick<RepositoryRecord, "id">,
-): string {
+export function resolveRepositoryShellContextId(_repository: Pick<RepositoryRecord, "id">): string {
   return PERSONAL_SHELL_CONTEXT_ID;
 }
 

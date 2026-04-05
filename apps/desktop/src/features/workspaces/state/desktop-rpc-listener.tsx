@@ -8,7 +8,9 @@ import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-
 
 const DESKTOP_RPC_SHELL_REQUEST_EVENT = "desktop-rpc:shell-request";
 
-function buildPreviewResult(request: Extract<DesktopRpcShellRequest, { kind: "tab.open.preview" }>) {
+function buildPreviewResult(
+  request: Extract<DesktopRpcShellRequest, { kind: "tab.open.preview" }>,
+) {
   return {
     repositoryId: request.repositoryId,
     surface: "preview",

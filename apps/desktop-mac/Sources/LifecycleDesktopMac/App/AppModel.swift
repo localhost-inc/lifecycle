@@ -1,6 +1,25 @@
 import Combine
 import Foundation
 
+let defaultWorkspaceExtensionSidebarWidth: CGFloat = 320
+let minimumWorkspaceExtensionSidebarWidth: CGFloat = 260
+let maximumWorkspaceExtensionSidebarWidth: CGFloat = 420
+let minimumWorkspaceCanvasWidth: CGFloat = 480
+let workspaceExtensionSidebarDividerThickness: CGFloat = 12
+
+func clampedWorkspaceExtensionSidebarWidth(_ width: CGFloat, availableWidth: CGFloat) -> CGFloat {
+  guard availableWidth.isFinite, availableWidth > 0 else {
+    return min(max(width, minimumWorkspaceExtensionSidebarWidth), maximumWorkspaceExtensionSidebarWidth)
+  }
+
+  let upperBound = min(
+    maximumWorkspaceExtensionSidebarWidth,
+    max(availableWidth - minimumWorkspaceCanvasWidth, 0)
+  )
+  let lowerBound = min(minimumWorkspaceExtensionSidebarWidth, upperBound)
+  return min(max(width, lowerBound), upperBound)
+}
+
 @MainActor
 final class AppModel: ObservableObject {
   @Published var bridgeURL: URL?
@@ -10,22 +29,23 @@ final class AppModel: ObservableObject {
   @Published var terminalEnvelopeByWorkspaceID: [String: BridgeWorkspaceTerminalsEnvelope] = [:]
   @Published var terminalConnectionBySurfaceID: [String: BridgeTerminalConnection] = [:]
   @Published private var canvasDocumentsByWorkspaceID: [String: WorkspaceCanvasDocument] = [:]
+  @Published private var activeExtensionKindByWorkspaceID: [String: WorkspaceExtensionKind] = [:]
+  @Published private var extensionSidebarWidthByWorkspaceID: [String: CGFloat] = [:]
+  @Published var terminalThemeContext: AppTerminalThemeContext = .fallback
   @Published var selectedRepositoryID: String?
   @Published var selectedWorkspaceID: String?
   @Published var isLoading = false
   @Published var errorMessage: String?
   @Published var terminalLoadingWorkspaceIDs = Set<String>()
+  @Published private(set) var openedWorkspaceIDs = Set<String>()
 
-  private var activityTask: Task<Void, Never>?
   private var bridgePID: Int?
   private var bridgeMonitorTask: Task<Void, Never>?
-  private var terminalTask: Task<Void, Never>?
+  private let bridgeSocket = BridgeSocket()
   private var didStart = false
 
   deinit {
-    activityTask?.cancel()
     bridgeMonitorTask?.cancel()
-    terminalTask?.cancel()
   }
 
   func start() {
@@ -35,6 +55,7 @@ final class AppModel: ObservableObject {
 
     didStart = true
     registerSurfaces()
+    registerExtensions()
     Task {
       await bootstrap()
     }
@@ -42,6 +63,10 @@ final class AppModel: ObservableObject {
 
   private func registerSurfaces() {
     SurfaceRegistry.shared.register(TerminalSurfaceDefinition())
+  }
+
+  private func registerExtensions() {
+    WorkspaceExtensionRegistry.shared.register(DebugExtensionDefinition())
   }
 
   func refresh() {
@@ -53,10 +78,32 @@ final class AppModel: ObservableObject {
   func select(repository: BridgeRepository, workspace: BridgeWorkspaceSummary) {
     selectedRepositoryID = repository.id
     selectedWorkspaceID = workspace.id
+    openedWorkspaceIDs.insert(workspace.id)
+    Self.persistLastWorkspace(workspaceID: workspace.id, repositoryID: repository.id)
 
     Task {
       await loadTerminals(for: workspace.id, force: false)
     }
+  }
+
+  func selectWorkspace(id workspaceID: String) {
+    guard let repository = repositories.first(where: { repository in
+      repository.workspaces.contains(where: { $0.id == workspaceID })
+    }),
+      let workspace = repository.workspaces.first(where: { $0.id == workspaceID })
+    else {
+      return
+    }
+
+    select(repository: repository, workspace: workspace)
+  }
+
+  func setTerminalThemeContext(_ context: AppTerminalThemeContext) {
+    guard terminalThemeContext != context else {
+      return
+    }
+
+    terminalThemeContext = context
   }
 
   var selectedRepository: BridgeRepository? {
@@ -89,10 +136,73 @@ final class AppModel: ObservableObject {
     return activityByWorkspaceID[selectedWorkspaceID]
   }
 
+  func extensionSidebarState(for workspaceID: String? = nil) -> WorkspaceExtensionSidebarState? {
+    guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID,
+          let context = workspaceExtensionContext(for: targetWorkspaceID)
+    else {
+      return nil
+    }
+
+    return WorkspaceExtensionSidebarState(
+      workspaceID: targetWorkspaceID,
+      extensions: WorkspaceExtensionRegistry.shared.resolveExtensions(context: context),
+      activeKind: activeExtensionKindByWorkspaceID[targetWorkspaceID]
+    )
+  }
+
+  func selectExtension(_ kind: WorkspaceExtensionKind, workspaceID: String? = nil) {
+    guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID else {
+      return
+    }
+
+    activeExtensionKindByWorkspaceID[targetWorkspaceID] = kind
+  }
+
+  func extensionSidebarWidth(for workspaceID: String? = nil, availableWidth: CGFloat? = nil) -> CGFloat {
+    guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID else {
+      return defaultWorkspaceExtensionSidebarWidth
+    }
+
+    let storedWidth = extensionSidebarWidthByWorkspaceID[targetWorkspaceID] ??
+      defaultWorkspaceExtensionSidebarWidth
+    guard let availableWidth else {
+      return storedWidth
+    }
+
+    return clampedWorkspaceExtensionSidebarWidth(storedWidth, availableWidth: availableWidth)
+  }
+
+  func setExtensionSidebarWidth(
+    _ width: CGFloat,
+    workspaceID: String? = nil,
+    availableWidth: CGFloat? = nil
+  ) {
+    guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID else {
+      return
+    }
+
+    let nextWidth =
+      if let availableWidth {
+        clampedWorkspaceExtensionSidebarWidth(width, availableWidth: availableWidth)
+      } else {
+        min(max(width, minimumWorkspaceExtensionSidebarWidth), maximumWorkspaceExtensionSidebarWidth)
+      }
+
+    guard extensionSidebarWidthByWorkspaceID[targetWorkspaceID] != nextWidth else {
+      return
+    }
+
+    extensionSidebarWidthByWorkspaceID[targetWorkspaceID] = nextWidth
+  }
+
   func canvasState() -> CanvasState? {
-    guard let workspace = selectedWorkspace,
-          let document = canvasDocumentsByWorkspaceID[workspace.id],
-          let surfacesByID = resolveCanvasSurfaces(for: workspace.id, document: document),
+    guard let selectedWorkspaceID else { return nil }
+    return canvasState(for: selectedWorkspaceID)
+  }
+
+  func canvasState(for workspaceID: String) -> CanvasState? {
+    guard let document = canvasDocumentsByWorkspaceID[workspaceID],
+          let surfacesByID = resolveCanvasSurfaces(for: workspaceID, document: document),
           !surfacesByID.isEmpty
     else {
       return nil
@@ -104,6 +214,15 @@ final class AppModel: ObservableObject {
       surfacesByID: surfacesByID,
       layout: document.layout
     )
+  }
+
+  func terminalEnvelope(for workspaceID: String) -> BridgeWorkspaceTerminalsEnvelope? {
+    terminalEnvelopeByWorkspaceID[workspaceID]
+  }
+
+  /// Workspace IDs that have been opened and have canvas data ready to render.
+  var cachedWorkspaceIDs: [String] {
+    openedWorkspaceIDs.filter { canvasDocumentsByWorkspaceID[$0] != nil }.sorted()
   }
 
   func createTerminalTab(workspaceID: String? = nil, groupID: String? = nil) {
@@ -257,9 +376,8 @@ final class AppModel: ObservableObject {
       try await loadRepositories()
       try await loadActivity()
       await loadTerminalsIfNeeded()
-      startActivityPolling()
       startBridgeMonitoring()
-      startTerminalPolling()
+      connectSocket()
     } catch {
       errorMessage = error.localizedDescription
     }
@@ -291,17 +409,40 @@ final class AppModel: ObservableObject {
     }
     self.repositories = repositories
 
+    let allWorkspaceIDs = Set(repositories.flatMap(\.workspaces).map(\.id))
+    openedWorkspaceIDs.formIntersection(allWorkspaceIDs)
+
+    // Keep current selection if still valid
     if let selectedRepositoryID,
        repositories.contains(where: { $0.id == selectedRepositoryID }),
        let selectedWorkspaceID,
        repositories.flatMap(\.workspaces).contains(where: { $0.id == selectedWorkspaceID })
     {
+      openedWorkspaceIDs.insert(selectedWorkspaceID)
       return
     }
 
+    // Try restoring persisted selection
+    let allWorkspaces = repositories.flatMap(\.workspaces)
+    if let persisted = Self.loadLastWorkspace(),
+       let repository = repositories.first(where: { $0.id == persisted.repositoryID }),
+       allWorkspaces.contains(where: { $0.id == persisted.workspaceID })
+    {
+      selectedRepositoryID = persisted.repositoryID
+      selectedWorkspaceID = persisted.workspaceID
+      openedWorkspaceIDs.insert(persisted.workspaceID)
+      return
+    }
+
+    // Fall back to first workspace
     if let firstRepository = repositories.first {
       selectedRepositoryID = firstRepository.id
-      selectedWorkspaceID = firstRepository.workspaces.first?.id
+      if let firstWorkspace = firstRepository.workspaces.first {
+        selectedWorkspaceID = firstWorkspace.id
+        openedWorkspaceIDs.insert(firstWorkspace.id)
+      } else {
+        selectedWorkspaceID = nil
+      }
     } else {
       selectedRepositoryID = nil
       selectedWorkspaceID = nil
@@ -332,24 +473,6 @@ final class AppModel: ObservableObject {
     await refreshTerminals(for: workspaceID, showLoading: true)
   }
 
-  private func startActivityPolling() {
-    activityTask?.cancel()
-    activityTask = Task { [weak self] in
-      while !Task.isCancelled {
-        do {
-          try await Task.sleep(nanoseconds: 1_500_000_000)
-          guard let self else {
-            continue
-          }
-
-          try? await self.loadActivity()
-        } catch {
-          continue
-        }
-      }
-    }
-  }
-
   private func startBridgeMonitoring() {
     bridgeMonitorTask?.cancel()
     bridgeMonitorTask = Task { [weak self] in
@@ -368,32 +491,29 @@ final class AppModel: ObservableObject {
     }
   }
 
-  private func startTerminalPolling() {
-    terminalTask?.cancel()
-    terminalTask = Task { [weak self] in
-      while !Task.isCancelled {
-        do {
-          try await Task.sleep(nanoseconds: 1_500_000_000)
-          guard let self else {
-            continue
-          }
+  private func connectSocket() {
+    guard let baseURL = bridgeURL else { return }
 
-          await self.refreshSelectedTerminals()
-        } catch {
-          continue
-        }
-      }
+    bridgeSocket.connect(to: baseURL) { [weak self] event in
+      guard let self else { return }
+      self.handleSocketEvent(event)
     }
   }
 
-  private func refreshSelectedTerminals() async {
-    guard let selectedWorkspaceID,
-          terminalEnvelopeByWorkspaceID[selectedWorkspaceID] != nil
-    else {
-      return
+  private func handleSocketEvent(_ event: BridgeSocket.Event) {
+    switch event {
+    case .connected:
+      break
+    case .activity(let workspaces):
+      activityByWorkspaceID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
+    case .serviceStarted, .serviceFailed, .serviceStopped:
+      // Service events can be handled as needed in the future.
+      break
+    case .pong:
+      break
+    case .unknown:
+      break
     }
-
-    await refreshTerminals(for: selectedWorkspaceID, showLoading: false)
   }
 
   private func refreshTerminals(for workspaceID: String, showLoading: Bool) async {
@@ -654,7 +774,9 @@ final class AppModel: ObservableObject {
     let context = SurfaceResolutionContext(
       workspaceID: workspaceID,
       workingDirectory: workingDirectory,
-      themeConfigPath: AppResources.ghosttyThemeConfigPath(),
+      themeConfigPath: terminalThemeContext.themeConfigPath,
+      terminalBackgroundHexColor: terminalThemeContext.backgroundHexColor,
+      terminalDarkAppearance: terminalThemeContext.darkAppearance,
       backendLabel: envelope.runtime.backendLabel,
       persistent: envelope.runtime.persistent,
       terminalsByID: Dictionary(uniqueKeysWithValues: envelope.terminals.map { ($0.id, $0) }),
@@ -684,10 +806,28 @@ final class AppModel: ObservableObject {
     return surfaces.isEmpty ? nil : Dictionary(uniqueKeysWithValues: surfaces)
   }
 
-  private func workspaceSummary(for workspaceID: String) -> BridgeWorkspaceSummary? {
+  func workspaceSummary(for workspaceID: String) -> BridgeWorkspaceSummary? {
     repositories
       .flatMap(\.workspaces)
       .first(where: { $0.id == workspaceID })
+  }
+
+  private func workspaceExtensionContext(for workspaceID: String) -> WorkspaceExtensionContext? {
+    guard let workspace = workspaceSummary(for: workspaceID) else {
+      return nil
+    }
+
+    let repository = repositories.first { repository in
+      repository.workspaces.contains(where: { $0.id == workspaceID })
+    }
+
+    return WorkspaceExtensionContext(
+      model: self,
+      repository: repository,
+      workspace: workspace,
+      activity: activityByWorkspaceID[workspaceID],
+      terminalEnvelope: terminalEnvelopeByWorkspaceID[workspaceID]
+    )
   }
 
   private func upsertTerminalEnvelope(
@@ -891,6 +1031,7 @@ final class AppModel: ObservableObject {
       try await loadRepositories()
       try await loadActivity()
       await loadTerminalsIfNeeded()
+      connectSocket()
       errorMessage = nil
     } catch {
       guard isBridgeConnectivityError(error) || error is BridgeBootstrapError else {
@@ -919,5 +1060,24 @@ final class AppModel: ObservableObject {
       }
       nextIndex += 1
     }
+  }
+
+  // MARK: - Last Workspace Persistence
+
+  private static let lastWorkspaceIDKey = "lifecycle.lastWorkspaceID"
+  private static let lastRepositoryIDKey = "lifecycle.lastRepositoryID"
+
+  private static func persistLastWorkspace(workspaceID: String, repositoryID: String) {
+    UserDefaults.standard.set(workspaceID, forKey: lastWorkspaceIDKey)
+    UserDefaults.standard.set(repositoryID, forKey: lastRepositoryIDKey)
+  }
+
+  private static func loadLastWorkspace() -> (workspaceID: String, repositoryID: String)? {
+    guard let workspaceID = UserDefaults.standard.string(forKey: lastWorkspaceIDKey),
+          let repositoryID = UserDefaults.standard.string(forKey: lastRepositoryIDKey)
+    else {
+      return nil
+    }
+    return (workspaceID, repositoryID)
   }
 }

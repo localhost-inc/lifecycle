@@ -15,8 +15,9 @@ Rules:
 1. The TUI asks the bridge to perform runtime reads and mutations.
 2. The TUI does not shell out to fresh `lifecycle` subprocesses for core workspace operations when the bridge is available.
 3. The bridge is the source of runtime truth.
-4. When bridge-side runtime state changes, the bridge streams lifecycle events over WebSocket and the TUI updates UI state from those events.
-5. The TUI owns only presentation state such as selection, focus, layout, scrolling, and dialogs.
+4. If the pinned bridge endpoint dies or the bridge registration in `~/.lifecycle/bridge.json` changes, the TUI must rediscover the current bridge endpoint and retry bridge reads and mutations instead of staying pinned to a dead URL.
+5. When bridge-side runtime state changes, the bridge streams lifecycle events over WebSocket and the TUI updates UI state from those events.
+6. The TUI owns only presentation state such as selection, focus, layout, scrolling, and dialogs.
 
 ## Core model
 
@@ -60,16 +61,18 @@ The middle and right columns must never silently drift across hosts.
 
 1. The Lifecycle bridge resolves a local workspace shell through the host-aware workspace client boundary.
 2. TUI sessions request a tmux-backed launch by passing a persistent session name for the bound or ad hoc local path.
-3. The Rust TUI attaches through tmux's native create-or-attach flow rather than a shell-script shim.
-4. Closing the TUI detaches the client; the tmux session survives.
-5. The right column reflects the same local workspace scope when Lifecycle can resolve it.
+3. Terminal persistence backend, mode, and executable selection come from bridge-managed Lifecycle settings. The default configuration uses the tmux backend in `managed` mode, which runs through a Lifecycle-owned tmux server/profile instead of inheriting the user's default tmux server or config.
+4. The Rust TUI attaches through tmux's native create-or-attach flow rather than a shell-script shim.
+5. Closing the TUI detaches the client; the tmux session survives.
+6. The right column reflects the same local workspace scope when Lifecycle can resolve it.
 
 ### `cloud`
 
 1. The Lifecycle bridge resolves a cloud workspace shell through the host-aware workspace client boundary.
 2. Persistent TUI sessions use remote tmux by asking the cloud runtime for a prepare step plus an interactive attach step.
-3. The shell session lives in the cloud workspace runtime, not on the local machine.
-4. `lifecycle workspace shell` and the TUI center column use the same host-owned shell runtime contract.
+3. Cloud terminal persistence policy also comes from bridge-managed Lifecycle settings, so the default tmux-backed `managed` mode attaches through the same Lifecycle-owned tmux profile semantics as local workspaces.
+4. The shell session lives in the cloud workspace runtime, not on the local machine.
+5. `lifecycle workspace shell` and the TUI center column use the same host-owned shell runtime contract.
 
 ### `docker`
 

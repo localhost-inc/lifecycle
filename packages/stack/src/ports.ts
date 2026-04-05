@@ -54,7 +54,9 @@ async function resolvePort(
     }
   }
 
-  throw new Error(`No available port for service "${name}" in range ${PORT_RANGE_START}-${PORT_RANGE_END}.`);
+  throw new Error(
+    `No available port for service "${name}" in range ${PORT_RANGE_START}-${PORT_RANGE_END}.`,
+  );
 }
 
 export async function assignPorts(

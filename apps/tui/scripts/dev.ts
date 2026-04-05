@@ -1,4 +1,4 @@
-import { ensureBridge, readPidfile } from "@lifecycle/bridge";
+import { ensureBridge, readBridgeRegistration } from "@lifecycle/bridge";
 import { watch } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
@@ -7,6 +7,7 @@ import path from "node:path";
 
 const projectRoot = path.resolve(import.meta.dir, "..", "..", "..");
 const tuiRoot = path.resolve(import.meta.dir, "..");
+const cliEntrypoint = path.join(projectRoot, "packages", "cli", "src", "index.ts");
 const binaryPath = path.join(projectRoot, "target", "debug", "lifecycle-tui");
 const pidFilePath = path.join(os.tmpdir(), "lifecycle-tui-dev.pid");
 const watchTargets = [
@@ -132,13 +133,13 @@ async function stopApp() {
 }
 
 async function stopBridge() {
-  const pidfile = await readPidfile();
-  if (!pidfile) {
+  const registration = await readBridgeRegistration();
+  if (!registration) {
     return;
   }
 
   try {
-    process.kill(pidfile.pid, "SIGTERM");
+    process.kill(registration.pid, "SIGTERM");
   } catch {
     return;
   }
@@ -146,14 +147,14 @@ async function stopBridge() {
   for (let attempt = 0; attempt < 20; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 100));
     try {
-      process.kill(pidfile.pid, 0);
+      process.kill(registration.pid, 0);
     } catch {
       return;
     }
   }
 
   try {
-    process.kill(pidfile.pid, "SIGKILL");
+    process.kill(registration.pid, "SIGKILL");
   } catch {
     // already gone
   }
@@ -162,7 +163,12 @@ async function stopBridge() {
 async function ensureBridgeRuntime() {
   const { port } = await ensureBridge();
   bridgeUrl = `http://127.0.0.1:${port}`;
-  env = { ...process.env, LIFECYCLE_BRIDGE_URL: bridgeUrl };
+  env = {
+    ...process.env,
+    LIFECYCLE_BRIDGE_URL: bridgeUrl,
+    LIFECYCLE_BRIDGE_CLI_RUNTIME: process.execPath,
+    LIFECYCLE_BRIDGE_CLI_ENTRYPOINT: cliEntrypoint,
+  };
   console.log(`Bridge running on ${bridgeUrl}`);
 }
 

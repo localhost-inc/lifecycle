@@ -64,8 +64,9 @@ export function useRepositoryManifest(
   const localWorkspaceClient = useWorkspaceClientRegistry().resolve("local");
 
   return useQuery({
-    queryKey:
-      repositoryId ? repositoryKeys.manifest(repositoryId) : ["repository-manifest", "disabled"],
+    queryKey: repositoryId
+      ? repositoryKeys.manifest(repositoryId)
+      : ["repository-manifest", "disabled"],
     queryFn: async () => {
       const repository = repositories.find((item) => item.id === repositoryId);
       if (!repository) {

@@ -85,6 +85,8 @@ export {
   PLAN_LIST_OPERATION,
   PLAN_UPDATE_OPERATION,
   REPO_LIST_OPERATION,
+  SETTINGS_GET_OPERATION,
+  SETTINGS_UPDATE_OPERATION,
   SERVICE_GET_OPERATION,
   SERVICE_LIST_OPERATION,
   SERVICE_LOGS_OPERATION,
@@ -179,6 +181,32 @@ export type {
 export type { FieldError, LifecycleConfig, ManifestParseResult } from "./manifest";
 export { getManifestFingerprint, LifecycleConfigSchema, parseManifest } from "./manifest";
 export type { RepositoryRecord } from "./repository";
+export {
+  LifecycleAppearanceSettingsSchema,
+  LifecycleAppearanceSettingsUpdateSchema,
+  LifecycleSettingsSchema,
+  LifecycleSettingsUpdateSchema,
+  LifecycleTerminalCommandSettingsSchema,
+  LifecycleTerminalCommandSettingsUpdateSchema,
+  LifecycleTerminalPersistenceBackendSchema,
+  LifecycleTerminalPersistenceModeSchema,
+  LifecycleTerminalPersistenceSettingsSchema,
+  LifecycleTerminalPersistenceSettingsUpdateSchema,
+  LifecycleTerminalSettingsSchema,
+  LifecycleTerminalSettingsUpdateSchema,
+  LifecycleThemePreferenceSchema,
+} from "./settings";
+export type {
+  LifecycleAppearanceSettings,
+  LifecycleSettings,
+  LifecycleSettingsUpdate,
+  LifecycleTerminalCommandSettings,
+  LifecycleTerminalPersistenceBackend,
+  LifecycleTerminalPersistenceMode,
+  LifecycleTerminalPersistenceSettings,
+  LifecycleTerminalSettings,
+  LifecycleThemePreference,
+} from "./settings";
 export { WORKSPACE_MAX_TEXT_FILE_BYTES } from "./workspace";
 export type {
   ServiceStatus,

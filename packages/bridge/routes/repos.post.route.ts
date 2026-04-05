@@ -25,8 +25,7 @@ export default createRoute({
     const db = ctx.get("db");
     const existing = await getRepositoryByPath(db, body.path);
     const repositoryId =
-      existing?.id ??
-      (await insertRepository(db, { path: body.path, name: body.name }));
+      existing?.id ?? (await insertRepository(db, { path: body.path, name: body.name }));
 
     if (body.rootWorkspace) {
       const workspaces = await listWorkspacesByRepository(db, repositoryId);

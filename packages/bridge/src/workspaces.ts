@@ -7,12 +7,14 @@ import {
   insertWorkspaceStatement,
 } from "@lifecycle/db/queries";
 import type {
+  ResolveWorkspaceTerminalRuntimeInput,
   WorkspaceClientRegistry,
 } from "@lifecycle/workspace";
 import type { WorkspaceHost, WorkspaceRecord } from "@lifecycle/contracts";
 
 import { buildTmuxSessionName } from "./tmux";
 import { BridgeError } from "./errors";
+import { readBridgeSettings } from "./settings";
 
 export interface BridgeWorkspaceScope {
   binding: "bound" | "adhoc";
@@ -195,13 +197,12 @@ export async function resolveBridgeShell(
   }
 
   try {
-    const runtime = await workspaceRegistry.resolve(record.host).resolveShellRuntime(
-      record,
-      {
-        cwd: workspace.cwd ?? workspace.worktree_path,
-        sessionName: buildTmuxSessionName(workspace),
-      },
-    );
+    const persistenceRuntimeInput = await resolveBridgeTerminalPersistenceRuntimeInput();
+    const runtime = await workspaceRegistry.resolve(record.host).resolveShellRuntime(record, {
+      cwd: workspace.cwd ?? workspace.worktree_path,
+      sessionName: buildTmuxSessionName(workspace),
+      ...persistenceRuntimeInput,
+    });
 
     return {
       workspace,
@@ -394,7 +395,7 @@ function normalizeHost(host: string): WorkspaceHost {
 interface BridgeTerminalContext {
   client: ReturnType<WorkspaceClientRegistry["resolve"]>;
   record: WorkspaceRecord | undefined;
-  runtimeInput: {
+  runtimeInput: ResolveWorkspaceTerminalRuntimeInput & {
     cwd: string | null;
     sessionName: string;
   };
@@ -408,12 +409,14 @@ async function resolveBridgeTerminalContext(
 ): Promise<BridgeTerminalContext> {
   const workspace = await resolveBridgeWorkspaceScope(db, workspaceId);
   const record = await getWorkspaceRecordById(db, workspaceId);
+  const persistenceRuntimeInput = await resolveBridgeTerminalPersistenceRuntimeInput();
   return {
     client: workspaceRegistry.resolve(normalizeHost(record?.host ?? workspace.host)),
     record,
     runtimeInput: {
       cwd: workspace.cwd ?? workspace.worktree_path,
       sessionName: buildTmuxSessionName(workspace),
+      ...persistenceRuntimeInput,
     },
     workspace,
   };
@@ -426,9 +429,30 @@ async function requireBridgeTerminalContext(
 ): Promise<BridgeTerminalContext & { record: WorkspaceRecord }> {
   const context = await resolveBridgeTerminalContext(db, workspaceRegistry, workspaceId);
   if (!context.record) {
-    throw new Error(context.workspace.resolution_error ?? `Could not resolve workspace "${workspaceId}".`);
+    throw new Error(
+      context.workspace.resolution_error ?? `Could not resolve workspace "${workspaceId}".`,
+    );
   }
   return context as BridgeTerminalContext & { record: WorkspaceRecord };
+}
+
+async function resolveBridgeTerminalPersistenceRuntimeInput(): Promise<
+  Pick<
+    ResolveWorkspaceTerminalRuntimeInput,
+    "persistenceBackend" | "persistenceExecutablePath" | "persistenceMode"
+  >
+> {
+  const {
+    settings: {
+      terminal: { persistence },
+    },
+  } = await readBridgeSettings();
+
+  return {
+    persistenceBackend: persistence.backend,
+    persistenceMode: persistence.mode,
+    persistenceExecutablePath: persistence.executablePath,
+  };
 }
 
 function serializeBridgeTerminalRuntime(runtime: {
@@ -483,10 +507,7 @@ function serializeBridgeTerminalConnection(connection: {
   };
 }
 
-function unavailableBridgeTerminalRuntime(
-  message: string,
-  backendLabel = "unavailable",
-) {
+function unavailableBridgeTerminalRuntime(message: string, backendLabel = "unavailable") {
   return {
     backend_label: backendLabel,
     runtime_id: null,

@@ -1,4 +1,6 @@
 export const BRIDGE_HEALTH_OPERATION = "bridge.health";
+export const SETTINGS_GET_OPERATION = "settings.get";
+export const SETTINGS_UPDATE_OPERATION = "settings.update";
 
 export const REPO_LIST_OPERATION = "repo.list";
 

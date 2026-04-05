@@ -65,15 +65,17 @@ struct TerminalSurfaceDefinition: SurfaceDefinition {
       terminal: terminalRecord
     )
 
-    let content = AnySurfaceContent(id: record.id) { isFocused in
+    let content = AnySurfaceContent(id: record.id) { renderState in
       GhosttyTerminalSurfaceView(
         surface: resolved,
         themeConfigPath: context.themeConfigPath,
-        backgroundHexColor: "#181614",
-        isFocused: isFocused
+        backgroundHexColor: context.terminalBackgroundHexColor,
+        darkAppearance: context.terminalDarkAppearance,
+        isFocused: renderState.isFocused,
+        isVisible: renderState.isVisible
       )
       .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .background(Color.black)
+      .background(Color(nsColor: NSColor(themeHex: context.terminalBackgroundHexColor)))
     }
 
     let tab = SurfaceTabPresentation(

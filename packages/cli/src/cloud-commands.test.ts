@@ -159,40 +159,44 @@ describe("cloud CLI commands", () => {
     let requestMethod = "";
     let requestPath = "";
 
-    await withTempHome(async () =>
-      await withMockBridge(async ({ body, method, pathname }) => {
-        requestMethod = method;
-        requestPath = pathname;
-        requestBody = body;
+    await withTempHome(
+      async () =>
+        await withMockBridge(
+          async ({ body, method, pathname }) => {
+            requestMethod = method;
+            requestPath = pathname;
+            requestBody = body;
 
-        return {
-          body: {
-              number: 42,
-              url: "https://github.com/acme/repo/pull/42",
-              headBranch: "feature/branch",
-              baseBranch: "develop",
-            },
-          status: 201,
-        };
-      }, async () => {
-          const code = await main(
-            [
-              "pr",
-              "create",
-              "--workspace-id",
-              "ws_123",
-              "--title",
-              "Cloud PR",
-              "--body",
-              "Ready for review",
-              "--base-branch",
-              "develop",
-            ],
-            sink.io,
-          );
+            return {
+              body: {
+                number: 42,
+                url: "https://github.com/acme/repo/pull/42",
+                headBranch: "feature/branch",
+                baseBranch: "develop",
+              },
+              status: 201,
+            };
+          },
+          async () => {
+            const code = await main(
+              [
+                "pr",
+                "create",
+                "--workspace-id",
+                "ws_123",
+                "--title",
+                "Cloud PR",
+                "--body",
+                "Ready for review",
+                "--base-branch",
+                "develop",
+              ],
+              sink.io,
+            );
 
-          expect(code).toBe(0);
-        }),
+            expect(code).toBe(0);
+          },
+        ),
     );
 
     expect(requestMethod).toBe("POST");
@@ -216,30 +220,34 @@ describe("cloud CLI commands", () => {
     let requestMethod = "";
     let requestPath = "";
 
-    await withTempHome(async () =>
-      await withMockBridge(async ({ body, method, pathname }) => {
-        requestMethod = method;
-        requestPath = pathname;
-        requestBody = body;
+    await withTempHome(
+      async () =>
+        await withMockBridge(
+          async ({ body, method, pathname }) => {
+            requestMethod = method;
+            requestPath = pathname;
+            requestBody = body;
 
-        return {
-          body: {
-              command: ["git", "status"],
-              cwd: "/workspace",
-              exitCode: 3,
-              output: "out\nerr\n",
-              stderr: "err\n",
-              stdout: "out\n",
-            },
-        };
-      }, async () => {
-          const code = await main(
-            ["workspace", "exec", "ws_123", "--", "git", "status"],
-            sink.io,
-          );
+            return {
+              body: {
+                command: ["git", "status"],
+                cwd: "/workspace",
+                exitCode: 3,
+                output: "out\nerr\n",
+                stderr: "err\n",
+                stdout: "out\n",
+              },
+            };
+          },
+          async () => {
+            const code = await main(
+              ["workspace", "exec", "ws_123", "--", "git", "status"],
+              sink.io,
+            );
 
-          expect(code).toBe(3);
-        }),
+            expect(code).toBe(3);
+          },
+        ),
     );
 
     expect(requestMethod).toBe("POST");
@@ -253,49 +261,50 @@ describe("cloud CLI commands", () => {
     const sink = createIo();
     const requests: Array<{ method: string; pathname: string }> = [];
 
-    await withTempHome(async () =>
-      await withMockBridge(async ({ method, pathname }) => {
-        requests.push({ method, pathname });
+    await withTempHome(
+      async () =>
+        await withMockBridge(
+          async ({ method, pathname }) => {
+            requests.push({ method, pathname });
 
-        return {
-          body: {
-            workspace: {
-              binding: "bound",
-              workspace_id: "ws_cloud_123",
-              workspace_name: "Cloud Workspace",
-              repo_name: "example-repo",
-              host: "cloud",
-              status: "active",
-              source_ref: "feature/branch",
-              cwd: null,
-              worktree_path: null,
-              services: [],
-              resolution_note: null,
-              resolution_error: null,
-            },
-            shell: {
-              backend_label: "cloud shell",
-              launch_error: null,
-              persistent: false,
-              session_name: null,
-              prepare: null,
-              spec: {
-                program: "ssh",
-                args: ["tok_123@ssh.app.lifecycle.test"],
-                cwd: null,
-                env: [],
+            return {
+              body: {
+                workspace: {
+                  binding: "bound",
+                  workspace_id: "ws_cloud_123",
+                  workspace_name: "Cloud Workspace",
+                  repo_name: "example-repo",
+                  host: "cloud",
+                  status: "active",
+                  source_ref: "feature/branch",
+                  cwd: null,
+                  worktree_path: null,
+                  services: [],
+                  resolution_note: null,
+                  resolution_error: null,
+                },
+                shell: {
+                  backend_label: "cloud shell",
+                  launch_error: null,
+                  persistent: false,
+                  session_name: null,
+                  prepare: null,
+                  spec: {
+                    program: "ssh",
+                    args: ["tok_123@ssh.app.lifecycle.test"],
+                    cwd: null,
+                    env: [],
+                  },
+                },
               },
-            },
+            };
           },
-        };
-      }, async () => {
-          const code = await main(
-            ["workspace", "shell", "ws_cloud_123", "--json"],
-            sink.io,
-          );
+          async () => {
+            const code = await main(["workspace", "shell", "ws_cloud_123", "--json"], sink.io);
 
-          expect(code).toBe(0);
-        }),
+            expect(code).toBe(0);
+          },
+        ),
     );
 
     expect(requests).toEqual([{ method: "POST", pathname: "/workspaces/ws_cloud_123/shell" }]);

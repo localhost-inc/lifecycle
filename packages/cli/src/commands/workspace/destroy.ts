@@ -1,7 +1,11 @@
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import { createWorkspaceArchiveRequest, requestDesktopRpc, resolveWorkspaceId } from "../../desktop/rpc";
+import {
+  createWorkspaceArchiveRequest,
+  requestDesktopRpc,
+  resolveWorkspaceId,
+} from "../../desktop/rpc";
 import { failCommand, jsonFlag, workspaceIdFlag } from "../_shared";
 
 export default defineCommand({

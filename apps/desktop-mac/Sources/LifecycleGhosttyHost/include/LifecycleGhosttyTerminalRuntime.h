@@ -3,6 +3,10 @@
 #import <stdbool.h>
 #import <stdint.h>
 
+// Process-wide Ghostty runtime bridge used by LifecycleGhosttyTerminalHostView.
+// The C symbols stay snake_case because they expose a C ABI, while the file name
+// follows the PascalCase naming used by the rest of the host target.
+
 typedef void (*LifecycleNativeTerminalExitCallback)(const char *terminal_id, int32_t exit_code);
 typedef void (*LifecycleNativeWorkspaceShortcutCallback)(const char *terminal_id,
                                                          int32_t shortcut_kind,

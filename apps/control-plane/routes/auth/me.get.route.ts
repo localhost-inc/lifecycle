@@ -24,7 +24,10 @@ export default createRoute({
     const foundUser = users[0];
     if (!foundUser) throw unauthenticated("User not found.");
 
-    const memberships = await db.select().from(organizationMembership).where(eq(organizationMembership.userId, userId));
+    const memberships = await db
+      .select()
+      .from(organizationMembership)
+      .where(eq(organizationMembership.userId, userId));
     const orgIds = memberships.map((m) => m.organizationId);
     const orgs = orgIds.length > 0 ? await db.select().from(organization) : [];
     const userOrgs = orgs.filter((o) => orgIds.includes(o.id));

@@ -1,6 +1,6 @@
 #import "LifecycleGhosttyTerminalHostView.h"
 
-#import "lifecycle_native_terminal.h"
+#import "LifecycleGhosttyTerminalRuntime.h"
 
 @interface LifecycleGhosttyTerminalHostView ()
 

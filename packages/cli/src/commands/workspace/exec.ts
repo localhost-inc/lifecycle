@@ -4,10 +4,7 @@ import { z } from "zod";
 
 import { failCommand, jsonFlag } from "../_shared";
 
-function printOutput(
-  text: string,
-  write: (message: string) => void,
-) {
+function printOutput(text: string, write: (message: string) => void) {
   const lines = text.replace(/\n$/, "").split("\n");
   for (const line of lines) {
     if (line.length === 0) {

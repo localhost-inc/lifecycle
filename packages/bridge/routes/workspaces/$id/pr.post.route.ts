@@ -7,11 +7,13 @@ export default createRoute({
     params: z.object({
       id: z.string().min(1),
     }),
-    body: z.object({
-      title: z.string().trim().min(1).optional(),
-      body: z.string().optional(),
-      baseBranch: z.string().trim().min(1).optional(),
-    }).optional(),
+    body: z
+      .object({
+        title: z.string().trim().min(1).optional(),
+        body: z.string().optional(),
+        baseBranch: z.string().trim().min(1).optional(),
+      })
+      .optional(),
   },
   handler: async ({ params, body, ctx }) => {
     const client = ctx.get("controlPlaneClient");

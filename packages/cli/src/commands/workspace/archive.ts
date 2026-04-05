@@ -43,10 +43,18 @@ export default defineCommand({
           });
           if (out.trim().length > 0) {
             if (input.json) {
-              context.stdout(JSON.stringify({ archived: false, reason: "uncommitted_changes", name, worktreePath }, null, 2));
+              context.stdout(
+                JSON.stringify(
+                  { archived: false, reason: "uncommitted_changes", name, worktreePath },
+                  null,
+                  2,
+                ),
+              );
               return 1;
             }
-            context.stderr(`Workspace "${name}" has uncommitted changes. Use --force to delete anyway.`);
+            context.stderr(
+              `Workspace "${name}" has uncommitted changes. Use --force to delete anyway.`,
+            );
             return 1;
           }
         } catch {
@@ -67,7 +75,13 @@ export default defineCommand({
       });
 
       if (input.json) {
-        context.stdout(JSON.stringify({ archived: true, name, repoPath, worktreePath: worktreePath ?? null }, null, 2));
+        context.stdout(
+          JSON.stringify(
+            { archived: true, name, repoPath, worktreePath: worktreePath ?? null },
+            null,
+            2,
+          ),
+        );
         return 0;
       }
 

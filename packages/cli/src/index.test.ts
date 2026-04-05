@@ -475,52 +475,52 @@ describe("lifecycle cli", () => {
 
     await withHttpBridge(
       async (request) => {
-          receivedRequest = request;
-          return {
-            services: [
-              {
-                assigned_port: 3000,
-                created_at: "2026-03-21T00:00:00.000Z",
-                id: "svc_123",
-                name: "api",
-                preview_url: "http://control-plane.lifecycle.localhost",
-                status: "ready",
-                status_reason: null,
-                updated_at: "2026-03-21T00:00:00.000Z",
-                workspace_id: "ws_123",
-              },
-            ],
-            startedServices: ["api"],
-            workspaceId: "ws_123",
-          };
-        },
-        async () => {
-          const code = await withEnvironment(
+        receivedRequest = request;
+        return {
+          services: [
             {
-              LIFECYCLE_WORKSPACE_ID: "ws_123",
+              assigned_port: 3000,
+              created_at: "2026-03-21T00:00:00.000Z",
+              id: "svc_123",
+              name: "api",
+              preview_url: "http://control-plane.lifecycle.localhost",
+              status: "ready",
+              status_reason: null,
+              updated_at: "2026-03-21T00:00:00.000Z",
+              workspace_id: "ws_123",
             },
-            async () => await main(["service", "start", "api"], sink.io),
-          );
+          ],
+          startedServices: ["api"],
+          workspaceId: "ws_123",
+        };
+      },
+      async () => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () => await main(["service", "start", "api"], sink.io),
+        );
 
-          expect(code).toBe(0);
-        },
-      );
+        expect(code).toBe(0);
+      },
+    );
 
-      expect(receivedRequest).toMatchObject({
-        method: "POST",
-        pathname: "/workspaces/ws_123/services/start",
-        body: {
-          serviceNames: ["api"],
-        },
-      });
-      expect(sink.stdout).toEqual([
-        "Started services: api",
-        "api",
-        "status: ready",
-        "port: 3000",
-        "preview: http://control-plane.lifecycle.localhost",
-      ]);
-      expect(sink.stderr).toEqual([]);
+    expect(receivedRequest).toMatchObject({
+      method: "POST",
+      pathname: "/workspaces/ws_123/services/start",
+      body: {
+        serviceNames: ["api"],
+      },
+    });
+    expect(sink.stdout).toEqual([
+      "Started services: api",
+      "api",
+      "status: ready",
+      "port: 3000",
+      "preview: http://control-plane.lifecycle.localhost",
+    ]);
+    expect(sink.stderr).toEqual([]);
   });
 
   test("prints structured context by default", async () => {
@@ -550,9 +550,9 @@ describe("lifecycle cli", () => {
               cliInstalled: true,
               context: true,
               service: {
-              health: false,
-              get: true,
-              list: true,
+                health: false,
+                get: true,
+                list: true,
                 logs: false,
                 set: false,
                 start: true,

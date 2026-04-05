@@ -147,9 +147,7 @@ describe("lowerStackGraph", () => {
       }
     }`);
 
-    expect(() => lowerStackGraph(config, { prepared: false })).toThrow(
-      /depends on missing node/,
-    );
+    expect(() => lowerStackGraph(config, { prepared: false })).toThrow(/depends on missing node/);
   });
 
   test("skips already-running services for targeted starts", () => {

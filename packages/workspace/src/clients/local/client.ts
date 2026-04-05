@@ -41,6 +41,8 @@ import { readManifestFromPath, type FileReader, type ManifestStatus } from "../.
 import { computeArchiveInput } from "../../policy/workspace-archive";
 import { computeRenameInput } from "../../policy/workspace-rename";
 import {
+  buildTmuxLaunchEnv,
+  buildTmuxCommand,
   buildEnsureTmuxConnectionCommand,
   buildEnsureTmuxSessionCommand,
   buildSafeKillTmuxSessionCommand,
@@ -50,6 +52,8 @@ import {
   buildTmuxListTerminalArgs,
   normalizeTerminalTitle,
   parseTmuxTerminalRecords,
+  resolveTmuxRuntimeProfile,
+  shellEscape,
 } from "../shared/tmux-terminal-runtime";
 
 export interface LocalClientDeps {
@@ -120,11 +124,13 @@ export class LocalWorkspaceClient implements WorkspaceClient {
   ): Promise<WorkspaceShellRuntime> {
     const cwd = input.cwd ?? workspace.worktree_path ?? null;
     const sessionName = input.sessionName?.trim() || null;
+    const tmuxProfile = resolveTmuxRuntimeProfile(input);
 
     if (!cwd) {
       return {
         backendLabel: sessionName ? "local tmux" : "local shell",
-        launchError: "Lifecycle could not resolve a local working directory for this shell session.",
+        launchError:
+          "Lifecycle could not resolve a local working directory for this shell session.",
         persistent: false,
         sessionName: null,
         prepare: null,
@@ -148,17 +154,46 @@ export class LocalWorkspaceClient implements WorkspaceClient {
       };
     }
 
-    if (!this.commandAvailable("tmux")) {
+    if (tmuxProfile.backend !== "tmux") {
       return {
-        backendLabel: "local tmux",
-        launchError:
-          "tmux is required for the Lifecycle TUI local shell. Install tmux or launch from an environment where tmux is available.",
+        backendLabel: "local shell",
+        launchError: unsupportedPersistenceBackendError(tmuxProfile.backend),
         persistent: false,
         sessionName: null,
         prepare: null,
         spec: null,
       };
     }
+
+    if (!this.commandAvailable(tmuxProfile.program)) {
+      return {
+        backendLabel: "local tmux",
+        launchError: `${tmuxProfile.program} is required for the Lifecycle TUI local shell. Install tmux or launch from an environment where tmux is available.`,
+        persistent: false,
+        sessionName: null,
+        prepare: null,
+        spec: null,
+      };
+    }
+
+    const args = [
+      ...tmuxProfile.baseArgs,
+      "new-session",
+      "-A",
+      "-s",
+      sessionName,
+      "-c",
+      cwd,
+      ...(tmuxProfile.mode === "managed"
+        ? [";", "set-option", "-t", sessionName, "status", "off"]
+        : []),
+      ";",
+      "set-option",
+      "-t",
+      sessionName,
+      "window-size",
+      "latest",
+    ];
 
     return {
       backendLabel: "local tmux",
@@ -167,23 +202,10 @@ export class LocalWorkspaceClient implements WorkspaceClient {
       sessionName,
       prepare: null,
       spec: {
-        program: "tmux",
-        args: [
-          "new-session",
-          "-A",
-          "-s",
-          sessionName,
-          "-c",
-          cwd,
-          ";",
-          "set-option",
-          "-t",
-          sessionName,
-          "window-size",
-          "latest",
-        ],
+        program: tmuxProfile.program,
+        args,
         cwd,
-        env: [["TERM", "xterm-256color"]],
+        env: buildTmuxLaunchEnv(tmuxProfile),
       },
     };
   }
@@ -194,6 +216,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
   ): Promise<WorkspaceTerminalRuntime> {
     const cwd = input.cwd ?? workspace.worktree_path ?? null;
     const sessionName = input.sessionName?.trim() || null;
+    const tmuxProfile = resolveTmuxRuntimeProfile(input);
 
     if (!cwd || !sessionName) {
       return {
@@ -208,12 +231,24 @@ export class LocalWorkspaceClient implements WorkspaceClient {
       };
     }
 
-    if (!this.commandAvailable("tmux")) {
+    if (tmuxProfile.backend !== "tmux") {
+      return {
+        backendLabel: "local shell",
+        runtimeId: null,
+        launchError: unsupportedPersistenceBackendError(tmuxProfile.backend),
+        persistent: false,
+        supportsCreate: false,
+        supportsClose: false,
+        supportsConnect: false,
+        supportsRename: false,
+      };
+    }
+
+    if (!this.commandAvailable(tmuxProfile.program)) {
       return {
         backendLabel: "local tmux",
         runtimeId: null,
-        launchError:
-          "tmux is required for the Lifecycle local terminal runtime. Install tmux or launch from an environment where tmux is available.",
+        launchError: `${tmuxProfile.program} is required for the Lifecycle local terminal runtime. Install tmux or launch from an environment where tmux is available.`,
         persistent: false,
         supportsCreate: false,
         supportsClose: false,
@@ -241,11 +276,14 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     const context = await this.requireTerminalContext(workspace, input);
     await this.ensureTmuxSession(workspace, context);
 
-    const result = await this.execCommand(workspace, [
-      "tmux",
-      ...buildTmuxListTerminalArgs(context.sessionName),
-    ]);
-    this.throwIfCommandFailed(result, "Lifecycle could not list local terminals for this workspace.");
+    const result = await this.execCommand(
+      workspace,
+      buildTmuxCommand(context.profile, buildTmuxListTerminalArgs(context.sessionName)),
+    );
+    this.throwIfCommandFailed(
+      result,
+      "Lifecycle could not list local terminals for this workspace.",
+    );
     return parseTmuxTerminalRecords(result.stdout);
   }
 
@@ -257,11 +295,17 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     await this.ensureTmuxSession(workspace, context);
 
     const title = normalizeTerminalTitle(input.title, input.kind);
-    const result = await this.execCommand(workspace, [
-      "tmux",
-      ...buildTmuxCreateTerminalArgs(context.sessionName, context.cwd, title),
-    ]);
-    this.throwIfCommandFailed(result, "Lifecycle could not create a local terminal for this workspace.");
+    const result = await this.execCommand(
+      workspace,
+      buildTmuxCommand(
+        context.profile,
+        buildTmuxCreateTerminalArgs(context.sessionName, context.cwd, title),
+      ),
+    );
+    this.throwIfCommandFailed(
+      result,
+      "Lifecycle could not create a local terminal for this workspace.",
+    );
 
     const created = parseTmuxTerminalRecords(result.stdout).at(0);
     if (!created) {
@@ -283,10 +327,13 @@ export class LocalWorkspaceClient implements WorkspaceClient {
       throw new Error("Lifecycle will not close the last terminal in a workspace runtime.");
     }
 
-    const result = await this.execCommand(workspace, [
-      "tmux",
-      ...buildTmuxCloseTerminalArgs(context.sessionName, terminalId),
-    ]);
+    const result = await this.execCommand(
+      workspace,
+      buildTmuxCommand(
+        context.profile,
+        buildTmuxCloseTerminalArgs(context.sessionName, terminalId),
+      ),
+    );
     this.throwIfCommandFailed(result, `Lifecycle could not close local terminal "${terminalId}".`);
   }
 
@@ -320,6 +367,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
           args: [
             "-lc",
             buildEnsureTmuxConnectionCommand(
+              context.profile,
               context.sessionName,
               connectionId,
               input.terminalId,
@@ -327,13 +375,13 @@ export class LocalWorkspaceClient implements WorkspaceClient {
             ),
           ],
           cwd: context.cwd,
-          env: [["TERM", "xterm-256color"]],
+          env: buildTmuxLaunchEnv(context.profile),
         },
         spec: {
-          program: "tmux",
-          args: ["attach-session", "-t", connectionId],
+          program: context.profile.program,
+          args: [...context.profile.baseArgs, "attach-session", "-t", connectionId],
           cwd: context.cwd,
-          env: [["TERM", "xterm-256color"]],
+          env: buildTmuxLaunchEnv(context.profile),
         },
       },
       launchError: null,
@@ -345,11 +393,11 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     connectionId: string,
     input: ResolveWorkspaceTerminalRuntimeInput = {},
   ): Promise<void> {
-    await this.requireTerminalContext(workspace, input);
+    const context = await this.requireTerminalContext(workspace, input);
     const result = await this.execCommand(workspace, [
       "sh",
       "-lc",
-      buildSafeKillTmuxSessionCommand(connectionId),
+      buildSafeKillTmuxSessionCommand(context.profile, connectionId),
     ]);
     this.throwIfCommandFailed(
       result,
@@ -740,15 +788,19 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     const result = await this.execCommand(workspace, [
       "sh",
       "-lc",
-      buildEnsureTmuxSessionCommand(context.sessionName, context.cwd),
+      buildEnsureTmuxSessionCommand(context.profile, context.sessionName, context.cwd),
     ]);
     this.throwIfCommandFailed(result, "Lifecycle could not prepare the local terminal runtime.");
   }
 
   private commandAvailable(program: string): boolean {
-    const result = this.spawnSync("sh", ["-lc", `command -v ${program} >/dev/null 2>&1`], {
-      stdio: "ignore",
-    });
+    const result = this.spawnSync(
+      "sh",
+      ["-lc", `command -v ${shellEscape(program)} >/dev/null 2>&1`],
+      {
+        stdio: "ignore",
+      },
+    );
     return result.status === 0;
   }
 
@@ -766,6 +818,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
 
     return {
       cwd: input.cwd ?? requireWorktreePath(workspace),
+      profile: resolveTmuxRuntimeProfile(input),
       sessionName: runtime.runtimeId,
     };
   }
@@ -790,5 +843,10 @@ export class LocalWorkspaceClient implements WorkspaceClient {
 
 interface LocalTerminalContext {
   cwd: string;
+  profile: ReturnType<typeof resolveTmuxRuntimeProfile>;
   sessionName: string;
+}
+
+function unsupportedPersistenceBackendError(backend: string): string {
+  return `Lifecycle terminal persistence backend "${backend}" is not supported yet.`;
 }

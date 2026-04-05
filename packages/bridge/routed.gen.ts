@@ -13,27 +13,29 @@ import route4 from "./routes/repos.get.route.ts";
 import route5 from "./routes/repos.post.route.ts";
 import route6 from "./routes/repos/$repoId.delete.route.ts";
 import route7 from "./routes/repos/link.post.route.ts";
-import route8 from "./routes/users/me/environment.put.route.ts";
-import route9 from "./routes/workspaces.get.route.ts";
-import route10 from "./routes/workspaces/index.post.route.ts";
-import route11 from "./routes/workspaces/$id.delete.route.ts";
-import route12 from "./routes/workspaces/$id/exec.post.route.ts";
-import route13 from "./routes/workspaces/$id/git.get.route.ts";
-import route14 from "./routes/workspaces/$id/git/commit.post.route.ts";
-import route15 from "./routes/workspaces/$id/pr.post.route.ts";
-import route16 from "./routes/workspaces/$id/pr/merge.post.route.ts";
-import route17 from "./routes/workspaces/$id/services.get.route.ts";
-import route18 from "./routes/workspaces/$id/services/start.post.route.ts";
-import route19 from "./routes/workspaces/$id/services/stop.post.route.ts";
-import route20 from "./routes/workspaces/$id/shell.get.route.ts";
-import route21 from "./routes/workspaces/$id/shell.post.route.ts";
-import route22 from "./routes/workspaces/$id/terminals.get.route.ts";
-import route23 from "./routes/workspaces/$id/terminals.post.route.ts";
-import route24 from "./routes/workspaces/$id/terminals/$terminalId.delete.route.ts";
-import route25 from "./routes/workspaces/$id/terminals/$terminalId.get.route.ts";
-import route26 from "./routes/workspaces/$id/terminals/$terminalId/connections.post.route.ts";
-import route27 from "./routes/workspaces/$id/terminals/$terminalId/connections/$connectionId.delete.route.ts";
-import route28 from "./routes/workspaces/activity.get.route.ts";
+import route8 from "./routes/settings.get.route.ts";
+import route9 from "./routes/settings.put.route.ts";
+import route10 from "./routes/users/me/environment.put.route.ts";
+import route11 from "./routes/workspaces.get.route.ts";
+import route12 from "./routes/workspaces/index.post.route.ts";
+import route13 from "./routes/workspaces/$id.delete.route.ts";
+import route14 from "./routes/workspaces/$id/exec.post.route.ts";
+import route15 from "./routes/workspaces/$id/git.get.route.ts";
+import route16 from "./routes/workspaces/$id/git/commit.post.route.ts";
+import route17 from "./routes/workspaces/$id/pr.post.route.ts";
+import route18 from "./routes/workspaces/$id/pr/merge.post.route.ts";
+import route19 from "./routes/workspaces/$id/services.get.route.ts";
+import route20 from "./routes/workspaces/$id/services/start.post.route.ts";
+import route21 from "./routes/workspaces/$id/services/stop.post.route.ts";
+import route22 from "./routes/workspaces/$id/shell.get.route.ts";
+import route23 from "./routes/workspaces/$id/shell.post.route.ts";
+import route24 from "./routes/workspaces/$id/terminals.get.route.ts";
+import route25 from "./routes/workspaces/$id/terminals.post.route.ts";
+import route26 from "./routes/workspaces/$id/terminals/$terminalId.delete.route.ts";
+import route27 from "./routes/workspaces/$id/terminals/$terminalId.get.route.ts";
+import route28 from "./routes/workspaces/$id/terminals/$terminalId/connections.post.route.ts";
+import route29 from "./routes/workspaces/$id/terminals/$terminalId/connections/$connectionId.delete.route.ts";
+import route30 from "./routes/workspaces/activity.get.route.ts";
 
 export const routeTree = defineRouteTree([
   {
@@ -85,129 +87,141 @@ export const routeTree = defineRouteTree([
     middleware: [middleware0],
   },
   {
+    path: "/settings",
+    method: "get",
+    route: route8,
+    middleware: [middleware0],
+  },
+  {
+    path: "/settings",
+    method: "put",
+    route: route9,
+    middleware: [middleware0],
+  },
+  {
     path: "/users/me/environment",
     method: "put",
-    route: route8,
+    route: route10,
     middleware: [middleware0],
   },
   {
     path: "/workspaces",
     method: "get",
-    route: route9,
-    middleware: [middleware0],
-  },
-  {
-    path: "/workspaces",
-    method: "post",
-    route: route10,
-    middleware: [middleware0],
-  },
-  {
-    path: "/workspaces/:id",
-    method: "delete",
     route: route11,
     middleware: [middleware0],
   },
   {
-    path: "/workspaces/:id/exec",
+    path: "/workspaces",
     method: "post",
     route: route12,
     middleware: [middleware0],
   },
   {
-    path: "/workspaces/:id/git",
-    method: "get",
+    path: "/workspaces/:id",
+    method: "delete",
     route: route13,
     middleware: [middleware0],
   },
   {
-    path: "/workspaces/:id/git/commit",
+    path: "/workspaces/:id/exec",
     method: "post",
     route: route14,
     middleware: [middleware0],
   },
   {
-    path: "/workspaces/:id/pr",
-    method: "post",
+    path: "/workspaces/:id/git",
+    method: "get",
     route: route15,
     middleware: [middleware0],
   },
   {
-    path: "/workspaces/:id/pr/merge",
+    path: "/workspaces/:id/git/commit",
     method: "post",
     route: route16,
     middleware: [middleware0],
   },
   {
-    path: "/workspaces/:id/services",
-    method: "get",
+    path: "/workspaces/:id/pr",
+    method: "post",
     route: route17,
     middleware: [middleware0],
   },
   {
-    path: "/workspaces/:id/services/start",
+    path: "/workspaces/:id/pr/merge",
     method: "post",
     route: route18,
     middleware: [middleware0],
   },
   {
-    path: "/workspaces/:id/services/stop",
-    method: "post",
+    path: "/workspaces/:id/services",
+    method: "get",
     route: route19,
     middleware: [middleware0],
   },
   {
-    path: "/workspaces/:id/shell",
-    method: "get",
+    path: "/workspaces/:id/services/start",
+    method: "post",
     route: route20,
     middleware: [middleware0],
   },
   {
-    path: "/workspaces/:id/shell",
+    path: "/workspaces/:id/services/stop",
     method: "post",
     route: route21,
     middleware: [middleware0],
   },
   {
-    path: "/workspaces/:id/terminals",
+    path: "/workspaces/:id/shell",
     method: "get",
     route: route22,
     middleware: [middleware0],
   },
   {
-    path: "/workspaces/:id/terminals",
+    path: "/workspaces/:id/shell",
     method: "post",
     route: route23,
     middleware: [middleware0],
   },
   {
+    path: "/workspaces/:id/terminals",
+    method: "get",
+    route: route24,
+    middleware: [middleware0],
+  },
+  {
+    path: "/workspaces/:id/terminals",
+    method: "post",
+    route: route25,
+    middleware: [middleware0],
+  },
+  {
     path: "/workspaces/:id/terminals/:terminalId",
     method: "delete",
-    route: route24,
+    route: route26,
     middleware: [middleware0],
   },
   {
     path: "/workspaces/:id/terminals/:terminalId",
     method: "get",
-    route: route25,
+    route: route27,
     middleware: [middleware0],
   },
   {
     path: "/workspaces/:id/terminals/:terminalId/connections",
     method: "post",
-    route: route26,
+    route: route28,
     middleware: [middleware0],
   },
   {
     path: "/workspaces/:id/terminals/:terminalId/connections/:connectionId",
     method: "delete",
-    route: route27,
+    route: route29,
     middleware: [middleware0],
   },
   {
     path: "/workspaces/activity",
     method: "get",
-    route: route28,
+    route: route30,
     middleware: [middleware0],
   },
 ]);
@@ -217,32 +231,48 @@ export const app = new Hono()
   .get("/health", routeHandler(route0, "/health"))
   .get("/organizations", routeHandler(route1, "/organizations"))
   .post("/organizations", routeHandler(route2, "/organizations"))
-  .post("/organizations/:orgId/cloud-accounts", routeHandler(route3, "/organizations/:orgId/cloud-accounts"))
+  .post(
+    "/organizations/:orgId/cloud-accounts",
+    routeHandler(route3, "/organizations/:orgId/cloud-accounts"),
+  )
   .get("/repos", routeHandler(route4, "/repos"))
   .post("/repos", routeHandler(route5, "/repos"))
   .delete("/repos/:repoId", routeHandler(route6, "/repos/:repoId"))
   .post("/repos/link", routeHandler(route7, "/repos/link"))
-  .put("/users/me/environment", routeHandler(route8, "/users/me/environment"))
-  .get("/workspaces", routeHandler(route9, "/workspaces"))
-  .post("/workspaces", routeHandler(route10, "/workspaces"))
-  .delete("/workspaces/:id", routeHandler(route11, "/workspaces/:id"))
-  .post("/workspaces/:id/exec", routeHandler(route12, "/workspaces/:id/exec"))
-  .get("/workspaces/:id/git", routeHandler(route13, "/workspaces/:id/git"))
-  .post("/workspaces/:id/git/commit", routeHandler(route14, "/workspaces/:id/git/commit"))
-  .post("/workspaces/:id/pr", routeHandler(route15, "/workspaces/:id/pr"))
-  .post("/workspaces/:id/pr/merge", routeHandler(route16, "/workspaces/:id/pr/merge"))
-  .get("/workspaces/:id/services", routeHandler(route17, "/workspaces/:id/services"))
-  .post("/workspaces/:id/services/start", routeHandler(route18, "/workspaces/:id/services/start"))
-  .post("/workspaces/:id/services/stop", routeHandler(route19, "/workspaces/:id/services/stop"))
-  .get("/workspaces/:id/shell", routeHandler(route20, "/workspaces/:id/shell"))
-  .post("/workspaces/:id/shell", routeHandler(route21, "/workspaces/:id/shell"))
-  .get("/workspaces/:id/terminals", routeHandler(route22, "/workspaces/:id/terminals"))
-  .post("/workspaces/:id/terminals", routeHandler(route23, "/workspaces/:id/terminals"))
-  .delete("/workspaces/:id/terminals/:terminalId", routeHandler(route24, "/workspaces/:id/terminals/:terminalId"))
-  .get("/workspaces/:id/terminals/:terminalId", routeHandler(route25, "/workspaces/:id/terminals/:terminalId"))
-  .post("/workspaces/:id/terminals/:terminalId/connections", routeHandler(route26, "/workspaces/:id/terminals/:terminalId/connections"))
-  .delete("/workspaces/:id/terminals/:terminalId/connections/:connectionId", routeHandler(route27, "/workspaces/:id/terminals/:terminalId/connections/:connectionId"))
-  .get("/workspaces/activity", routeHandler(route28, "/workspaces/activity"))
-;
+  .get("/settings", routeHandler(route8, "/settings"))
+  .put("/settings", routeHandler(route9, "/settings"))
+  .put("/users/me/environment", routeHandler(route10, "/users/me/environment"))
+  .get("/workspaces", routeHandler(route11, "/workspaces"))
+  .post("/workspaces", routeHandler(route12, "/workspaces"))
+  .delete("/workspaces/:id", routeHandler(route13, "/workspaces/:id"))
+  .post("/workspaces/:id/exec", routeHandler(route14, "/workspaces/:id/exec"))
+  .get("/workspaces/:id/git", routeHandler(route15, "/workspaces/:id/git"))
+  .post("/workspaces/:id/git/commit", routeHandler(route16, "/workspaces/:id/git/commit"))
+  .post("/workspaces/:id/pr", routeHandler(route17, "/workspaces/:id/pr"))
+  .post("/workspaces/:id/pr/merge", routeHandler(route18, "/workspaces/:id/pr/merge"))
+  .get("/workspaces/:id/services", routeHandler(route19, "/workspaces/:id/services"))
+  .post("/workspaces/:id/services/start", routeHandler(route20, "/workspaces/:id/services/start"))
+  .post("/workspaces/:id/services/stop", routeHandler(route21, "/workspaces/:id/services/stop"))
+  .get("/workspaces/:id/shell", routeHandler(route22, "/workspaces/:id/shell"))
+  .post("/workspaces/:id/shell", routeHandler(route23, "/workspaces/:id/shell"))
+  .get("/workspaces/:id/terminals", routeHandler(route24, "/workspaces/:id/terminals"))
+  .post("/workspaces/:id/terminals", routeHandler(route25, "/workspaces/:id/terminals"))
+  .delete(
+    "/workspaces/:id/terminals/:terminalId",
+    routeHandler(route26, "/workspaces/:id/terminals/:terminalId"),
+  )
+  .get(
+    "/workspaces/:id/terminals/:terminalId",
+    routeHandler(route27, "/workspaces/:id/terminals/:terminalId"),
+  )
+  .post(
+    "/workspaces/:id/terminals/:terminalId/connections",
+    routeHandler(route28, "/workspaces/:id/terminals/:terminalId/connections"),
+  )
+  .delete(
+    "/workspaces/:id/terminals/:terminalId/connections/:connectionId",
+    routeHandler(route29, "/workspaces/:id/terminals/:terminalId/connections/:connectionId"),
+  )
+  .get("/workspaces/activity", routeHandler(route30, "/workspaces/activity"));
 
 export type AppType = typeof app;

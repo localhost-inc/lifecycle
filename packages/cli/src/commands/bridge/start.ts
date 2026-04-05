@@ -1,6 +1,6 @@
 import { defineCommand } from "@lifecycle/cmd";
 import { startBridgeServer } from "@lifecycle/bridge/server";
-import { writePidfile, removePidfile } from "@lifecycle/bridge";
+import { writeBridgeRegistration, removeBridgeRegistration } from "@lifecycle/bridge";
 import { z } from "zod";
 
 import { getStackClientRegistry } from "../../stack-registry";
@@ -18,14 +18,14 @@ export default defineCommand({
       workspaceRegistry: getWorkspaceClientRegistry(),
     });
 
-    await writePidfile({ pid: process.pid, port: port as number });
+    await writeBridgeRegistration({ pid: process.pid, port: port as number });
     context.stderr(`Lifecycle bridge listening on http://127.0.0.1:${port}`);
 
     let shuttingDown = false;
     const shutdown = async () => {
       if (shuttingDown) return;
       shuttingDown = true;
-      await removePidfile();
+      await removeBridgeRegistration();
       process.exit(0);
     };
 

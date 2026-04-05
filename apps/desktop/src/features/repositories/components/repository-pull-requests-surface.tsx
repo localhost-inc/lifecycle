@@ -65,9 +65,7 @@ function RepositoryPullRequestsSurfaceContent({
         <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
           Pull Requests
         </p>
-        <h2 className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
-          {repositoryName}
-        </h2>
+        <h2 className="mt-2 text-2xl font-semibold text-[var(--foreground)]">{repositoryName}</h2>
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <PullRequestsTab

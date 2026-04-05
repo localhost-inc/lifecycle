@@ -11,6 +11,10 @@ final class LifecycleDesktopMacAppDelegate: NSObject, NSApplicationDelegate {
         return
       }
 
+      window.styleMask.insert(.fullSizeContentView)
+      window.titleVisibility = .hidden
+      window.titlebarAppearsTransparent = true
+      window.isMovableByWindowBackground = false
       window.makeKeyAndOrderFront(nil)
       window.orderFrontRegardless()
       NSApp.activate(ignoringOtherApps: true)
@@ -31,9 +35,11 @@ struct LifecycleDesktopMacApp: App {
   var body: some Scene {
     WindowGroup("Lifecycle") {
       ContentView()
-        .preferredColorScheme(.dark)
     }
     .windowStyle(.hiddenTitleBar)
     .defaultSize(width: 1440, height: 900)
+    .commands {
+      AppCommands()
+    }
   }
 }

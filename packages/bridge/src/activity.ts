@@ -8,8 +8,20 @@ import { buildTmuxSessionName } from "./tmux";
 const POLL_INTERVAL_MS = 1000;
 
 const IDLE_SHELLS = new Set([
-  "bash", "zsh", "fish", "sh", "dash", "ksh", "tcsh", "csh", "nu",
-  "-bash", "-zsh", "-fish", "-sh", "login",
+  "bash",
+  "zsh",
+  "fish",
+  "sh",
+  "dash",
+  "ksh",
+  "tcsh",
+  "csh",
+  "nu",
+  "-bash",
+  "-zsh",
+  "-fish",
+  "-sh",
+  "login",
 ]);
 const ACTIVITY_GATED_FOREGROUND_COMMANDS = new Set(["claude", "codex"]);
 const AGENT_ACTIVITY_WINDOW_SECS = 5;
@@ -56,12 +68,22 @@ export async function pollActivity(): Promise<WorkspaceActivityEntry[]> {
       try {
         const client = workspaceRegistry.resolve(check.host);
         const result = await client.execCommand(check.workspace, [
-          "tmux", "list-panes", "-t", check.sessionName,
-          "-F", "#{pane_current_command}\t#{window_activity}",
+          "tmux",
+          "list-panes",
+          "-t",
+          check.sessionName,
+          "-F",
+          "#{pane_current_command}\t#{window_activity}",
         ]);
 
         if (result.exitCode !== 0) {
-          return { id: check.id, repo: check.repo, name: check.name, busy: false, activity_at: null };
+          return {
+            id: check.id,
+            repo: check.repo,
+            name: check.name,
+            busy: false,
+            activity_at: null,
+          };
         }
 
         return {
@@ -105,10 +127,13 @@ export function startActivityPoller(): void {
       lastState = nextState;
 
       if (changed.length > 0) {
-        broadcastMessage({
-          type: "activity",
-          workspaces,
-        }, "activity");
+        broadcastMessage(
+          {
+            type: "activity",
+            workspaces,
+          },
+          "activity",
+        );
       }
     } catch {
       // swallow errors — poll will retry
@@ -147,7 +172,10 @@ export function parseTmuxPaneActivity(
     if (!command || IDLE_SHELLS.has(command)) continue;
 
     if (ACTIVITY_GATED_FOREGROUND_COMMANDS.has(command) || VERSION_LIKE_RE.test(command)) {
-      if (Number.isFinite(parsedActivity) && nowEpochSeconds - parsedActivity <= AGENT_ACTIVITY_WINDOW_SECS) {
+      if (
+        Number.isFinite(parsedActivity) &&
+        nowEpochSeconds - parsedActivity <= AGENT_ACTIVITY_WINDOW_SECS
+      ) {
         busy = true;
       }
       continue;

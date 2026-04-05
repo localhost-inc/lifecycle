@@ -16,10 +16,13 @@ import { supervisorSocketPath, supervisorPidPath } from "./paths";
  */
 export class SupervisorClient {
   private socket: Socket | null = null;
-  private pending = new Map<string, {
-    resolve: (value: unknown) => void;
-    reject: (err: Error) => void;
-  }>();
+  private pending = new Map<
+    string,
+    {
+      resolve: (value: unknown) => void;
+      reject: (err: Error) => void;
+    }
+  >();
   private nextId = 1;
   private buffer = "";
   private eventListener: ((msg: SupervisorMessage) => void) | null = null;
@@ -83,13 +86,22 @@ export class SupervisorClient {
     this.eventListener = listener;
   }
 
-  async request(method: string, workspace?: string, params?: Record<string, unknown>): Promise<unknown> {
+  async request(
+    method: string,
+    workspace?: string,
+    params?: Record<string, unknown>,
+  ): Promise<unknown> {
     if (!this.socket) {
       throw new Error("Not connected to supervisor");
     }
 
     const id = String(this.nextId++);
-    const req: SupervisorRequest = { id, method, ...(workspace ? { workspace } : {}), ...(params ? { params } : {}) };
+    const req: SupervisorRequest = {
+      id,
+      method,
+      ...(workspace ? { workspace } : {}),
+      ...(params ? { params } : {}),
+    };
 
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });

@@ -17,7 +17,9 @@ export default defineCommand({
     try {
       const name = input.args?.[0];
       if (!name) {
-        context.stderr("Usage: lifecycle workspace create <name> --host local [--repo-path <path>] [--ref <branch>]");
+        context.stderr(
+          "Usage: lifecycle workspace create <name> --host local [--repo-path <path>] [--ref <branch>]",
+        );
         return 1;
       }
 

@@ -31,7 +31,9 @@ async function readDeclaredServiceNames(
   workspaceRegistry: WorkspaceClientRegistry,
   workspace: WorkspaceRecord,
 ): Promise<string[]> {
-  const manifest = await workspaceRegistry.resolve(workspace.host).readManifest(requireWorkspacePath(workspace));
+  const manifest = await workspaceRegistry
+    .resolve(workspace.host)
+    .readManifest(requireWorkspacePath(workspace));
   if (manifest.state === "missing") {
     return [];
   }
@@ -77,10 +79,7 @@ async function syncServiceRows(
     .filter((row): row is ServiceRow => row !== undefined);
 }
 
-async function refreshRuntimeRows(
-  db: SqlDriver,
-  rows: ServiceRow[],
-): Promise<ServiceRow[]> {
+async function refreshRuntimeRows(db: SqlDriver, rows: ServiceRow[]): Promise<ServiceRow[]> {
   const nextRows: ServiceRow[] = [];
   const now = new Date().toISOString();
 
@@ -116,13 +115,12 @@ async function listRuntimeServiceRecords(
   return refreshedRows.map(serviceRecordFromRow);
 }
 
-function localSupervisorForHost(
-  stackRegistry: StackClientRegistry,
-  workspace: WorkspaceRecord,
-) {
+function localSupervisorForHost(stackRegistry: StackClientRegistry, workspace: WorkspaceRecord) {
   const client = stackRegistry.resolve(workspace.host);
   if (!(client instanceof LocalStackClient)) {
-    throw new Error(`Stack runtime for host "${workspace.host}" is not available in the local bridge.`);
+    throw new Error(
+      `Stack runtime for host "${workspace.host}" is not available in the local bridge.`,
+    );
   }
   return client;
 }
@@ -144,7 +142,9 @@ export async function startBridgeServices(
   serviceNames?: string[],
 ): Promise<{ services: ServiceRecord[]; startedServices: string[]; workspaceId: string }> {
   const workspace = await resolveBridgeWorkspaceRecord(db, workspaceId);
-  const manifest = await workspaceRegistry.resolve(workspace.host).readManifest(requireWorkspacePath(workspace));
+  const manifest = await workspaceRegistry
+    .resolve(workspace.host)
+    .readManifest(requireWorkspacePath(workspace));
   if (manifest.state === "missing") {
     throw new BridgeError({
       code: "stack_unconfigured",
@@ -266,7 +266,8 @@ export async function stopBridgeServices(
   const currentRows = await listServiceRowsByWorkspace(db, workspace.id);
   const declared = await readDeclaredServiceNames(workspaceRegistry, workspace);
   const syncedRows = await syncServiceRows(db, workspace, declared);
-  const targetNames = serviceNames && serviceNames.length > 0 ? serviceNames : syncedRows.map((row) => row.name);
+  const targetNames =
+    serviceNames && serviceNames.length > 0 ? serviceNames : syncedRows.map((row) => row.name);
   const runningNames = currentRows
     .filter((row) => targetNames.includes(row.name) && row.pid !== null && isPidAlive(row.pid))
     .map((row) => row.name);

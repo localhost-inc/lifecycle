@@ -69,7 +69,9 @@ export async function readControlPlaneJson<T>(
   throw new Error(message);
 }
 
-export async function requireActiveOrganizationId(explicitOrganizationId?: string): Promise<string> {
+export async function requireActiveOrganizationId(
+  explicitOrganizationId?: string,
+): Promise<string> {
   if (explicitOrganizationId) {
     return explicitOrganizationId;
   }

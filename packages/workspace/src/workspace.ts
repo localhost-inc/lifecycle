@@ -10,6 +10,8 @@ import type {
   GitPullRequestSummary,
   GitPushResult,
   GitStatusResult,
+  LifecycleTerminalPersistenceBackend,
+  LifecycleTerminalPersistenceMode,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
 import type { ManifestStatus } from "./manifest";
@@ -101,7 +103,13 @@ export interface WorkspaceShellLaunchSpec {
   env: Array<[string, string]>;
 }
 
-export interface ResolveWorkspaceShellInput {
+export interface WorkspaceTerminalPersistenceRuntimeInput {
+  persistenceBackend?: LifecycleTerminalPersistenceBackend;
+  persistenceMode?: LifecycleTerminalPersistenceMode;
+  persistenceExecutablePath?: string | null;
+}
+
+export interface ResolveWorkspaceShellInput extends WorkspaceTerminalPersistenceRuntimeInput {
   cwd?: string | null;
   sessionName?: string | null;
   syncEnvironment?: string[];
@@ -116,7 +124,7 @@ export interface WorkspaceShellRuntime {
   spec: WorkspaceShellLaunchSpec | null;
 }
 
-export interface ResolveWorkspaceTerminalRuntimeInput {
+export interface ResolveWorkspaceTerminalRuntimeInput extends WorkspaceTerminalPersistenceRuntimeInput {
   cwd?: string | null;
   sessionName?: string | null;
   syncEnvironment?: string[];

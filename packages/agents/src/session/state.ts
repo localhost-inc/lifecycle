@@ -212,7 +212,9 @@ export function reduceAgentSessionEvent(
             };
           }
           // Phase already "thinking" — no state change needed.
-          return sessionState.workspaceId === event.workspaceId ? sessionState : { ...sessionState, workspaceId: event.workspaceId };
+          return sessionState.workspaceId === event.workspaceId
+            ? sessionState
+            : { ...sessionState, workspaceId: event.workspaceId };
         }
         if (event.part.type === "text") {
           if (activity.phase !== "responding") {
@@ -224,7 +226,9 @@ export function reduceAgentSessionEvent(
             };
           }
           // Phase already "responding" — no state change needed.
-          return sessionState.workspaceId === event.workspaceId ? sessionState : { ...sessionState, workspaceId: event.workspaceId };
+          return sessionState.workspaceId === event.workspaceId
+            ? sessionState
+            : { ...sessionState, workspaceId: event.workspaceId };
         }
         if (event.part.type === "tool_call") {
           const toolCallId = event.part.toolCallId;
@@ -235,11 +239,15 @@ export function reduceAgentSessionEvent(
             activity.toolCallId === toolCallId;
           if (isDuplicateToolCall) {
             // Same tool still running — no state change needed.
-            return sessionState.workspaceId === event.workspaceId ? sessionState : { ...sessionState, workspaceId: event.workspaceId };
+            return sessionState.workspaceId === event.workspaceId
+              ? sessionState
+              : { ...sessionState, workspaceId: event.workspaceId };
           }
           const isNewTool = activity.phase !== "tool_use" || activity.toolCallId !== toolCallId;
           if (!isNewTool) {
-            return sessionState.workspaceId === event.workspaceId ? sessionState : { ...sessionState, workspaceId: event.workspaceId };
+            return sessionState.workspaceId === event.workspaceId
+              ? sessionState
+              : { ...sessionState, workspaceId: event.workspaceId };
           }
           return {
             ...sessionState,
@@ -254,7 +262,9 @@ export function reduceAgentSessionEvent(
         }
       }
       // No activity or unrecognized part type — no change.
-      return sessionState.workspaceId === event.workspaceId ? sessionState : { ...sessionState, workspaceId: event.workspaceId };
+      return sessionState.workspaceId === event.workspaceId
+        ? sessionState
+        : { ...sessionState, workspaceId: event.workspaceId };
     }
 
     if (event.kind === "agent.approval.requested") {
@@ -262,9 +272,7 @@ export function reduceAgentSessionEvent(
         ...sessionState,
         workspaceId: event.workspaceId,
         pendingApprovals: [
-          ...sessionState.pendingApprovals.filter(
-            (approval) => approval.id !== event.approval.id,
-          ),
+          ...sessionState.pendingApprovals.filter((approval) => approval.id !== event.approval.id),
           event.approval,
         ],
         providerStatus: null,

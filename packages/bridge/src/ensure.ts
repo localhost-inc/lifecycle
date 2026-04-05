@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { hc } from "hono/client";
 import type { AppType } from "../routed.gen";
-import { readPidfile } from "./pidfile";
+import { readBridgeRegistration } from "./registration";
 
 const STARTUP_ATTEMPTS = 120;
 const STARTUP_WAIT_MS = 100;
@@ -43,17 +43,18 @@ function createBridgeFetch() {
       return response;
     }
 
-    const message = formatBridgeFailure(
-      response.status,
-      await response.text().catch(() => ""),
-    );
+    const message = formatBridgeFailure(response.status, await response.text().catch(() => ""));
 
     throw new Error(message);
   };
 }
 
 type BridgeErrorEnvelope =
-  | { error: string; target?: string; issues?: Array<{ message?: string; path?: Array<string | number> }> }
+  | {
+      error: string;
+      target?: string;
+      issues?: Array<{ message?: string; path?: Array<string | number> }>;
+    }
   | { error: { message?: string } };
 
 export function formatBridgeFailure(status: number, body: string): string {
@@ -104,7 +105,9 @@ function parseBridgeFailure(body: string): string | null {
   return null;
 }
 
-function formatBridgeIssues(issues: Array<{ message?: string; path?: Array<string | number> }>): string {
+function formatBridgeIssues(
+  issues: Array<{ message?: string; path?: Array<string | number> }>,
+): string {
   return issues
     .flatMap((issue) => {
       if (typeof issue.message !== "string" || !issue.message.trim()) {
@@ -155,7 +158,7 @@ export async function ensureBridge(): Promise<{ port: number; client: BridgeClie
     };
   }
 
-  const existing = await readPidfile();
+  const existing = await readBridgeRegistration();
   if (existing && (await isHealthy(existing.port))) {
     return { port: existing.port, client: createBridgeClient(`http://127.0.0.1:${existing.port}`) };
   }
@@ -164,9 +167,12 @@ export async function ensureBridge(): Promise<{ port: number; client: BridgeClie
 
   for (let attempt = 0; attempt < STARTUP_ATTEMPTS; attempt++) {
     await sleep(STARTUP_WAIT_MS);
-    const pidfile = await readPidfile();
-    if (pidfile && (await isHealthy(pidfile.port))) {
-      return { port: pidfile.port, client: createBridgeClient(`http://127.0.0.1:${pidfile.port}`) };
+    const registration = await readBridgeRegistration();
+    if (registration && (await isHealthy(registration.port))) {
+      return {
+        port: registration.port,
+        client: createBridgeClient(`http://127.0.0.1:${registration.port}`),
+      };
     }
   }
 

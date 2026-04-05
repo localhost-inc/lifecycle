@@ -24,11 +24,7 @@ function normalizeInteractiveExitCode(code: number, startedAt: number): number {
 /**
  * Phase 1: piped SSH — sync environment, start tmux session, write trigger file.
  */
-function setupTmuxSession(
-  sshArgs: string[],
-  sessionName: string,
-  launchFn: string,
-): Promise<void> {
+function setupTmuxSession(sshArgs: string[], sessionName: string, launchFn: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const ssh = spawn("ssh", sshArgs, { stdio: ["pipe", "pipe", "pipe"] });
     let injected = false;
@@ -100,13 +96,19 @@ export default defineCommand({
       const result = await res.json();
 
       if (input.json) {
-        context.stdout(JSON.stringify({
-          workspace,
-          provider,
-          cwd: result.cwd,
-          host: result.host,
-          home: result.home,
-        }, null, 2));
+        context.stdout(
+          JSON.stringify(
+            {
+              workspace,
+              provider,
+              cwd: result.cwd,
+              host: result.host,
+              home: result.home,
+            },
+            null,
+            2,
+          ),
+        );
         return 0;
       }
 

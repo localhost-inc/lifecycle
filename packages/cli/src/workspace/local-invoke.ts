@@ -13,10 +13,7 @@ export async function invokeLocalWorkspaceCommand(
     case "get_git_current_branch":
       return getGitCurrentBranch(requireStringArg(args, "repoPath"));
     case "get_git_sha":
-      return getGitSha(
-        requireStringArg(args, "repoPath"),
-        requireStringArg(args, "refName"),
-      );
+      return getGitSha(requireStringArg(args, "repoPath"), requireStringArg(args, "refName"));
     case "create_git_worktree":
       return createGitWorktree({
         repoPath: requireStringArg(args, "repoPath"),
@@ -30,10 +27,7 @@ export async function invokeLocalWorkspaceCommand(
     case "resolve_lifecycle_root_path":
       return resolveLifecycleRootPath();
     case "remove_git_worktree":
-      removeGitWorktree(
-        requireStringArg(args, "repoPath"),
-        requireStringArg(args, "worktreePath"),
-      );
+      removeGitWorktree(requireStringArg(args, "repoPath"), requireStringArg(args, "worktreePath"));
       return undefined;
     case "git_branch_has_upstream":
       return gitBranchHasUpstream(

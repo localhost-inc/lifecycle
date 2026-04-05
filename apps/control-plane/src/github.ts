@@ -42,7 +42,11 @@ async function createAppJwt(appId: string, privateKeyPem: string): Promise<strin
 
   const key = await importPrivateKey(privateKeyPem);
   const signature = new Uint8Array(
-    await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(`${header}.${payload}`)),
+    await crypto.subtle.sign(
+      "RSASSA-PKCS1-v1_5",
+      key,
+      new TextEncoder().encode(`${header}.${payload}`),
+    ),
   );
 
   return `${header}.${payload}.${base64url(signature)}`;
@@ -96,16 +100,13 @@ export async function getRepoInstallation(
 ): Promise<{ installationId: string; permissions: Record<string, string> } | null> {
   const jwt = await createAppJwt(appId, privateKeyPem);
 
-  const res = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/installation`,
-    {
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${jwt}`,
-        "User-Agent": "lifecycle-api",
-      },
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/installation`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${jwt}`,
+      "User-Agent": "lifecycle-api",
     },
-  );
+  });
 
   if (res.status === 404) {
     return null;
@@ -172,15 +173,18 @@ export async function mergePullRequest(
   repo: string,
   pullNumber: number,
 ): Promise<{ merged: boolean; message: string }> {
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/merge`, {
-    method: "PUT",
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${token}`,
-      "User-Agent": "lifecycle-api",
+  const res = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/merge`,
+    {
+      method: "PUT",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "User-Agent": "lifecycle-api",
+      },
+      body: JSON.stringify({ merge_method: "squash" }),
     },
-    body: JSON.stringify({ merge_method: "squash" }),
-  });
+  );
 
   if (!res.ok) {
     const text = await res.text();

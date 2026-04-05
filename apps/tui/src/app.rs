@@ -278,7 +278,7 @@ impl App {
             status_expires: None,
             spinner_frame: 0,
             spinner_last_tick: Instant::now(),
-            bridge_events: BridgeEventStream::connect(bridge.base_url()),
+            bridge_events: BridgeEventStream::connect(&bridge),
             workspace_activity: HashMap::new(),
             active_workspace_key: None,
             dialog: AppDialog::None,

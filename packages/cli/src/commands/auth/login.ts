@@ -108,21 +108,29 @@ export default defineCommand({
             const authedClient = createControlPlaneClient();
             await authedClient.users.me.environment.$put({
               json: {
-                git: profile.git ? {
-                  name: profile.git.name,
-                  email: profile.git.email,
-                  configBase64: profile.git.configBase64,
-                } : undefined,
-                claude: profile.claude ? {
-                  accessToken: profile.claude.accessToken,
-                  refreshToken: profile.claude.refreshToken,
-                } : undefined,
-                claudeConfig: profile.claudeConfig ? {
-                  settingsBase64: profile.claudeConfig.settingsBase64,
-                } : undefined,
-                codex: profile.codex ? {
-                  authBase64: profile.codex.authBase64,
-                } : undefined,
+                git: profile.git
+                  ? {
+                      name: profile.git.name,
+                      email: profile.git.email,
+                      configBase64: profile.git.configBase64,
+                    }
+                  : undefined,
+                claude: profile.claude
+                  ? {
+                      accessToken: profile.claude.accessToken,
+                      refreshToken: profile.claude.refreshToken,
+                    }
+                  : undefined,
+                claudeConfig: profile.claudeConfig
+                  ? {
+                      settingsBase64: profile.claudeConfig.settingsBase64,
+                    }
+                  : undefined,
+                codex: profile.codex
+                  ? {
+                      authBase64: profile.codex.authBase64,
+                    }
+                  : undefined,
               },
             });
             context.stdout("\n\x1b[32m✓\x1b[0m Environment synced.");

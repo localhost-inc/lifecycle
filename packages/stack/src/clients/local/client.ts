@@ -2,11 +2,7 @@ import type { LifecycleConfig, ServiceRecord } from "@lifecycle/contracts";
 import { execSync, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import type {
-  StackClient,
-  StartStackInput,
-  StartStackResult,
-} from "../../client";
+import type { StackClient, StartStackInput, StartStackResult } from "../../client";
 import { resolveStartOrder } from "../../graph";
 import type { HealthCheck } from "../../health";
 import { waitForHealth } from "../../health";
@@ -60,10 +56,7 @@ export class LocalStackClient implements StackClient {
     return this.supervisor;
   }
 
-  async start(
-    config: LifecycleConfig,
-    input: StartStackInput,
-  ): Promise<StartStackResult> {
+  async start(config: LifecycleConfig, input: StartStackInput): Promise<StartStackResult> {
     const { prepareSteps, sorted } = resolveStartOrder(config, {
       prepared: input.prepared,
       ...(input.serviceNames ? { targetServices: input.serviceNames } : {}),
@@ -186,7 +179,9 @@ export class LocalStackClient implements StackClient {
     runtimeEnv: Record<string, string>,
     step: {
       command?: string | undefined;
-      write_files?: Array<{ path: string; content?: string | undefined; lines?: string[] | undefined }> | undefined;
+      write_files?:
+        | Array<{ path: string; content?: string | undefined; lines?: string[] | undefined }>
+        | undefined;
       cwd?: string | undefined;
       env?: Record<string, string> | undefined;
       timeout_seconds: number;
@@ -204,7 +199,10 @@ export class LocalStackClient implements StackClient {
 
     if (step.command) {
       const cwd = step.cwd ? resolvePath(rootPath, step.cwd) : rootPath;
-      const env: Record<string, string> = { ...process.env as Record<string, string>, ...runtimeEnv };
+      const env: Record<string, string> = {
+        ...(process.env as Record<string, string>),
+        ...runtimeEnv,
+      };
       if (step.env) {
         for (const [key, value] of Object.entries(step.env)) {
           env[key] = expandRuntimeTemplates(value, runtimeEnv);
@@ -236,12 +234,10 @@ export class LocalStackClient implements StackClient {
     const id = processId(stackId, serviceName);
 
     if (serviceConfig.runtime === "process") {
-      const cwd = serviceConfig.cwd ? resolvePath(input.rootPath, serviceConfig.cwd) : input.rootPath;
-      const env = resolveServiceEnv(
-        serviceConfig.env,
-        runtimeEnv,
-        `stack.${serviceName}.env`,
-      );
+      const cwd = serviceConfig.cwd
+        ? resolvePath(input.rootPath, serviceConfig.cwd)
+        : input.rootPath;
+      const env = resolveServiceEnv(serviceConfig.env, runtimeEnv, `stack.${serviceName}.env`);
 
       this.supervisor.spawn(id, {
         binary: "sh",
@@ -265,14 +261,8 @@ export class LocalStackClient implements StackClient {
     if (serviceConfig.health_check) {
       const check = this.buildHealthCheck(serviceConfig.health_check, runtimeEnv);
       const containerRef =
-        serviceConfig.runtime === "image"
-          ? `lifecycle-${stackId}-${serviceName}`
-          : null;
-      await waitForHealth(
-        check,
-        serviceConfig.startup_timeout_seconds ?? 60,
-        containerRef,
-      );
+        serviceConfig.runtime === "image" ? `lifecycle-${stackId}-${serviceName}` : null;
+      await waitForHealth(check, serviceConfig.startup_timeout_seconds ?? 60, containerRef);
     }
   }
 
@@ -280,10 +270,7 @@ export class LocalStackClient implements StackClient {
     id: string,
     stackId: string,
     serviceName: string,
-    serviceConfig: Extract<
-      LifecycleConfig["stack"][string],
-      { kind: "service"; runtime: "image" }
-    >,
+    serviceConfig: Extract<LifecycleConfig["stack"][string], { kind: "service"; runtime: "image" }>,
     input: StartStackInput,
     runtimeEnv: Record<string, string>,
     assignedPorts: Record<string, number>,
@@ -300,23 +287,26 @@ export class LocalStackClient implements StackClient {
       buildArgs.push(contextPath);
       const buildResult = spawnSync("docker", buildArgs, { stdio: "pipe", timeout: 300_000 });
       if (buildResult.status !== 0) {
-        throw new Error(`Docker build failed for ${serviceName}: ${buildResult.stderr?.toString().trim()}`);
+        throw new Error(
+          `Docker build failed for ${serviceName}: ${buildResult.stderr?.toString().trim()}`,
+        );
       }
       imageRef = tag;
     } else if (imageRef) {
-      const pullResult = spawnSync("docker", ["pull", imageRef], { stdio: "pipe", timeout: 300_000 });
+      const pullResult = spawnSync("docker", ["pull", imageRef], {
+        stdio: "pipe",
+        timeout: 300_000,
+      });
       if (pullResult.status !== 0) {
-        throw new Error(`Docker pull failed for ${imageRef}: ${pullResult.stderr?.toString().trim()}`);
+        throw new Error(
+          `Docker pull failed for ${imageRef}: ${pullResult.stderr?.toString().trim()}`,
+        );
       }
     } else {
       throw new Error(`Image service "${serviceName}" requires either image or build.`);
     }
 
-    const envEntries = resolveServiceEnv(
-      serviceConfig.env,
-      runtimeEnv,
-      `stack.${serviceName}.env`,
-    );
+    const envEntries = resolveServiceEnv(serviceConfig.env, runtimeEnv, `stack.${serviceName}.env`);
     const containerName = `lifecycle-${stackId}-${serviceName}`;
 
     // Remove existing container.
@@ -352,14 +342,14 @@ export class LocalStackClient implements StackClient {
 
     const runResult = spawnSync("docker", runArgs, { stdio: "pipe", timeout: 60_000 });
     if (runResult.status !== 0) {
-      throw new Error(`Docker run failed for ${serviceName}: ${runResult.stderr?.toString().trim()}`);
+      throw new Error(
+        `Docker run failed for ${serviceName}: ${runResult.stderr?.toString().trim()}`,
+      );
     }
   }
 
   private buildHealthCheck(
-    hc: NonNullable<
-      Extract<LifecycleConfig["stack"][string], { kind: "service" }>["health_check"]
-    >,
+    hc: NonNullable<Extract<LifecycleConfig["stack"][string], { kind: "service" }>["health_check"]>,
     runtimeEnv: Record<string, string>,
   ): HealthCheck {
     if (hc.kind === "tcp") {

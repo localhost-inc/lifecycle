@@ -135,7 +135,9 @@ export default defineCommand({
     scope: z
       .enum(["user", "project", "local"])
       .default("project")
-      .describe("user (personal, all projects), project (team-shared, committed), or local (personal, this project, gitignored)."),
+      .describe(
+        "user (personal, all projects), project (team-shared, committed), or local (personal, this project, gitignored).",
+      ),
     force: z.boolean().default(false).describe("Overwrite existing entries."),
   }),
   run: async (input) => {

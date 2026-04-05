@@ -1,7 +1,4 @@
-import {
-  createWorkspaceClientRegistry,
-  type WorkspaceClientRegistry,
-} from "@lifecycle/workspace";
+import { createWorkspaceClientRegistry, type WorkspaceClientRegistry } from "@lifecycle/workspace";
 import { access, readFile } from "node:fs/promises";
 import { CloudWorkspaceClient } from "@lifecycle/workspace/internal/cloud";
 import { LocalWorkspaceClient } from "@lifecycle/workspace/internal/local";

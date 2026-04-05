@@ -97,9 +97,7 @@ function TranscriptItemContent(index: number, _data: unknown, context: Transcrip
       key={message.id}
       message={message}
       isStreaming={
-        context.isRunning &&
-        index === context.messages.length - 1 &&
-        message.role === "assistant"
+        context.isRunning && index === context.messages.length - 1 && message.role === "assistant"
       }
       onResolveApproval={context.onResolveApproval}
       onOpenFile={context.onOpenFile}
@@ -609,10 +607,7 @@ export const AgentSurface = memo(function AgentSurface({
     [sessionId, agentClient],
   );
 
-  const onDraftPromptChange = useCallback(
-    (value: string) => setDraftPrompt(value),
-    [],
-  );
+  const onDraftPromptChange = useCallback((value: string) => setDraftPrompt(value), []);
   const onRemovePendingImage = useCallback(
     (i: number) => setPendingImages((prev) => prev.filter((_, j) => j !== i)),
     [],
@@ -632,8 +627,7 @@ export const AgentSurface = memo(function AgentSurface({
   );
 
   const visibleError = sendError ?? state.lastError;
-  const showThinking =
-    state.pendingTurnIds.length > 0 && state.pendingApprovals.length === 0;
+  const showThinking = state.pendingTurnIds.length > 0 && state.pendingApprovals.length === 0;
   const queuedMessageCount = Math.max(
     0,
     promptQueue.prompts.length - (promptQueue.dispatchingPromptId !== null ? 1 : 0),
@@ -888,7 +882,8 @@ export const AgentSurface = memo(function AgentSurface({
                   <div className="pt-4">
                     {session.status === "starting" ? (
                       <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
-                        <span className="text-[var(--accent)]">[~]</span> starting {provider.name}...
+                        <span className="text-[var(--accent)]">[~]</span> starting {provider.name}
+                        ...
                       </div>
                     ) : null}
                     {state.authStatus?.mode === "authenticating" ? (

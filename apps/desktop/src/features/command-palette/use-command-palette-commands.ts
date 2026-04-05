@@ -21,9 +21,7 @@ export function useCommandPaletteCommands(
   const mac = isMacPlatform();
 
   return useMemo(() => {
-    const repositoriesById = new Map(
-      repositories.map((repository) => [repository.id, repository]),
-    );
+    const repositoriesById = new Map(repositories.map((repository) => [repository.id, repository]));
     const workspaceCommands = Object.entries(workspacesByRepositoryId).flatMap(
       ([repositoryId, workspaces]) => {
         const repository = repositoriesById.get(repositoryId);

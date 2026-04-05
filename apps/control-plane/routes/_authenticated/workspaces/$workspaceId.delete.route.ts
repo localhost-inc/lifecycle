@@ -21,7 +21,10 @@ export default createRoute({
       } catch {}
     }
 
-    await db.update(workspace).set({ status: "archived", environmentStatus: "idle", updatedAt: new Date().toISOString() }).where(eq(workspace.id, ws.id));
+    await db
+      .update(workspace)
+      .set({ status: "archived", environmentStatus: "idle", updatedAt: new Date().toISOString() })
+      .where(eq(workspace.id, ws.id));
     return { id: ws.id, status: "archived" };
   },
 });

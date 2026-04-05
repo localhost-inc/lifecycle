@@ -2,7 +2,13 @@ import { defineCommand } from "@lifecycle/cmd";
 import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
-import { failCommand, jsonFlag, printServiceSummary, resolveWorkspaceId, workspaceIdFlag } from "../_shared";
+import {
+  failCommand,
+  jsonFlag,
+  printServiceSummary,
+  resolveWorkspaceId,
+  workspaceIdFlag,
+} from "../_shared";
 
 export default defineCommand({
   description: "Start services for the current workspace.",

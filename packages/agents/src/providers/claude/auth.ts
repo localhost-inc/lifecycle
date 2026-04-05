@@ -76,9 +76,7 @@ export async function checkClaudeAuth(): Promise<void> {
  * Trigger the Claude OAuth login flow by running `claude auth login`.
  * The CLI opens the browser for OAuth and blocks until complete.
  */
-export async function loginClaudeAuth(
-  loginMethod: ClaudeLoginMethod = "claudeai",
-): Promise<void> {
+export async function loginClaudeAuth(loginMethod: ClaudeLoginMethod = "claudeai"): Promise<void> {
   emit({
     kind: "auth.status",
     provider: "claude",

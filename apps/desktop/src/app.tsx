@@ -76,9 +76,7 @@ export function App({
           <BootstrapPerfMarker />
           <ContextMenuBlocker />
           <WorkspaceClientRegistryProvider workspaceClientRegistry={workspaceClientRegistry}>
-            <StackClientRegistryProvider
-              stackClientRegistry={stackClientRegistry}
-            >
+            <StackClientRegistryProvider stackClientRegistry={stackClientRegistry}>
               <AgentClientRegistryProvider agentClientRegistry={agentClientRegistry}>
                 <StoreProvider
                   agentMessageRegistry={agentMessageRegistry}

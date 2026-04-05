@@ -1,8 +1,10 @@
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -15,6 +17,10 @@ const LIFECYCLE_BRIDGE_CLI_ENTRYPOINT_ENV: &str = "LIFECYCLE_BRIDGE_CLI_ENTRYPOI
 pub struct LifecycleBridgeClient {
     base_url: Arc<Mutex<String>>,
     launch: BridgeLaunchConfig,
+    /// Receives the new base URL each time `bridge.json` changes.
+    url_changed_rx: Arc<Mutex<mpsc::Receiver<String>>>,
+    /// Keeps the watcher alive for the lifetime of the client.
+    _watcher: Arc<Mutex<Option<RecommendedWatcher>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -24,7 +30,7 @@ struct BridgeLaunchConfig {
 }
 
 #[derive(Debug, Deserialize)]
-struct BridgePidfile {
+struct BridgeRegistration {
     port: u16,
 }
 
@@ -207,17 +213,34 @@ impl LifecycleBridgeClient {
             return None;
         }
 
+        let (url_changed_tx, url_changed_rx) = mpsc::channel();
+        let shared_url = Arc::new(Mutex::new(base_url));
+        let watcher = start_registration_watcher(shared_url.clone(), url_changed_tx);
+
         Some(Self {
-            base_url: Arc::new(Mutex::new(base_url)),
+            base_url: shared_url,
             launch: BridgeLaunchConfig {
                 runtime: std::env::var(LIFECYCLE_BRIDGE_CLI_RUNTIME_ENV).ok().filter(|value| !value.trim().is_empty()),
                 entrypoint: std::env::var(LIFECYCLE_BRIDGE_CLI_ENTRYPOINT_ENV).ok().filter(|value| !value.trim().is_empty()),
             },
+            url_changed_rx: Arc::new(Mutex::new(url_changed_rx)),
+            _watcher: Arc::new(Mutex::new(watcher)),
         })
     }
 
-    pub fn base_url(&self) -> &str {
-        panic!("base_url() no longer returns a stable borrowed string; use current_base_url() instead")
+    pub fn base_url(&self) -> String {
+        self.current_base_url()
+    }
+
+    /// Drain any pending URL-change notifications from the file watcher.
+    /// Returns the latest new base URL if the bridge moved, or `None`.
+    pub fn poll_url_changed(&self) -> Option<String> {
+        let rx = self.url_changed_rx.lock().expect("url_changed lock poisoned");
+        let mut latest = None;
+        while let Ok(url) = rx.try_recv() {
+            latest = Some(url);
+        }
+        latest
     }
 
     pub fn repo_list(&self) -> Result<RepoListPayload, String> {
@@ -470,13 +493,21 @@ fn discover_healthy_bridge_url() -> Option<String> {
 }
 
 fn discover_bridge_url() -> Option<String> {
-    let pidfile_path = bridge_pidfile_path()?;
-    let pidfile = serde_json::from_str::<BridgePidfile>(&fs::read_to_string(pidfile_path).ok()?).ok()?;
-    Some(format!("http://127.0.0.1:{}", pidfile.port))
+    let registration_path = bridge_registration_path()?;
+    bridge_url_from_registration_text(&fs::read_to_string(registration_path).ok()?)
 }
 
-fn bridge_pidfile_path() -> Option<PathBuf> {
+fn bridge_registration_path() -> Option<PathBuf> {
     Some(dirs::home_dir()?.join(".lifecycle").join("bridge.json"))
+}
+
+pub fn current_bridge_url_from_registration() -> Option<String> {
+    discover_bridge_url()
+}
+
+fn bridge_url_from_registration_text(text: &str) -> Option<String> {
+    let registration = serde_json::from_str::<BridgeRegistration>(text).ok()?;
+    Some(format!("http://127.0.0.1:{}", registration.port))
 }
 
 fn format_bridge_error(status: u16, body: &str) -> String {
@@ -549,9 +580,61 @@ fn format_validation_path(path: &[BridgeValidationPathSegment]) -> String {
     formatted
 }
 
+/// Watch `~/.lifecycle/bridge.json` for changes. When the file is written,
+/// re-read the registration and, if the derived URL differs from the current
+/// `base_url`, update it and send the new URL through `tx`.
+fn start_registration_watcher(
+    base_url: Arc<Mutex<String>>,
+    tx: mpsc::Sender<String>,
+) -> Option<RecommendedWatcher> {
+    let registration_path = bridge_registration_path()?;
+    let watch_dir = registration_path.parent()?.to_path_buf();
+
+    let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+        let event = match res {
+            Ok(event) => event,
+            Err(_) => return,
+        };
+
+        let dominated = matches!(
+            event.kind,
+            notify::EventKind::Create(_)
+                | notify::EventKind::Modify(_)
+                | notify::EventKind::Remove(_)
+        );
+        if !dominated {
+            return;
+        }
+
+        let affects_registration = event.paths.iter().any(|p| p.ends_with("bridge.json"));
+        if !affects_registration {
+            return;
+        }
+
+        let next_url = match discover_healthy_bridge_url() {
+            Some(url) => url,
+            None => return,
+        };
+
+        let current = base_url.lock().expect("bridge url lock poisoned").clone();
+        if next_url != current {
+            crate::debug::log(format!(
+                "bridge registration changed: {} -> {}",
+                current, next_url
+            ));
+            *base_url.lock().expect("bridge url lock poisoned") = next_url.clone();
+            let _ = tx.send(next_url);
+        }
+    })
+    .ok()?;
+
+    watcher.watch(&watch_dir, RecursiveMode::NonRecursive).ok()?;
+    Some(watcher)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::format_bridge_error;
+    use super::{bridge_url_from_registration_text, format_bridge_error};
 
     #[test]
     fn formats_structured_bridge_errors() {
@@ -578,5 +661,11 @@ mod tests {
     fn formats_raw_text_failures_with_status() {
         let message = format_bridge_error(500, "upstream exploded");
         assert_eq!(message, "Bridge request failed with status 500: upstream exploded");
+    }
+
+    #[test]
+    fn parses_bridge_url_from_registration_text() {
+        let url = bridge_url_from_registration_text(r#"{"pid":42,"port":52036}"#);
+        assert_eq!(url.as_deref(), Some("http://127.0.0.1:52036"));
     }
 }

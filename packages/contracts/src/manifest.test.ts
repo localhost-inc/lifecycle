@@ -95,9 +95,7 @@ describe("parseManifest", () => {
     expect(result.valid).toBe(false);
     if (result.valid) return;
     expect(
-      result.errors.some(
-        (e) => e.path === "stack" || e.message.toLowerCase().includes("required"),
-      ),
+      result.errors.some((e) => e.path === "stack" || e.message.toLowerCase().includes("required")),
     ).toBe(true);
   });
 

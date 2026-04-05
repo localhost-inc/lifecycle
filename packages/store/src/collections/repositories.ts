@@ -55,12 +55,16 @@ export function createRepositoryCollection(driver: SqlDriver): SqlCollection<Rep
     getKey: (repository) => repository.id,
     onInsert: async ({ transaction }) => {
       await driver.transaction(
-        transaction.mutations.map((mutation) => insertRepositoryStatement(recordToRow(mutation.modified))),
+        transaction.mutations.map((mutation) =>
+          insertRepositoryStatement(recordToRow(mutation.modified)),
+        ),
       );
     },
     onUpdate: async ({ transaction }) => {
       await driver.transaction(
-        transaction.mutations.map((mutation) => updateRepositoryStatement(recordToRow(mutation.modified))),
+        transaction.mutations.map((mutation) =>
+          updateRepositoryStatement(recordToRow(mutation.modified)),
+        ),
       );
     },
     onDelete: async ({ transaction }) => {

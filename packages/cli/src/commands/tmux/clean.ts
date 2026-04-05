@@ -18,9 +18,7 @@ export default defineCommand({
       return 0;
     }
 
-    const targets = input.all
-      ? sessions
-      : sessions.filter((s) => !s.attached);
+    const targets = input.all ? sessions : sessions.filter((s) => !s.attached);
 
     if (targets.length === 0) {
       context.stdout(
@@ -65,9 +63,7 @@ function listLifecycleSessions(): TmuxSession[] {
         const [name = "", attachedStr = "0"] = line.split("\t");
         return { name, attached: attachedStr !== "0" };
       })
-      .filter(
-        (s) => s.name.startsWith("lifecycle-") || s.name.startsWith("lc-"),
-      );
+      .filter((s) => s.name.startsWith("lifecycle-") || s.name.startsWith("lc-"));
   } catch {
     return [];
   }

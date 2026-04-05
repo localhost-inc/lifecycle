@@ -11,10 +11,22 @@ export default createRoute({
     const db = ctx.get("db");
     const userId = ctx.get("userId");
 
-    const membership = await db.select().from(organizationMembership).where(and(eq(organizationMembership.organizationId, query.organizationId), eq(organizationMembership.userId, userId))).limit(1);
+    const membership = await db
+      .select()
+      .from(organizationMembership)
+      .where(
+        and(
+          eq(organizationMembership.organizationId, query.organizationId),
+          eq(organizationMembership.userId, userId),
+        ),
+      )
+      .limit(1);
     if (!membership[0]) return { workspaces: [] as typeof rows };
 
-    const rows = await db.select().from(workspace).where(eq(workspace.organizationId, query.organizationId));
+    const rows = await db
+      .select()
+      .from(workspace)
+      .where(eq(workspace.organizationId, query.organizationId));
     return { workspaces: rows };
   },
 });

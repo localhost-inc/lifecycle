@@ -113,10 +113,7 @@ export async function insertRepository(
   return id;
 }
 
-export async function deleteRepository(
-  db: SqlDriver,
-  repositoryId: string,
-): Promise<boolean> {
+export async function deleteRepository(db: SqlDriver, repositoryId: string): Promise<boolean> {
   const stmt = deleteRepositoryStatement(repositoryId);
   const result = await db.execute(stmt.sql, stmt.params);
   return result.rowsAffected > 0;

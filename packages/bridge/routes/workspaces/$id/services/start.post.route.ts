@@ -17,12 +17,6 @@ export default createRoute({
     const stackRegistry = ctx.get("stackRegistry");
     const workspaceRegistry = ctx.get("workspaceRegistry");
 
-    return startBridgeServices(
-      db,
-      workspaceRegistry,
-      stackRegistry,
-      params.id,
-      body.serviceNames,
-    );
+    return startBridgeServices(db, workspaceRegistry, stackRegistry, params.id, body.serviceNames);
   },
 });

@@ -53,15 +53,17 @@ describe("connectLocalAgentWorker", () => {
           return "/tmp/lifecycle" as T;
         case "read_json_file":
           registrationReads += 1;
-          return (registrationReads < 2
-            ? null
-            : {
-                pid: 123,
-                port: 4312,
-                sessionId: "session_1",
-                status: "ready",
-                token: "secret",
-              }) as T;
+          return (
+            registrationReads < 2
+              ? null
+              : {
+                  pid: 123,
+                  port: 4312,
+                  sessionId: "session_1",
+                  status: "ready",
+                  token: "secret",
+                }
+          ) as T;
         case "spawn_managed_process":
           return { pid: 123 } as T;
         default:

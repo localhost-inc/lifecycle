@@ -19,7 +19,8 @@ function prompt(question: string): Promise<string> {
 
 async function openBrowser(url: string) {
   const { exec } = await import("node:child_process");
-  const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+  const cmd =
+    process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
   exec(`${cmd} "${url}"`);
 }
 
@@ -28,7 +29,10 @@ const CF_TOKEN_URL = "https://dash.cloudflare.com/profile/control-plane-tokens/c
 export default defineCommand({
   description: "Connect a Cloudflare account to the active organization.",
   input: z.object({
-    apiToken: z.string().optional().describe("Cloudflare API token. Prompted interactively if omitted."),
+    apiToken: z
+      .string()
+      .optional()
+      .describe("Cloudflare API token. Prompted interactively if omitted."),
     json: jsonFlag,
   }),
   run: async (input, context) => {

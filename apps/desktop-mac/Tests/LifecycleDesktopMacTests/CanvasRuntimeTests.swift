@@ -1,8 +1,33 @@
 import XCTest
+import SwiftUI
 
 @testable import LifecycleDesktopMac
 
 final class CanvasRuntimeTests: XCTestCase {
+  func testAppRouteParsesWorkspaceURL() throws {
+    let route = try XCTUnwrap(
+      AppRoute(url: URL(string: "lifecycle://app/workspaces/workspace-123")!)
+    )
+
+    XCTAssertEqual(route, .workspace(id: "workspace-123"))
+    XCTAssertEqual(route.path, "/workspaces/workspace-123")
+  }
+
+  func testAppRouteParsesSettingsURL() throws {
+    let route = try XCTUnwrap(
+      AppRoute(url: URL(string: "lifecycle://app/settings")!)
+    )
+
+    XCTAssertEqual(route, .settings)
+    XCTAssertEqual(route.path, "/settings")
+  }
+
+  func testAppRouteRejectsUnknownURL() {
+    XCTAssertNil(
+      AppRoute(url: URL(string: "lifecycle://app/unknown")!)
+    )
+  }
+
   func testTmuxSurfaceMirrorSessionNameIsStableAndSanitized() {
     let sessionName = tmuxSurfaceMirrorSessionName(
       baseSessionName: "workspace/name 1",
@@ -48,10 +73,45 @@ final class CanvasRuntimeTests: XCTestCase {
     )
 
     let command = bridgeTerminalCommandText(connection)
-    let expectedScript = "\(prepare.displayCommand) && exec \(spec.displayCommand)"
+    let expectedScript = "\(prepare.shellCommand) && exec \(spec.shellCommand)"
     let expected = ["/bin/sh", "-c", expectedScript].map(shellEscape).joined(separator: " ")
 
     XCTAssertEqual(command, expected)
+  }
+
+  func testBridgeTerminalCommandPreservesLaunchSpecEnvironment() {
+    let prepare = BridgeShellLaunchSpec(
+      program: "sh",
+      args: ["-lc", "echo ready"],
+      cwd: "/tmp/workspace",
+      env: [["TERM", "xterm-256color"], ["TMUX", ""], ["TMUX_PANE", ""]]
+    )
+    let spec = BridgeShellLaunchSpec(
+      program: "tmux",
+      args: ["-L", "lifecycle-managed-v2", "-f", "/dev/null", "attach-session", "-t", "workspace"],
+      cwd: "/tmp/workspace",
+      env: [["TERM", "xterm-256color"], ["TMUX", ""], ["TMUX_PANE", ""]]
+    )
+    let connection = BridgeTerminalConnection(
+      connectionID: "conn-1",
+      terminalID: "@1",
+      launchError: nil,
+      transport: .spawn(
+        BridgeTerminalSpawnTransport(
+          kind: "spawn",
+          prepare: prepare,
+          spec: spec
+        )
+      )
+    )
+
+    let command = bridgeTerminalCommandText(connection)
+    let expectedScript = "\(prepare.shellCommand) && exec \(spec.shellCommand)"
+    let expected = ["/bin/sh", "-c", expectedScript].map(shellEscape).joined(separator: " ")
+
+    XCTAssertEqual(command, expected)
+    XCTAssertTrue(expectedScript.contains("'TMUX='"))
+    XCTAssertTrue(expectedScript.contains("'TMUX_PANE='"))
   }
 
   func testNormalizeCanvasDocumentAppendsUnassignedSurfaceToActiveGroup() {
@@ -146,12 +206,12 @@ final class CanvasRuntimeTests: XCTestCase {
     XCTAssertEqual(activeCanvasSurfaceIDs(in: document), [firstSurfaceID, secondSurfaceID])
   }
 
-  func testBridgeDiscoveryParsesPidfilePortAndPID() throws {
+  func testBridgeDiscoveryParsesRegistrationPortAndPID() throws {
     let data = try JSONEncoder().encode(
-      BridgePidfile(pid: 4821, port: 52036)
+      BridgeRegistration(pid: 4821, port: 52036)
     )
 
-    let discovery = try XCTUnwrap(bridgeDiscovery(fromPidfileData: data))
+    let discovery = try XCTUnwrap(bridgeDiscovery(fromRegistrationData: data))
 
     XCTAssertEqual(discovery.pid, 4821)
     XCTAssertEqual(discovery.url.absoluteString, "http://127.0.0.1:52036")
@@ -179,6 +239,21 @@ final class CanvasRuntimeTests: XCTestCase {
     )
   }
 
+  func testRenderedSurfacesKeepsInactiveTabsMounted() {
+    let firstSurface = canvasSurface(id: "surface:workspace-1:@1", title: "Tab 1")
+    let secondSurface = canvasSurface(id: "surface:workspace-1:@2", title: "Tab 2")
+
+    let rendered = renderedSurfaces(
+      for: [firstSurface, secondSurface],
+      activeSurfaceID: secondSurface.id,
+      groupIsActive: true
+    )
+
+    XCTAssertEqual(rendered.map(\.id), [firstSurface.id, secondSurface.id])
+    XCTAssertEqual(rendered[0].renderState, SurfaceRenderState(isFocused: false, isVisible: false))
+    XCTAssertEqual(rendered[1].renderState, SurfaceRenderState(isFocused: true, isVisible: true))
+  }
+
   private func terminalSurfaceRecord(id: String, title: String) -> CanvasSurfaceRecord {
     CanvasSurfaceRecord(
       id: id,
@@ -190,6 +265,25 @@ final class CanvasRuntimeTests: XCTestCase {
           "terminalID": id.components(separatedBy: ":").last ?? id,
         ]
       )
+    )
+  }
+
+  private func canvasSurface(id: String, title: String) -> CanvasSurface {
+    let record = terminalSurfaceRecord(id: id, title: title)
+    return CanvasSurface(
+      id: id,
+      title: title,
+      surfaceKind: .terminal,
+      record: record,
+      content: AnySurfaceContent(id: id) { _ in
+        EmptyView()
+      },
+      tabPresentation: SurfaceTabPresentation(
+        title: title,
+        subtitle: nil,
+        icon: "terminal"
+      ),
+      isClosable: true
     )
   }
 }

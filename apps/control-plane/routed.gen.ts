@@ -177,8 +177,14 @@ export const app = new Hono()
   .get("/organizations", routeHandler(route4, "/organizations"))
   .post("/organizations", routeHandler(route5, "/organizations"))
   .get("/organizations/:orgId", routeHandler(route6, "/organizations/:orgId"))
-  .get("/organizations/:orgId/cloud-accounts", routeHandler(route7, "/organizations/:orgId/cloud-accounts"))
-  .post("/organizations/:orgId/cloud-accounts", routeHandler(route8, "/organizations/:orgId/cloud-accounts"))
+  .get(
+    "/organizations/:orgId/cloud-accounts",
+    routeHandler(route7, "/organizations/:orgId/cloud-accounts"),
+  )
+  .post(
+    "/organizations/:orgId/cloud-accounts",
+    routeHandler(route8, "/organizations/:orgId/cloud-accounts"),
+  )
   .get("/repos", routeHandler(route9, "/repos"))
   .post("/repos", routeHandler(route10, "/repos"))
   .get("/repos/:repoId", routeHandler(route11, "/repos/:repoId"))
@@ -190,8 +196,10 @@ export const app = new Hono()
   .get("/workspaces/:workspaceId", routeHandler(route17, "/workspaces/:workspaceId"))
   .post("/workspaces/:workspaceId/exec", routeHandler(route18, "/workspaces/:workspaceId/exec"))
   .post("/workspaces/:workspaceId/pr", routeHandler(route19, "/workspaces/:workspaceId/pr"))
-  .post("/workspaces/:workspaceId/pr/merge", routeHandler(route20, "/workspaces/:workspaceId/pr/merge"))
-  .get("/workspaces/:workspaceId/shell", routeHandler(route21, "/workspaces/:workspaceId/shell"))
-;
+  .post(
+    "/workspaces/:workspaceId/pr/merge",
+    routeHandler(route20, "/workspaces/:workspaceId/pr/merge"),
+  )
+  .get("/workspaces/:workspaceId/shell", routeHandler(route21, "/workspaces/:workspaceId/shell"));
 
 export type AppType = typeof app;

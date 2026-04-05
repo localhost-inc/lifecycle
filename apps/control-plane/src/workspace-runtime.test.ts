@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  buildWorkspaceExecCommand,
-  CLOUD_WORKTREE_PATH,
-} from "./workspace-runtime";
+import { buildWorkspaceExecCommand, CLOUD_WORKTREE_PATH } from "./workspace-runtime";
 
 describe("buildWorkspaceExecCommand", () => {
   test("builds an exec command with cwd and environment", () => {

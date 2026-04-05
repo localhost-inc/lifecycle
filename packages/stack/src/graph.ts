@@ -83,10 +83,7 @@ function collectTransitiveDeps(
 // Lower
 // ---------------------------------------------------------------------------
 
-export function lowerStackGraph(
-  config: LifecycleConfig,
-  options: LowerOptions,
-): LoweredGraph {
+export function lowerStackGraph(config: LifecycleConfig, options: LowerOptions): LoweredGraph {
   const { prepared, satisfiedServices } = options;
   const satisfied = satisfiedServices ?? new Set<string>();
 

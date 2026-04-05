@@ -12,12 +12,29 @@ export default createRoute({
     const db = ctx.get("db");
     const userId = ctx.get("userId");
 
-    const rows = await db.select().from(repository).where(eq(repository.id, params.repoId)).limit(1);
+    const rows = await db
+      .select()
+      .from(repository)
+      .where(eq(repository.id, params.repoId))
+      .limit(1);
     const repo = rows[0];
     if (!repo) throw notFound("repository_not_linked", `Repository ${params.repoId} not found.`);
 
-    const membership = await db.select().from(organizationMembership).where(and(eq(organizationMembership.organizationId, repo.organizationId), eq(organizationMembership.userId, userId))).limit(1);
-    if (!membership[0]) throw forbidden("organization_membership_missing", "You are not a member of this organization.");
+    const membership = await db
+      .select()
+      .from(organizationMembership)
+      .where(
+        and(
+          eq(organizationMembership.organizationId, repo.organizationId),
+          eq(organizationMembership.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!membership[0])
+      throw forbidden(
+        "organization_membership_missing",
+        "You are not a member of this organization.",
+      );
 
     return repo;
   },

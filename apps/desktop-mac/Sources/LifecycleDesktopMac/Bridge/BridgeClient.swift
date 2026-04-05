@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct BridgeClient {
   let baseURL: URL
   private let decoder = JSONDecoder()
@@ -12,6 +13,14 @@ struct BridgeClient {
   func activity() async throws -> [BridgeWorkspaceActivity] {
     let response: BridgeWorkspaceActivityResponse = try await request(path: "workspaces/activity")
     return response.workspaces
+  }
+
+  func settings() async throws -> BridgeSettingsEnvelope {
+    try await request(path: "settings")
+  }
+
+  func updateSettings(_ jsonBody: [String: Any]) async throws -> BridgeSettingsEnvelope {
+    try await request(path: "settings", method: "PUT", jsonBody: jsonBody)
   }
 
   func shell(for workspaceID: String) async throws -> BridgeWorkspaceShellEnvelope {
@@ -85,7 +94,7 @@ struct BridgeClient {
   private func request<Response: Decodable>(
     path: String,
     method: String = "GET",
-    jsonBody: [String: String]? = nil
+    jsonBody: Any? = nil
   ) async throws -> Response {
     let url = baseURL.appending(path: path)
     var request = URLRequest(url: url)

@@ -1,7 +1,12 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
 import type { Context } from "hono";
-import { requireWorkspaceAccess, requireActiveWorkspaceSandbox, CLOUD_HOME_PATH, CLOUD_WORKTREE_PATH } from "../_helpers";
+import {
+  requireWorkspaceAccess,
+  requireActiveWorkspaceSandbox,
+  CLOUD_HOME_PATH,
+  CLOUD_WORKTREE_PATH,
+} from "../_helpers";
 
 export default createRoute({
   schemas: { params: z.object({ workspaceId: z.string() }) },

@@ -4,10 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTursoDb } from "@lifecycle/db/turso";
 import { applyDbMigrations } from "@lifecycle/db/migrations";
-import {
-  createWorkspaceClientRegistry,
-  type WorkspaceClient,
-} from "@lifecycle/workspace";
+import { createWorkspaceClientRegistry, type WorkspaceClient } from "@lifecycle/workspace";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 
 import { createBridgeWorkspace } from "./workspaces";
@@ -114,16 +111,16 @@ describe("createBridgeWorkspace", () => {
       }),
     );
 
-    const rows = await db.select<{ path: string }>(
-      "SELECT path FROM repository WHERE id = $1",
-      [created.repositoryId],
-    );
+    const rows = await db.select<{ path: string }>("SELECT path FROM repository WHERE id = $1", [
+      created.repositoryId,
+    ]);
     expect(rows).toEqual([{ path: "/tmp/lifecycle" }]);
 
-    const persisted = await db.select<{ name: string; source_ref: string; worktree_path: string | null }>(
-      "SELECT name, source_ref, worktree_path FROM workspace WHERE id = $1",
-      [created.id],
-    );
+    const persisted = await db.select<{
+      name: string;
+      source_ref: string;
+      worktree_path: string | null;
+    }>("SELECT name, source_ref, worktree_path FROM workspace WHERE id = $1", [created.id]);
     expect(persisted).toEqual([
       {
         name: "feature-x",

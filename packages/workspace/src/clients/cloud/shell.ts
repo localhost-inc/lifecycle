@@ -19,9 +19,12 @@ export function buildCloudShellSshArgs(
 ): string[] {
   const args = [
     "-tt",
-    "-o", "StrictHostKeyChecking=no",
-    "-o", "UserKnownHostsFile=/dev/null",
-    "-o", "LogLevel=ERROR",
+    "-o",
+    "StrictHostKeyChecking=no",
+    "-o",
+    "UserKnownHostsFile=/dev/null",
+    "-o",
+    "LogLevel=ERROR",
     `${connection.token}@${connection.host}`,
   ];
 

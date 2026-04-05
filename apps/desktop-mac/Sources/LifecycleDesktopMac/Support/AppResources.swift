@@ -1,7 +1,7 @@
 import Foundation
 
 enum AppResources {
-  static func ghosttyThemeConfigPath() -> String {
+  static func bundledGhosttyThemeConfigPath() -> String {
     let resourceBundleName = "LifecycleDesktopMac_LifecycleDesktopMac.bundle"
 
     let mainBundleCandidates = [

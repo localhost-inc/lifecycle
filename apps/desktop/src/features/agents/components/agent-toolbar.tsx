@@ -309,7 +309,11 @@ export const AgentToolbar = memo(function AgentToolbar(props: AgentToolbarProps)
         catalogLoading={props.catalogLoading}
         catalogError={props.catalogError}
       />
-      <AgentStatus displayStatus={props.displayStatus} usage={props.usage} debugRef={props.debugRef} />
+      <AgentStatus
+        displayStatus={props.displayStatus}
+        usage={props.usage}
+        debugRef={props.debugRef}
+      />
     </div>
   );
 });

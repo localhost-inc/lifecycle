@@ -111,11 +111,7 @@ function emitWorkerEvent(event: AgentWorkerEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
 }
 
-function emitRawProviderEvent(
-  eventType: string,
-  payload: unknown,
-  turnId?: string | null,
-): void {
+function emitRawProviderEvent(eventType: string, payload: unknown, turnId?: string | null): void {
   emitWorkerEvent({
     kind: "provider.raw_event",
     eventType,
@@ -680,7 +676,9 @@ function buildToolUserInputMetadata(params: Record<string, unknown>): Record<str
   };
 }
 
-export function buildMcpElicitationMetadata(params: Record<string, unknown>): Record<string, unknown> {
+export function buildMcpElicitationMetadata(
+  params: Record<string, unknown>,
+): Record<string, unknown> {
   return {
     _meta: params._meta ?? null,
     elicitationId: readString(params, "elicitationId") ?? null,

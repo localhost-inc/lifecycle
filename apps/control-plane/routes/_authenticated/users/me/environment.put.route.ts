@@ -15,18 +15,10 @@ export default createRoute({
     const db = ctx.get("db");
     const userId = ctx.get("userId");
 
-    await db.insert(userEnvironment).values({
-      userId,
-      gitName: body.git?.name ?? null,
-      gitEmail: body.git?.email ?? null,
-      gitConfigBase64: body.git?.configBase64 ?? null,
-      claudeAccessToken: body.claude?.accessToken ?? null,
-      claudeRefreshToken: body.claude?.refreshToken ?? null,
-      claudeSettingsBase64: body.claudeConfig?.settingsBase64 ?? null,
-      codexAuthBase64: body.codex?.authBase64 ?? null,
-    }).onConflictDoUpdate({
-      target: userEnvironment.userId,
-      set: {
+    await db
+      .insert(userEnvironment)
+      .values({
+        userId,
         gitName: body.git?.name ?? null,
         gitEmail: body.git?.email ?? null,
         gitConfigBase64: body.git?.configBase64 ?? null,
@@ -34,9 +26,20 @@ export default createRoute({
         claudeRefreshToken: body.claude?.refreshToken ?? null,
         claudeSettingsBase64: body.claudeConfig?.settingsBase64 ?? null,
         codexAuthBase64: body.codex?.authBase64 ?? null,
-        updatedAt: new Date().toISOString(),
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: userEnvironment.userId,
+        set: {
+          gitName: body.git?.name ?? null,
+          gitEmail: body.git?.email ?? null,
+          gitConfigBase64: body.git?.configBase64 ?? null,
+          claudeAccessToken: body.claude?.accessToken ?? null,
+          claudeRefreshToken: body.claude?.refreshToken ?? null,
+          claudeSettingsBase64: body.claudeConfig?.settingsBase64 ?? null,
+          codexAuthBase64: body.codex?.authBase64 ?? null,
+          updatedAt: new Date().toISOString(),
+        },
+      });
 
     return { ok: true };
   },

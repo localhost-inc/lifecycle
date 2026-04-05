@@ -3,6 +3,7 @@ import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { createWorkspaceClientRegistry, type WorkspaceClient } from "./client";
 import { CloudWorkspaceClient } from "./clients/cloud";
 import { type LocalClientDeps, LocalWorkspaceClient } from "./clients/local";
+import { MANAGED_TMUX_SOCKET_NAME } from "./clients/shared/tmux-terminal-runtime";
 
 describe("workspace contract", () => {
   function workspace(overrides: Partial<WorkspaceRecord> = {}): WorkspaceRecord {
@@ -300,6 +301,83 @@ describe("workspace contract", () => {
     });
   });
 
+  test("local host client resolves a managed tmux runtime with a Lifecycle-owned profile", async () => {
+    const spawnSyncMock = ((program: string, args?: readonly string[]) => {
+      if (
+        program === "sh" &&
+        args?.[0] === "-lc" &&
+        args[1]?.includes("command -v '/opt/lifecycle/bin/tmux'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      return { error: undefined, status: 0, stderr: "", stdout: "" };
+    }) as unknown as NonNullable<LocalClientDeps["spawnSync"]>;
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      spawnSync: spawnSyncMock,
+    });
+
+    const runtime = await client.resolveShellRuntime(workspace(), {
+      sessionName: "lc-local-session",
+      persistenceMode: "managed",
+      persistenceExecutablePath: "/opt/lifecycle/bin/tmux",
+    });
+
+    expect(runtime.spec).toEqual({
+      program: "/opt/lifecycle/bin/tmux",
+      args: [
+        "-L",
+        MANAGED_TMUX_SOCKET_NAME,
+        "-f",
+        "/dev/null",
+        "new-session",
+        "-A",
+        "-s",
+        "lc-local-session",
+        "-c",
+        REPO_PATH,
+        ";",
+        "set-option",
+        "-t",
+        "lc-local-session",
+        "status",
+        "off",
+        ";",
+        "set-option",
+        "-t",
+        "lc-local-session",
+        "window-size",
+        "latest",
+      ],
+      cwd: REPO_PATH,
+      env: [
+        ["TERM", "xterm-256color"],
+        ["TMUX", ""],
+        ["TMUX_PANE", ""],
+      ],
+    });
+  });
+
+  test("local host client fails fast for an unsupported persistence backend", async () => {
+    const client = new LocalWorkspaceClient({ invoke: async () => "" });
+
+    const runtime = await client.resolveShellRuntime(workspace(), {
+      sessionName: "lc-local-session",
+      persistenceBackend: "zellij",
+      persistenceMode: "managed",
+    });
+
+    expect(runtime).toEqual({
+      backendLabel: "local shell",
+      launchError: 'Lifecycle terminal persistence backend "zellij" is not supported yet.',
+      persistent: false,
+      sessionName: null,
+      prepare: null,
+      spec: null,
+    });
+  });
+
   test("cloud host client resolves a tmux-backed shell runtime with prepare and attach steps", async () => {
     const client = new CloudWorkspaceClient({
       execWorkspaceCommand: async () => ({
@@ -318,6 +396,8 @@ describe("workspace contract", () => {
     const runtime = await client.resolveShellRuntime(workspace({ host: "cloud" }), {
       sessionName: "lc-cloud-session",
       syncEnvironment: ["export FOO=bar"],
+      persistenceMode: "managed",
+      persistenceExecutablePath: "/usr/local/bin/tmux",
     });
 
     expect(runtime.backendLabel).toBe("cloud tmux");
@@ -326,40 +406,36 @@ describe("workspace contract", () => {
     expect(runtime.sessionName).toBe("lc-cloud-session");
     expect(runtime.prepare).not.toBeNull();
     expect(runtime.prepare?.program).toBe("ssh");
-    expect(runtime.prepare?.args.at(-1)).toContain("tmux has-session -t");
+    expect(runtime.prepare?.args.at(-1)).toContain("/usr/local/bin/tmux");
+    expect(runtime.prepare?.args.at(-1)).toContain(MANAGED_TMUX_SOCKET_NAME);
+    expect(runtime.prepare?.args.at(-1)).toContain("has-session");
     expect(runtime.prepare?.args.at(-1)).toContain("lc-cloud-session");
     expect(runtime.prepare?.args.at(-1)).toContain("export FOO=bar");
-    expect(runtime.spec).toEqual({
-      program: "ssh",
-      args: [
-        "-tt",
-        "-o",
-        "StrictHostKeyChecking=no",
-        "-o",
-        "UserKnownHostsFile=/dev/null",
-        "-o",
-        "LogLevel=ERROR",
-        "tok_123@ssh.app.lifecycle.test",
-      ],
-      cwd: null,
-      env: [],
-    });
+    expect(runtime.spec?.program).toBe("ssh");
+    expect(runtime.spec?.args.at(-1)).toContain("/usr/local/bin/tmux");
+    expect(runtime.spec?.args.at(-1)).toContain("attach-session");
+    expect(runtime.spec?.args.at(-1)).toContain("lc-cloud-session");
   });
 
   test("local host client lists tmux-backed terminal records through the terminal runtime", async () => {
     const calls: Array<{ args: string[]; program: string }> = [];
-    const spawnSyncMock = ((
-      program: string,
-      args?: readonly string[],
-    ) => {
+    const spawnSyncMock = ((program: string, args?: readonly string[]) => {
       const commandArgs = [...(args ?? [])];
       calls.push({ program, args: commandArgs });
 
-      if (program === "sh" && commandArgs[0] === "-lc" && commandArgs[1]?.includes("command -v tmux")) {
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("command -v 'tmux'")
+      ) {
         return { error: undefined, status: 0, stderr: "", stdout: "" };
       }
 
-      if (program === "sh" && commandArgs[0] === "-lc" && commandArgs[1]?.includes("tmux has-session")) {
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("'tmux' 'has-session'")
+      ) {
         return { error: undefined, status: 0, stderr: "", stdout: "" };
       }
 
@@ -405,11 +481,8 @@ describe("workspace contract", () => {
   });
 
   test("local host client returns an isolated spawn connection for a terminal", async () => {
-    const spawnSyncMock = ((
-      program: string,
-      args?: readonly string[],
-    ) => {
-      if (program === "sh" && args?.[0] === "-lc" && args[1]?.includes("command -v tmux")) {
+    const spawnSyncMock = ((program: string, args?: readonly string[]) => {
+      if (program === "sh" && args?.[0] === "-lc" && args[1]?.includes("command -v 'tmux'")) {
         return { error: undefined, status: 0, stderr: "", stdout: "" };
       }
 
@@ -434,10 +507,7 @@ describe("workspace contract", () => {
       kind: "spawn",
       prepare: {
         program: "sh",
-        args: [
-          "-lc",
-          expect.stringContaining("lc-local-session--conn--surface-A--_2"),
-        ],
+        args: ["-lc", expect.stringContaining("lc-local-session--conn--surface-A--_2")],
         cwd: REPO_PATH,
         env: [["TERM", "xterm-256color"]],
       },
@@ -448,6 +518,131 @@ describe("workspace contract", () => {
         env: [["TERM", "xterm-256color"]],
       },
     });
+  });
+
+  test("local host client scrubs outer tmux env for managed terminal connections", async () => {
+    const spawnSyncMock = ((program: string, args?: readonly string[]) => {
+      if (
+        program === "sh" &&
+        args?.[0] === "-lc" &&
+        args[1]?.includes("command -v '/opt/lifecycle/bin/tmux'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      return { error: undefined, status: 0, stderr: "", stdout: "" };
+    }) as unknown as NonNullable<LocalClientDeps["spawnSync"]>;
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      spawnSync: spawnSyncMock,
+    });
+
+    const connection = await client.connectTerminal(workspace(), {
+      sessionName: "lc-local-session",
+      terminalId: "@2",
+      clientId: "surface-A",
+      access: "interactive",
+      preferredTransport: "spawn",
+      persistenceMode: "managed",
+      persistenceExecutablePath: "/opt/lifecycle/bin/tmux",
+    });
+
+    expect(connection.transport).toEqual({
+      kind: "spawn",
+      prepare: {
+        program: "sh",
+        args: ["-lc", expect.stringContaining("lc-local-session--conn--surface-A--_2")],
+        cwd: REPO_PATH,
+        env: [
+          ["TERM", "xterm-256color"],
+          ["TMUX", ""],
+          ["TMUX_PANE", ""],
+        ],
+      },
+      spec: {
+        program: "/opt/lifecycle/bin/tmux",
+        args: [
+          "-L",
+          MANAGED_TMUX_SOCKET_NAME,
+          "-f",
+          "/dev/null",
+          "attach-session",
+          "-t",
+          "lc-local-session--conn--surface-A--_2",
+        ],
+        cwd: REPO_PATH,
+        env: [
+          ["TERM", "xterm-256color"],
+          ["TMUX", ""],
+          ["TMUX_PANE", ""],
+        ],
+      },
+    });
+  });
+
+  test("local host client uses the managed tmux profile for terminal listing", async () => {
+    const calls: Array<{ args: string[]; program: string }> = [];
+    const spawnSyncMock = ((program: string, args?: readonly string[]) => {
+      const commandArgs = [...(args ?? [])];
+      calls.push({ program, args: commandArgs });
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("command -v '/opt/lifecycle/bin/tmux'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes(
+          `'/opt/lifecycle/bin/tmux' '-L' '${MANAGED_TMUX_SOCKET_NAME}' '-f' '/dev/null' 'has-session'`,
+        )
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (program === "/opt/lifecycle/bin/tmux" && commandArgs[4] === "list-windows") {
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout: "@1\tshell\t0\t1\n",
+        };
+      }
+
+      return { error: undefined, status: 0, stderr: "", stdout: "" };
+    }) as unknown as NonNullable<LocalClientDeps["spawnSync"]>;
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      spawnSync: spawnSyncMock,
+    });
+
+    const terminals = await client.listTerminals(workspace(), {
+      sessionName: "lc-local-session",
+      persistenceMode: "managed",
+      persistenceExecutablePath: "/opt/lifecycle/bin/tmux",
+    });
+
+    expect(terminals).toEqual([
+      {
+        id: "@1",
+        title: "shell",
+        kind: "shell",
+        busy: false,
+        closable: false,
+      },
+    ]);
+    expect(
+      calls.some(
+        (call) =>
+          call.program === "/opt/lifecycle/bin/tmux" &&
+          call.args.slice(0, 5).join(" ") ===
+            `-L ${MANAGED_TMUX_SOCKET_NAME} -f /dev/null list-windows`,
+      ),
+    ).toBe(true);
   });
 
   test("cloud host client lists tmux-backed terminal records through remote execution", async () => {
@@ -534,9 +729,60 @@ describe("workspace contract", () => {
       "lc-cloud-session--conn--surface-B--_4",
     );
     expect(connection.transport.spec?.program).toBe("ssh");
+    expect(connection.transport.spec?.args.at(-1)).toContain("attach-session");
     expect(connection.transport.spec?.args.at(-1)).toContain(
-      "tmux attach-session -t lc-cloud-session--conn--surface-B--_4",
+      "lc-cloud-session--conn--surface-B--_4",
     );
+  });
+
+  test("cloud host client uses the managed tmux profile for remote terminal commands", async () => {
+    const calls: string[][] = [];
+    const client = new CloudWorkspaceClient({
+      execWorkspaceCommand: async (_workspaceId, command) => {
+        calls.push(command);
+        if (command[0] === "/usr/local/bin/tmux" && command[5] === "list-windows") {
+          return {
+            exitCode: 0,
+            stderr: "",
+            stdout: "@1\tshell\t0\t1\n",
+          };
+        }
+        return {
+          exitCode: 0,
+          stderr: "",
+          stdout: "",
+        };
+      },
+      getShellConnection: async () => ({
+        cwd: "/workspace/repo",
+        home: "/home/lifecycle",
+        host: "ssh.app.lifecycle.test",
+        token: "tok_123",
+      }),
+    });
+
+    const terminals = await client.listTerminals(workspace({ host: "cloud" }), {
+      sessionName: "lc-cloud-session",
+      persistenceMode: "managed",
+      persistenceExecutablePath: "/usr/local/bin/tmux",
+    });
+
+    expect(terminals).toEqual([
+      {
+        id: "@1",
+        title: "shell",
+        kind: "shell",
+        busy: false,
+        closable: false,
+      },
+    ]);
+    expect(calls[1]?.slice(0, 5)).toEqual([
+      "/usr/local/bin/tmux",
+      "-L",
+      MANAGED_TMUX_SOCKET_NAME,
+      "-f",
+      "/dev/null",
+    ]);
   });
 
   test("local host client reads lifecycle manifests through the injected file reader", async () => {

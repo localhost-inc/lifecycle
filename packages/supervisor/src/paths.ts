@@ -1,10 +1,9 @@
 import { resolve } from "node:path";
 
 function lifecycleRunPath(): string {
-  const root = process.env.LIFECYCLE_ROOT ?? resolve(
-    process.env.HOME ?? process.env.USERPROFILE ?? "/tmp",
-    ".lifecycle",
-  );
+  const root =
+    process.env.LIFECYCLE_ROOT ??
+    resolve(process.env.HOME ?? process.env.USERPROFILE ?? "/tmp", ".lifecycle");
   return resolve(root, "run");
 }
 

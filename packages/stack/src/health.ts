@@ -52,20 +52,17 @@ async function checkHttp(url: string, timeoutMs: number): Promise<boolean> {
 
 function checkContainer(containerRef: string): boolean {
   try {
-    const result = execSync(
-      `docker inspect --format '{{.State.Health.Status}}' ${containerRef}`,
-      { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] },
-    ).trim();
+    const result = execSync(`docker inspect --format '{{.State.Health.Status}}' ${containerRef}`, {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
     return result === "healthy";
   } catch {
     return false;
   }
 }
 
-async function checkHealth(
-  check: HealthCheck,
-  containerRef: string | null,
-): Promise<boolean> {
+async function checkHealth(check: HealthCheck, containerRef: string | null): Promise<boolean> {
   switch (check.kind) {
     case "tcp":
       return checkTcp(check.host, check.port, check.timeoutSeconds * 1000);

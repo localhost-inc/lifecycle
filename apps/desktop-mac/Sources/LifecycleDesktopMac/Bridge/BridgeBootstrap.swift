@@ -14,7 +14,7 @@ enum BridgeBootstrapError: LocalizedError {
   }
 }
 
-struct BridgePidfile: Codable {
+struct BridgeRegistration: Codable {
   let pid: Int
   let port: Int
 }
@@ -60,7 +60,7 @@ enum BridgeBootstrap {
       return BridgeDiscovery(url: url, pid: nil)
     }
 
-    if let discovery = await pidfileDiscovery(), await isHealthy(discovery.url) {
+    if let discovery = await registrationDiscovery(), await isHealthy(discovery.url) {
       return discovery
     }
 
@@ -72,7 +72,7 @@ enum BridgeBootstrap {
 
     for _ in 0..<bootstrapAttempts {
       try await Task.sleep(nanoseconds: bootstrapWaitNanoseconds)
-      if let discovery = await pidfileDiscovery(), await isHealthy(discovery.url) {
+      if let discovery = await registrationDiscovery(), await isHealthy(discovery.url) {
         return discovery
       }
     }
@@ -97,14 +97,14 @@ enum BridgeBootstrap {
     }
   }
 
-  private static func pidfileDiscovery() async -> BridgeDiscovery? {
+  private static func registrationDiscovery() async -> BridgeDiscovery? {
     let path =
-      ProcessInfo.processInfo.environment["LIFECYCLE_BRIDGE_PIDFILE"] ??
+      ProcessInfo.processInfo.environment["LIFECYCLE_BRIDGE_REGISTRATION"] ??
       NSString(string: "~/.lifecycle/bridge.json").expandingTildeInPath
     let url = URL(fileURLWithPath: path)
 
     guard let data = try? Data(contentsOf: url),
-          let discovery = bridgeDiscovery(fromPidfileData: data)
+          let discovery = bridgeDiscovery(fromRegistrationData: data)
     else {
       return nil
     }
@@ -129,18 +129,18 @@ enum BridgeBootstrap {
   }
 }
 
-func bridgeDiscovery(fromPidfileData data: Data) -> BridgeDiscovery? {
-  guard let pidfile = try? JSONDecoder().decode(BridgePidfile.self, from: data),
-        let url = URL(string: "http://127.0.0.1:\(pidfile.port)")
+func bridgeDiscovery(fromRegistrationData data: Data) -> BridgeDiscovery? {
+  guard let registration = try? JSONDecoder().decode(BridgeRegistration.self, from: data),
+        let url = URL(string: "http://127.0.0.1:\(registration.port)")
   else {
     return nil
   }
 
-  return BridgeDiscovery(url: url, pid: pidfile.pid)
+  return BridgeDiscovery(url: url, pid: registration.pid)
 }
 
-func bridgeURL(fromPidfileData data: Data) -> URL? {
-  bridgeDiscovery(fromPidfileData: data)?.url
+func bridgeURL(fromRegistrationData data: Data) -> URL? {
+  bridgeDiscovery(fromRegistrationData: data)?.url
 }
 
 private struct HealthPayload: Decodable {

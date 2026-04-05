@@ -216,7 +216,8 @@ export function AppShellLayout() {
       const checkoutType = input.checkoutType;
       const isRoot = checkoutType === "root";
       const branch = currentBranch ?? "main";
-      const name = input.workspaceName?.trim() || (isRoot ? branch : autoWorkspaceName(workspaceId));
+      const name =
+        input.workspaceName?.trim() || (isRoot ? branch : autoWorkspaceName(workspaceId));
       const sourceRef = isRoot ? branch : workspaceBranchName(name, workspaceId);
 
       const now = new Date().toISOString();
@@ -597,7 +598,9 @@ export function AppShellLayout() {
   // Sync the native Repository menu with the current repository list (macOS).
   useEffect(() => {
     if (isTauri()) {
-      void invoke("sync_project_menu", { names: repositories.map((repository) => repository.name) });
+      void invoke("sync_project_menu", {
+        names: repositories.map((repository) => repository.name),
+      });
     }
   }, [repositories]);
 

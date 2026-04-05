@@ -22,13 +22,13 @@
     "typecheck": "tsc -b tsconfig.json"
   },
   "dependencies": {
-    "@lifecycle/control-plane": "workspace:*",
-    "hono": "^4.7.10",
     "@lifecycle/contracts": "workspace:*",
+    "@lifecycle/control-plane": "workspace:*",
     "@lifecycle/db": "workspace:*",
     "@lifecycle/stack": "workspace:*",
     "@lifecycle/workspace": "workspace:*",
     "@standard-schema/spec": "^1.1.0",
+    "hono": "^4.7.10",
     "routedjs": "0.1.4",
     "zod": "^4.3.6"
   }

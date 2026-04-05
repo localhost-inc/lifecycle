@@ -72,7 +72,11 @@ export function forbidden(code: ApiErrorCode, message: string): ApiError {
   });
 }
 
-export function badRequest(code: ApiErrorCode, message: string, suggestedAction?: string): ApiError {
+export function badRequest(
+  code: ApiErrorCode,
+  message: string,
+  suggestedAction?: string,
+): ApiError {
   return new ApiError(400, {
     code,
     message,

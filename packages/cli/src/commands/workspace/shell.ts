@@ -35,7 +35,10 @@ export default defineCommand({
     args: z.array(z.string()).describe("<workspace>"),
     json: jsonFlag,
     tmuxSession: defineFlag(
-      z.string().optional().describe("Persistent tmux session name to create or attach before the shell opens."),
+      z
+        .string()
+        .optional()
+        .describe("Persistent tmux session name to create or attach before the shell opens."),
       { aliases: "t" },
     ),
   }),
