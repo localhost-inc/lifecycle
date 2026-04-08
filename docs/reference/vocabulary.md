@@ -39,7 +39,7 @@ Use `shell plane` unless the distinction truly does not matter.
 
 The active personal or shared organization scope that owns the visible project set in the shell.
 
-Examples: `Personal`, `Kin Health`
+Examples: `Personal`, `Acme Health`
 
 Local-first note:
 
@@ -163,7 +163,7 @@ Use `workspace` for the full workspace-scoped area.
 
 Use `workspace canvas` for the center work area.
 
-A group owns an ordered set of surfaces plus one active surface. The canvas decides how groups are arranged in tiled or spatial modes. For terminal surfaces, the bridge/runtime informs the binding: one workspace maps to one tmux session and one terminal surface maps to one tmux window in that session.
+A group owns an ordered set of surfaces plus one active surface. The canvas decides how groups are arranged in tiled or spatial modes. For terminal surfaces, the bridge/runtime informs the binding: surfaces bind to terminal ids owned by the workspace runtime. tmux-backed hosts may still map those ids to tmux sessions/windows internally, but that is not the public contract.
 
 Implementation note:
 
@@ -266,6 +266,28 @@ Contains:
 
 Use `workspace shell` when the client asks the bridge to open the shell for a selected workspace.
 
+### Terminal runtime
+
+The bridge-owned runtime boundary that manages terminals for one workspace.
+
+It owns terminal discovery, creation, attach, detach, and close operations.
+
+### Terminal
+
+One interactive terminal inside a workspace runtime.
+
+Use `terminal` for first-class interactive terminal records and CLI operations such as:
+
+1. `lifecycle terminal list`
+2. `lifecycle terminal open`
+3. `lifecycle terminal attach`
+
+### Terminal connection
+
+An ephemeral client attachment to one terminal.
+
+Connections are client-scoped and transport-specific. They are not the same thing as terminal identity.
+
 ### Environment
 
 The declarative execution graph defined in `lifecycle.json`.
@@ -312,7 +334,7 @@ Service logs are one logical stream per service. Entries may still carry `stdout
 
 ### Context
 
-The aggregate CLI read across project, workspace, stack, service, git, and desktop-shell facts.
+The aggregate CLI read across project, workspace, terminal, stack, service, and git facts.
 
 This is the canonical CLI noun for one-shot orientation and machine-readable discovery.
 
@@ -329,7 +351,7 @@ Use `context` when the caller needs a composed view of the current workspace sta
 
 The authenticated cloud tenancy boundary for shared projects, repositories, and cloud workspaces.
 
-Examples: `Personal`, `Kin`
+Examples: `Personal`, `Acme`
 
 Use `organization` for cloud ownership and policy. Do not use it as a synonym for `project`.
 

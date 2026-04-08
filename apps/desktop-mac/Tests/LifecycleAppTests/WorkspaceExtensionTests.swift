@@ -93,6 +93,24 @@ final class WorkspaceExtensionTests: XCTestCase {
     XCTAssertEqual(model.extensionSidebarWidth(for: "workspace-2", availableWidth: 1200), 380)
   }
 
+  func testStackExtensionUsesCompactLayoutAtDefaultSidebarWidths() {
+    XCTAssertTrue(
+      stackExtensionUsesCompactLayout(availableWidth: defaultWorkspaceExtensionSidebarWidth)
+    )
+    XCTAssertTrue(
+      stackExtensionUsesCompactLayout(availableWidth: minimumWorkspaceExtensionSidebarWidth)
+    )
+  }
+
+  func testStackExtensionUsesTableLayoutOnlyWhenSidebarIsWideEnough() {
+    XCTAssertFalse(
+      stackExtensionUsesCompactLayout(availableWidth: stackExtensionMinimumTableWidth)
+    )
+    XCTAssertFalse(
+      stackExtensionUsesCompactLayout(availableWidth: maximumWorkspaceExtensionSidebarWidth)
+    )
+  }
+
   private func makeContext() -> WorkspaceExtensionContext {
     WorkspaceExtensionContext(
       model: AppModel(),
@@ -131,7 +149,11 @@ final class WorkspaceExtensionTests: XCTestCase {
   ) -> ResolvedWorkspaceExtension {
     ResolvedWorkspaceExtension(
       kind: kind,
-      tab: WorkspaceExtensionTabPresentation(title: title, subtitle: nil),
+      tab: WorkspaceExtensionTabPresentation(
+        icon: "square.stack",
+        title: title,
+        subtitle: nil
+      ),
       content: AnyWorkspaceExtensionContent {
         EmptyView()
       }
@@ -146,7 +168,11 @@ private struct TestWorkspaceExtensionDefinition: WorkspaceExtensionDefinition {
   func resolve(context _: WorkspaceExtensionContext) -> ResolvedWorkspaceExtension? {
     ResolvedWorkspaceExtension(
       kind: kind,
-      tab: WorkspaceExtensionTabPresentation(title: title, subtitle: nil),
+      tab: WorkspaceExtensionTabPresentation(
+        icon: "square.stack",
+        title: title,
+        subtitle: nil
+      ),
       content: AnyWorkspaceExtensionContent {
         EmptyView()
       }

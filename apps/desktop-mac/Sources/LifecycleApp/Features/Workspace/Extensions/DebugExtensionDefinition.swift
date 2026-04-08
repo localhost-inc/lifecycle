@@ -7,6 +7,7 @@ struct DebugExtensionDefinition: WorkspaceExtensionDefinition {
     ResolvedWorkspaceExtension(
       kind: kind,
       tab: WorkspaceExtensionTabPresentation(
+        icon: "ladybug",
         title: "Debug",
         subtitle: context.runtime?.backendLabel ?? context.workspace.host
       ),

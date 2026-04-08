@@ -1,19 +1,13 @@
 import type {
   AgentEvent,
   AgentContext,
+  HarnessSettings,
   AgentTurnCancelRequest,
   AgentTurnRequest,
 } from "@lifecycle/agents";
-import {
-  buildDefaultHarnessSettings,
-  buildHarnessLaunchConfig,
-  normalizeHarnessSettings,
-} from "@lifecycle/agents";
+import { buildDefaultHarnessSettings, buildHarnessLaunchConfig } from "@lifecycle/agents";
 import { AgentMessageProjection } from "@lifecycle/agents/internal/messages";
-import type {
-  AgentHandle,
-  AgentCallbacks,
-} from "@lifecycle/agents/internal/handle";
+import type { AgentHandle, AgentCallbacks } from "@lifecycle/agents/internal/handle";
 import type {
   AgentStreamEvent,
   AgentStreamSnapshot,
@@ -50,6 +44,7 @@ import {
   upsertAgent,
 } from "./persistence";
 import { BridgeError } from "../errors";
+import { readBridgeSettings, type BridgeSettingsEnvelope } from "../settings";
 
 interface ObservedAgentMetadata {
   provider: AgentRecord["provider"];
@@ -78,10 +73,7 @@ export interface AgentManager {
   initialize(): Promise<void>;
   inspectAgent(agentId: string): Promise<AgentManagerInspectResult>;
   listAgents(workspaceId: string): Promise<AgentRecord[]>;
-  resolveApproval(
-    agentId: string,
-    input: Omit<AgentApprovalResolution, "agentId">,
-  ): Promise<void>;
+  resolveApproval(agentId: string, input: Omit<AgentApprovalResolution, "agentId">): Promise<void>;
   resolveProviderRequest(
     agentId: string,
     input: Omit<AgentProviderRequestResolution, "metadata">,
@@ -93,10 +85,7 @@ export interface AgentManager {
       input: AgentInputPart[];
     },
   ): Promise<void>;
-  startAgent(input: {
-    provider: AgentProviderId;
-    workspaceId: string;
-  }): Promise<AgentRecord>;
+  startAgent(input: { provider: AgentProviderId; workspaceId: string }): Promise<AgentRecord>;
   cancelTurn(agentId: string, input: Omit<AgentTurnCancelRequest, "agentId">): Promise<void>;
 }
 
@@ -111,6 +100,8 @@ export interface AgentManagerDependencies {
   environment?: NodeJS.ProcessEnv;
   now?: () => string;
   randomId?: () => string;
+  readBridgeSettings?: (environment?: NodeJS.ProcessEnv) => Promise<BridgeSettingsEnvelope>;
+  spawnAgentWorker?: typeof spawnAgentWorker;
   workspaceRegistry: WorkspaceClientRegistry;
 }
 
@@ -186,10 +177,7 @@ function eventTurnId(event: AgentEvent): string | null {
   }
 }
 
-function agentsEqualForBootstrap(
-  previous: AgentRecord,
-  next: AgentRecord,
-): boolean {
+function agentsEqualForBootstrap(previous: AgentRecord, next: AgentRecord): boolean {
   return (
     previous.id === next.id &&
     previous.workspace_id === next.workspace_id &&
@@ -232,7 +220,7 @@ class AgentManagerImpl implements AgentManager {
       agents.map(async (agent) => {
         try {
           const context = await this.requireWorkspaceContext(agent.workspace_id);
-          const handle = this.spawnAgentHandle(agent, context);
+          const handle = await this.spawnAgentHandle(agent, context);
           this.agentHandles.set(agent.id, handle);
         } catch (error) {
           console.error(`[agent-manager] failed to reattach ${agent.id}:`, error);
@@ -274,12 +262,9 @@ class AgentManagerImpl implements AgentManager {
     return await this.requireAgent(agent.id);
   }
 
-  private async bootstrapStartedAgent(
-    agent: AgentRecord,
-    context: AgentContext,
-  ): Promise<void> {
+  private async bootstrapStartedAgent(agent: AgentRecord, context: AgentContext): Promise<void> {
     try {
-      const handle = this.spawnAgentHandle(agent, context);
+      const handle = await this.spawnAgentHandle(agent, context);
       this.agentHandles.set(agent.id, handle);
 
       const current = await this.requireAgent(agent.id);
@@ -385,7 +370,7 @@ class AgentManagerImpl implements AgentManager {
 
     try {
       await this.withAgentRetry(runningAgent, async () => {
-        const handle = this.ensureAgentHandle(runningAgent, context);
+        const handle = await this.ensureAgentHandle(runningAgent, context);
         await handle.sendTurn(request);
       });
     } catch (error) {
@@ -400,15 +385,12 @@ class AgentManagerImpl implements AgentManager {
     }
   }
 
-  async cancelTurn(
-    agentId: string,
-    input: Omit<AgentTurnCancelRequest, "agentId">,
-  ): Promise<void> {
+  async cancelTurn(agentId: string, input: Omit<AgentTurnCancelRequest, "agentId">): Promise<void> {
     const agent = await this.requireAgent(agentId);
     const context = await this.requireWorkspaceContext(agent.workspace_id);
 
     await this.withAgentRetry(agent, async () => {
-      const handle = this.ensureAgentHandle(agent, context);
+      const handle = await this.ensureAgentHandle(agent, context);
       await handle.cancelTurn({ ...input, agentId });
     });
   }
@@ -421,7 +403,7 @@ class AgentManagerImpl implements AgentManager {
     const context = await this.requireWorkspaceContext(agent.workspace_id);
 
     await this.withAgentRetry(agent, async () => {
-      const handle = this.ensureAgentHandle(agent, context);
+      const handle = await this.ensureAgentHandle(agent, context);
       await handle.resolveApproval({ ...input, agentId });
     });
   }
@@ -434,7 +416,7 @@ class AgentManagerImpl implements AgentManager {
     const context = await this.requireWorkspaceContext(agent.workspace_id);
 
     await this.withAgentRetry(agent, async () => {
-      const handle = this.ensureAgentHandle(agent, context);
+      const handle = await this.ensureAgentHandle(agent, context);
       if (!handle.resolveProviderRequest) {
         throw new Error(`Agent provider ${agent.provider} does not support provider requests.`);
       }
@@ -442,10 +424,21 @@ class AgentManagerImpl implements AgentManager {
     });
   }
 
-  private createAgentCallbacks(
-    agent: AgentRecord,
-    context: AgentContext,
-  ): AgentCallbacks {
+  private async resolveLaunchHarnessSettings(): Promise<HarnessSettings> {
+    const harnesses = buildDefaultHarnessSettings();
+    const readSettings = this.deps.readBridgeSettings ?? readBridgeSettings;
+    const envelope = await readSettings(this.deps.environment);
+
+    return {
+      ...harnesses,
+      claude: {
+        ...harnesses.claude,
+        loginMethod: envelope.settings.providers.claude.loginMethod,
+      },
+    };
+  }
+
+  private createAgentCallbacks(agent: AgentRecord, context: AgentContext): AgentCallbacks {
     return {
       onState: async (snapshot) => {
         if (snapshot.agentId !== agent.id || snapshot.provider !== agent.provider) {
@@ -456,11 +449,7 @@ class AgentManagerImpl implements AgentManager {
       },
       onEvent: async (event) => {
         if (event.kind === "agent.ready") {
-          await this.updateAgentProviderBinding(
-            agent.id,
-            context.workspaceId,
-            event.providerId,
-          );
+          await this.updateAgentProviderBinding(agent.id, context.workspaceId, event.providerId);
           return;
         }
 
@@ -469,10 +458,7 @@ class AgentManagerImpl implements AgentManager {
     };
   }
 
-  private spawnAgentHandle(
-    agent: AgentRecord,
-    context: AgentContext,
-  ): AgentHandle {
+  private async spawnAgentHandle(agent: AgentRecord, context: AgentContext): Promise<AgentHandle> {
     const callbacks = this.createAgentCallbacks(agent, context);
 
     if (this.deps.createAgentHandle) {
@@ -483,7 +469,7 @@ class AgentManagerImpl implements AgentManager {
       throw new Error(`Workspace ${agent.workspace_id} has no workspace root.`);
     }
 
-    const harnesses = normalizeHarnessSettings(buildDefaultHarnessSettings());
+    const harnesses = await this.resolveLaunchHarnessSettings();
     const args = buildProviderArgs(agent, context.workspaceRoot, harnesses);
     const env: Record<string, string> = {
       LIFECYCLE_BRIDGE_URL: this.deps.baseUrl,
@@ -495,7 +481,8 @@ class AgentManagerImpl implements AgentManager {
       Object.assign(env, this.deps.environment);
     }
 
-    const child = spawnAgentWorker({
+    const spawnWorker = this.deps.spawnAgentWorker ?? spawnAgentWorker;
+    const child = spawnWorker({
       args,
       cwd: context.workspaceRoot,
       env,
@@ -505,10 +492,7 @@ class AgentManagerImpl implements AgentManager {
     return new AgentDirectHandle(child, agent.id, agent.provider, callbacks);
   }
 
-  private ensureAgentHandle(
-    agent: AgentRecord,
-    context: AgentContext,
-  ): AgentHandle {
+  private async ensureAgentHandle(agent: AgentRecord, context: AgentContext): Promise<AgentHandle> {
     const existing = this.agentHandles.get(agent.id);
     if (existing && (!existing.isHealthy || existing.isHealthy())) {
       return existing;
@@ -517,7 +501,7 @@ class AgentManagerImpl implements AgentManager {
       this.agentHandles.delete(agent.id);
     }
 
-    const handle = this.spawnAgentHandle(agent, context);
+    const handle = await this.spawnAgentHandle(agent, context);
     this.agentHandles.set(agent.id, handle);
     return handle;
   }
@@ -552,8 +536,7 @@ class AgentManagerImpl implements AgentManager {
     const agent = await this.requireAgent(agentId);
     const nextStatus = snapshot.status === "starting" ? agent.status : snapshot.status;
     const nextProviderId =
-      snapshot.providerId?.trim() &&
-      snapshot.providerId !== agent.provider_id
+      snapshot.providerId?.trim() && snapshot.providerId !== agent.provider_id
         ? snapshot.providerId.trim()
         : agent.provider_id;
 
@@ -862,10 +845,7 @@ class AgentManagerImpl implements AgentManager {
     }
   }
 
-  private async withAgentRetry(
-    agent: AgentRecord,
-    execute: () => Promise<void>,
-  ): Promise<void> {
+  private async withAgentRetry(agent: AgentRecord, execute: () => Promise<void>): Promise<void> {
     const emitProviderStatus = async (status: string, detail?: string | null) => {
       await this.recordEvent({
         kind: "agent.status.updated",
@@ -891,10 +871,7 @@ class AgentManagerImpl implements AgentManager {
         await execute();
         await emitProviderStatus("", null);
       } catch (retryError) {
-        await emitProviderStatus(
-          "agent unavailable",
-          formatConnectionFailureStatus(retryError),
-        );
+        await emitProviderStatus("agent unavailable", formatConnectionFailureStatus(retryError));
         throw retryError;
       }
     }
@@ -1007,10 +984,7 @@ class AgentManagerImpl implements AgentManager {
       projectedMessage,
     });
 
-    if (
-      event.kind === "agent.updated" &&
-      TERMINAL_AGENT_STATUSES.has(event.agent.status)
-    ) {
+    if (event.kind === "agent.updated" && TERMINAL_AGENT_STATUSES.has(event.agent.status)) {
       this.agentHandles.delete(event.agent.id);
       this.messageProjection.clearAgent(event.agent.id);
       this.metadataByAgentId.delete(event.agent.id);
@@ -1044,9 +1018,7 @@ class AgentManagerImpl implements AgentManager {
     });
   }
 
-  private async getObservedAgentMetadata(
-    agentId: string,
-  ): Promise<ObservedAgentMetadata | null> {
+  private async getObservedAgentMetadata(agentId: string): Promise<ObservedAgentMetadata | null> {
     const cached = this.metadataByAgentId.get(agentId);
     if (cached) {
       return cached;
@@ -1137,7 +1109,7 @@ function normalizeClaudePermissionMode(permissionMode: string): string {
 function buildProviderArgs(
   agent: AgentRecord,
   workspaceRoot: string,
-  harnesses: ReturnType<typeof normalizeHarnessSettings>,
+  harnesses: HarnessSettings,
 ): string[] {
   const launchConfig = buildHarnessLaunchConfig(agent.provider, harnesses);
   const args = ["agent", agent.provider, "--workspace-path", workspaceRoot];

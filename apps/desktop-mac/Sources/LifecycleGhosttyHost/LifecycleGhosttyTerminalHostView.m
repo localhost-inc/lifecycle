@@ -38,6 +38,14 @@
   return [NSString stringWithUTF8String:message] ?: @"Ghostty runtime initialization failed.";
 }
 
++ (void)closeTerminalHostWithID:(NSString *)terminalID {
+  if (terminalID.length == 0) {
+    return;
+  }
+
+  lifecycle_native_terminal_close(terminalID.UTF8String);
+}
+
 - (instancetype)initWithFrame:(NSRect)frameRect {
   return [self initWithTerminalID:[NSUUID UUID].UUIDString];
 }
@@ -82,30 +90,10 @@
   return YES;
 }
 
-- (void)dealloc {
-  [self closeTerminalIfNeeded];
-}
-
-- (void)viewWillMoveToSuperview:(NSView *)newSuperview {
-  [super viewWillMoveToSuperview:newSuperview];
-  if (newSuperview == nil) {
-    [self closeTerminalIfNeeded];
-  }
-}
-
 - (void)layout {
   [super layout];
   _placeholderView.frame = self.bounds;
   [self syncTerminal];
-}
-
-- (void)closeTerminalIfNeeded {
-  if (_closed || self.terminalID.length == 0) {
-    return;
-  }
-
-  lifecycle_native_terminal_close(self.terminalID.UTF8String);
-  _closed = YES;
 }
 
 - (void)resetMountedTerminalIfNeeded {

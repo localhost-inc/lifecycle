@@ -1,9 +1,9 @@
 # Plan: Cloud Workspaces
 
 > Status: planned execution plan
-> Depends on: [Local CLI](./local-cli.md)
+> Depends on: [CLI](../../plans/cli.md)
 > Plan index: [docs/plans/README.md](./README.md). This document is the target contract for the first cloud delivery stream.
-> Related: [Kin Cloud V1](./kin-cloud-v1.md)
+> Related: [Cloud](../../plans/cloud.md)
 
 ## Goal
 

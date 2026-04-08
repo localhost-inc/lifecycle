@@ -45,6 +45,27 @@ Canonical monorepo entrypoint:
 ./scripts/dev desktop
 ```
 
+Inspect current dev state:
+
+```bash
+./scripts/dev status
+```
+
+Stop the current dev loop cleanly:
+
+```bash
+./scripts/dev stop
+```
+
+Tail a specific service log:
+
+```bash
+./scripts/dev logs bridge
+./scripts/dev logs control-plane
+./scripts/dev logs desktop-mac
+./scripts/dev logs desktop-mac-app
+```
+
 Bridge + control-plane only, for Xcode debugging:
 
 ```bash
@@ -92,12 +113,13 @@ Bridge behavior:
 
 Debugging:
 
-1. Use `bun run dev:desktop` or `./scripts/dev desktop` when you want the whole repo-backed app loop and normal product data under `~/.lifecycle`. The root `scripts/dev` entrypoint is the canonical monorepo supervisor and owns bridge, control-plane, and the mac app process together.
+1. Use `bun run dev:desktop` or `./scripts/dev desktop` when you want the whole repo-backed app loop. The root `scripts/dev` entrypoint is the canonical monorepo supervisor and owns bridge, control-plane, and the mac app process together.
 2. Use `bun run dev:desktop:services` when you want Xcode to launch only the native app while bridge and control-plane keep running from the repo.
 3. Open `apps/desktop-mac/Package.swift` in Xcode and run the auto-generated `LifecycleMac` scheme.
 4. Paste the output of `bun run desktop:mac:xcode-env` into the scheme's Run environment variables so Xcode uses the same bridge/runtime contract as `bun run dev:desktop`.
 5. Treat Xcode as the canonical path for breakpoints, sanitizers, Instruments, and crash debugging.
 6. Use `bun run desktop:mac:smoke` or `./scripts/dev desktop-smoke` to verify the desktop dev loop contract end to end: startup, bridge restart, control-plane restart, and desktop hot reload.
+7. The monorepo dev supervisor writes stable state and logs under `.lifecycle-runtime-dev/dev`, so `./scripts/dev status` and `./scripts/dev logs <service>` always point at the live runtime.
 
 Diagnostics:
 

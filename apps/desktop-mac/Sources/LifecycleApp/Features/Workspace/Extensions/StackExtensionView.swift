@@ -1,20 +1,37 @@
 import LifecyclePresentation
 import SwiftUI
 
+let stackExtensionMinimumTableWidth: CGFloat = 400
+
+func stackExtensionUsesCompactLayout(availableWidth: CGFloat) -> Bool {
+  availableWidth < stackExtensionMinimumTableWidth
+}
+
 struct StackExtensionView: View {
   @Environment(\.appTheme) private var theme
 
   let context: WorkspaceExtensionContext
 
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 12) {
-        summaryCard
-        nodeTable
+    GeometryReader { geometry in
+      let usesCompactLayout = stackExtensionUsesCompactLayout(availableWidth: geometry.size.width)
+
+      ScrollView {
+        VStack(alignment: .leading, spacing: 12) {
+          summaryCard
+
+          if usesCompactLayout {
+            compactNodeList
+          } else {
+            nodeTable
+          }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
       }
-      .padding(12)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+      .scrollIndicators(.automatic)
     }
-    .scrollIndicators(.automatic)
   }
 
   @ViewBuilder
@@ -64,6 +81,7 @@ struct StackExtensionView: View {
       RoundedRectangle(cornerRadius: 8, style: .continuous)
         .strokeBorder(theme.borderColor.opacity(0.5))
     )
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 
   @ViewBuilder
@@ -133,6 +151,7 @@ struct StackExtensionView: View {
       RoundedRectangle(cornerRadius: 8, style: .continuous)
         .strokeBorder(theme.borderColor.opacity(0.45))
     )
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 
   private var emptyStateLabel: String {
@@ -154,6 +173,68 @@ struct StackExtensionView: View {
   }
 
   @ViewBuilder
+  private var compactNodeList: some View {
+    let nodes = context.stackSummary?.nodes ?? []
+
+    VStack(alignment: .leading, spacing: 10) {
+      if nodes.isEmpty {
+        Text(emptyStateLabel)
+          .font(.system(size: 12, weight: .medium))
+          .foregroundStyle(theme.mutedColor)
+          .padding(12)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+              .fill(theme.surfaceRaised.opacity(0.4))
+          )
+          .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+              .strokeBorder(theme.borderColor.opacity(0.45))
+          )
+      } else {
+        ForEach(nodes) { node in
+          VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+              VStack(alignment: .leading, spacing: 6) {
+                Text(node.name)
+                  .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                  .foregroundStyle(theme.primaryTextColor)
+
+                HStack(spacing: 8) {
+                  kindBadge(for: node)
+                  statusBadge(for: node)
+                }
+              }
+
+              Spacer(minLength: 0)
+            }
+
+            compactNodeDetails(node)
+
+            if !node.dependsOn.isEmpty {
+              Text("depends_on: \(node.dependsOn.joined(separator: ", "))")
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(theme.mutedColor.opacity(0.8))
+                .fixedSize(horizontal: false, vertical: true)
+            }
+          }
+          .padding(12)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+              .fill(theme.surfaceRaised.opacity(0.4))
+          )
+          .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+              .strokeBorder(theme.borderColor.opacity(0.45))
+          )
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  @ViewBuilder
   private func statusBadge(for node: BridgeStackNode) -> some View {
     if node.kind == "service" {
       LCBadge(
@@ -167,6 +248,14 @@ struct StackExtensionView: View {
         .font(.system(size: 11, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.mutedColor)
     }
+  }
+
+  private func kindBadge(for node: BridgeStackNode) -> some View {
+    LCBadge(
+      label: node.kind,
+      color: node.kind == "service" ? theme.accentColor : theme.warningColor,
+      variant: .outline
+    )
   }
 
   @ViewBuilder
@@ -205,6 +294,59 @@ struct StackExtensionView: View {
             .foregroundStyle(theme.primaryTextColor.opacity(0.8))
             .textSelection(.enabled)
             .lineLimit(2)
+        }
+
+        Text("write_files: \(node.writeFilesCount ?? 0)")
+          .font(.system(size: 10, weight: .medium, design: .monospaced))
+          .foregroundStyle(theme.mutedColor.opacity(0.8))
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  @ViewBuilder
+  private func compactNodeDetails(_ node: BridgeStackNode) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      if node.kind == "service" {
+        HStack(spacing: 8) {
+          if let runtime = node.runtime {
+            Text(runtime)
+              .font(.system(size: 11, weight: .medium, design: .monospaced))
+              .foregroundStyle(theme.primaryTextColor.opacity(0.85))
+          }
+
+          if let assignedPort = node.assignedPort {
+            Text(":\(assignedPort)")
+              .font(.system(size: 11, weight: .medium, design: .monospaced))
+              .foregroundStyle(theme.successColor)
+          }
+        }
+
+        if let previewURL = node.previewURL {
+          Text(previewURL)
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundStyle(theme.mutedColor.opacity(0.8))
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+        } else if let statusReason = node.statusReason {
+          Text(statusReason)
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundStyle(theme.errorColor)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+      } else {
+        if let runOn = node.runOn {
+          Text("run_on: \(runOn)")
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundStyle(theme.warningColor)
+        }
+
+        if let command = node.command {
+          Text(command)
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundStyle(theme.primaryTextColor.opacity(0.8))
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
         }
 
         Text("write_files: \(node.writeFilesCount ?? 0)")

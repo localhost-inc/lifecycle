@@ -107,9 +107,8 @@ struct WorkspaceExtensionSidebarView: View {
     let isSelected = workspaceExtension.kind == state.activeKind
     let tab = workspaceExtension.tab
 
-    WorkspaceRailTabView(
-      title: tab.title,
-      subtitle: tab.subtitle,
+    WorkspaceExtensionRailTabView(
+      tab: tab,
       isSelected: isSelected
     ) {
       model.selectExtension(workspaceExtension.kind, workspaceID: workspace.id)

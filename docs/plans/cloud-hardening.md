@@ -1,7 +1,7 @@
 # Plan: Cloud Hardening
 
 > Status: planned execution plan
-> Depends on: [Cloud Workspaces](./cloud-workspaces.md)
+> Depends on: [Cloud](./cloud.md)
 > Plan index: [docs/plans/README.md](./README.md). This document is the target contract for lifecycle hardening after initial cloud delivery.
 
 ## Goal
@@ -36,7 +36,7 @@ What survives sleep:
 | Docker images                       | No              | Re-pull or restore from R2 cache on wake    |
 | Docker volumes (e.g. Postgres data) | No (default)    | Re-seed on wake; opt-in backup for V2       |
 | Running processes                   | No              | All services restart on wake                |
-| Workspace metadata                  | Yes             | Stored in Convex                            |
+| Workspace metadata                  | Yes             | Stored in control-plane state               |
 
 Sleep/wake contract:
 
@@ -53,7 +53,7 @@ Sleep/wake contract:
 
 1. Backup/restore performance at scale -- 500MB worktree vs 2GB worktree R2 round-trip times.
 2. Docker-in-Docker state after R2 restore -- does `dockerd` recognize restored image layers, or must images be re-pulled?
-3. Sandbox provisioning latency distribution -- no published p50/p95 from Cloudflare for cold sandbox spin-up.
+3. Sandbox provisioning latency distribution for the selected cloud runtime provider.
 4. R2 egress costs for frequent wake operations -- need cost model for teams with 20+ daily wake cycles.
 
 ### Destroy Flow (Cloud)
@@ -71,17 +71,17 @@ Sleep/wake contract:
 
 - Max active workspaces per organization
 - Quota enforcement at workspace creation time
-- Convex OCC handles serialization natively
+- quota enforcement should use the control plane's transactional/serialized authority path
 
 ### SLOs
 
 Full SLO targets: [reference/slos.md](../reference/slos.md)
 
-Key M7 targets:
+Key hardening targets:
 - p95 workspace wake from sleeping: <= 15s (cloud)
 - p95 workspace create to `ready`: <= 60s (cloud)
 
-## Desktop App Surface
+## Client Surface
 
 - **Cloud sleep/wake indicators**: "sleeping" badge on cloud workspace, auto-wake on click
 - **Sleeping workspace preview**: "waking workspace" response instead of 404

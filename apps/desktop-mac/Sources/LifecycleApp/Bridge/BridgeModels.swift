@@ -469,6 +469,7 @@ struct BridgeSettingsEnvelope: Decodable {
 
 struct BridgeSettings: Decodable, Equatable {
   let appearance: BridgeAppearanceSettings
+  let providers: BridgeProviderSettings
   let terminal: BridgeTerminalSettings
 }
 
@@ -476,9 +477,30 @@ struct BridgeAppearanceSettings: Decodable, Equatable {
   let theme: String
 }
 
+struct BridgeProviderSettings: Decodable, Equatable {
+  let claude: BridgeClaudeProviderSettings
+}
+
+struct BridgeClaudeProviderSettings: Decodable, Equatable {
+  let loginMethod: String
+
+  enum CodingKeys: String, CodingKey {
+    case loginMethod = "loginMethod"
+  }
+}
+
 struct BridgeTerminalSettings: Decodable, Equatable {
   let command: BridgeTerminalCommandSettings
   let persistence: BridgeTerminalPersistenceSettings
+  let defaultProfile: String
+  let profiles: [String: BridgeTerminalLaunchProfile]
+
+  enum CodingKeys: String, CodingKey {
+    case command
+    case persistence
+    case defaultProfile = "defaultProfile"
+    case profiles
+  }
 }
 
 struct BridgeTerminalCommandSettings: Decodable, Equatable {
@@ -489,6 +511,41 @@ struct BridgeTerminalPersistenceSettings: Decodable, Equatable {
   let backend: String
   let mode: String
   let executablePath: String?
+}
+
+struct BridgeTerminalLaunchProfile: Decodable, Equatable {
+  let launcher: String
+  let label: String?
+  let command: BridgeTerminalProfileCommand?
+  let settings: BridgeTerminalLaunchProfileSettings?
+}
+
+struct BridgeTerminalProfileCommand: Decodable, Equatable {
+  let program: String
+  let args: [String]
+  let env: [String: String]
+}
+
+struct BridgeTerminalLaunchProfileSettings: Decodable, Equatable {
+  let model: String?
+  let permissionMode: String?
+  let effort: String?
+  let configProfile: String?
+  let approvalPolicy: String?
+  let sandboxMode: String?
+  let reasoningEffort: String?
+  let webSearch: String?
+
+  enum CodingKeys: String, CodingKey {
+    case model
+    case permissionMode = "permissionMode"
+    case effort
+    case configProfile = "configProfile"
+    case approvalPolicy = "approvalPolicy"
+    case sandboxMode = "sandboxMode"
+    case reasoningEffort = "reasoningEffort"
+    case webSearch = "webSearch"
+  }
 }
 
 struct BridgeWorkspaceScope: Decodable, Hashable {

@@ -17,6 +17,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, readonly, nullable) NSString *lastError;
 
 - (instancetype)initWithTerminalID:(NSString *)terminalID NS_DESIGNATED_INITIALIZER;
++ (void)closeTerminalHostWithID:(NSString *)terminalID;
 - (void)syncTerminal;
 - (void)sendText:(NSString *)text;
 

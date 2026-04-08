@@ -92,19 +92,22 @@ func renderedSurfaces(
   activeSurfaceID: String?,
   groupIsActive: Bool
 ) -> [WorkspaceGroupRenderedSurface] {
-  let selectedSurfaceID = activeSurfaceID ?? surfaces.first?.id
-
-  return surfaces.map { surface in
-    let isVisible = surface.id == selectedSurfaceID
-    return WorkspaceGroupRenderedSurface(
-      id: surface.id,
-      renderState: SurfaceRenderState(
-        isFocused: groupIsActive && isVisible,
-        isVisible: isVisible
-      ),
-      surface: surface
-    )
+  guard let selectedSurface =
+    surfaces.first(where: { $0.id == activeSurfaceID }) ?? surfaces.first
+  else {
+    return []
   }
+
+  return [
+    WorkspaceGroupRenderedSurface(
+      id: selectedSurface.id,
+      renderState: SurfaceRenderState(
+        isFocused: groupIsActive,
+        isVisible: true
+      ),
+      surface: selectedSurface
+    )
+  ]
 }
 
 struct WorkspaceGroupView: View {

@@ -6,15 +6,153 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DESKTOP_DEV_SCRIPT="$REPO_ROOT/apps/desktop-mac/scripts/dev.sh"
 DESKTOP_SMOKE_SCRIPT="$REPO_ROOT/apps/desktop-mac/scripts/dev-loop-smoke.sh"
+DEV_STATE_ROOT="${LIFECYCLE_DEV_STATE_ROOT:-$REPO_ROOT/.lifecycle-runtime-dev/dev}"
+DEV_LOG_DIR="$DEV_STATE_ROOT/logs"
+DEV_PID_DIR="$DEV_STATE_ROOT/pids"
+ROOT_SUPERVISOR_PID_FILE="$DEV_PID_DIR/root-supervisor.pid"
+
+service_log_file() {
+  printf '%s/%s.log\n' "$DEV_LOG_DIR" "$1"
+}
+
+service_pid_file() {
+  printf '%s/%s.pid\n' "$DEV_PID_DIR" "$1"
+}
+
+read_pid_file() {
+  local path="$1"
+  [[ -f "$path" ]] || return 1
+  local pid
+  pid="$(tr -dc '0-9' <"$path")"
+  [[ -n "$pid" ]] || return 1
+  printf '%s\n' "$pid"
+}
+
+service_status() {
+  local name="$1"
+  local pid_file
+  pid_file="$(service_pid_file "$name")"
+  local pid=""
+  if pid="$(read_pid_file "$pid_file" 2>/dev/null || true)"; then
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      printf '%-16s running  pid=%s  log=%s\n' "$name" "$pid" "$(service_log_file "$name")"
+      return
+    fi
+  fi
+  printf '%-16s stopped  pid=-      log=%s\n' "$name" "$(service_log_file "$name")"
+}
+
+process_alive() {
+  local pid="$1"
+  [[ -n "$pid" ]] || return 1
+  kill -0 "$pid" >/dev/null 2>&1
+}
+
+wait_for_pid_exit() {
+  local pid="$1"
+  local attempts="${2:-50}"
+  local attempt
+  for attempt in $(seq 1 "$attempts"); do
+    if ! process_alive "$pid"; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  return 1
+}
+
+kill_exact_pid() {
+  local pid="$1"
+  [[ -n "$pid" ]] || return 0
+  process_alive "$pid" || return 0
+  kill -TERM "$pid" >/dev/null 2>&1 || true
+  if ! wait_for_pid_exit "$pid" 50; then
+    kill -KILL "$pid" >/dev/null 2>&1 || true
+    wait_for_pid_exit "$pid" 20 || true
+  fi
+}
+
+stop_service() {
+  local name="$1"
+  local pid_file
+  pid_file="$(service_pid_file "$name")"
+  local pid=""
+  if pid="$(read_pid_file "$pid_file" 2>/dev/null || true)"; then
+    kill_exact_pid "$pid"
+  fi
+  rm -f "$pid_file" >/dev/null 2>&1 || true
+}
+
+stop_dev() {
+  local pid=""
+  if pid="$(read_pid_file "$ROOT_SUPERVISOR_PID_FILE" 2>/dev/null || true)"; then
+    kill_exact_pid "$pid"
+  fi
+  rm -f "$ROOT_SUPERVISOR_PID_FILE" >/dev/null 2>&1 || true
+
+  stop_service desktop-mac
+  stop_service desktop-mac-app
+  stop_service bridge
+  stop_service control-plane
+
+  watchman trigger-del "$REPO_ROOT/apps/desktop-mac" "lifecycle-macos-dev" >/dev/null 2>&1 || true
+  watchman watch-del "$REPO_ROOT/apps/desktop-mac" >/dev/null 2>&1 || true
+  pkill -TERM -f "$REPO_ROOT/apps/desktop-mac/scripts/dev.sh --monorepo" >/dev/null 2>&1 || true
+  pkill -TERM -f "$REPO_ROOT/apps/desktop-mac/scripts/dev.sh --services-only" >/dev/null 2>&1 || true
+  pkill -TERM -f "$REPO_ROOT/apps/desktop-mac/scripts/dev.sh --app-only" >/dev/null 2>&1 || true
+  pkill -TERM -f 'bash ./scripts/dev.sh' >/dev/null 2>&1 || true
+  sleep 0.2
+  pkill -KILL -f "$REPO_ROOT/apps/desktop-mac/scripts/dev.sh --monorepo" >/dev/null 2>&1 || true
+  pkill -KILL -f "$REPO_ROOT/apps/desktop-mac/scripts/dev.sh --services-only" >/dev/null 2>&1 || true
+  pkill -KILL -f "$REPO_ROOT/apps/desktop-mac/scripts/dev.sh --app-only" >/dev/null 2>&1 || true
+  pkill -KILL -f 'bash ./scripts/dev.sh' >/dev/null 2>&1 || true
+
+  local pid=""
+  while IFS= read -r pid; do
+    [[ -n "$pid" ]] || continue
+    kill_exact_pid "$pid"
+  done < <(lsof -tiTCP:52222 -sTCP:LISTEN 2>/dev/null || true)
+
+  while IFS= read -r pid; do
+    [[ -n "$pid" ]] || continue
+    kill_exact_pid "$pid"
+  done < <(lsof -tiTCP:18787 -sTCP:LISTEN 2>/dev/null || true)
+}
+
+show_status() {
+  echo "Dev runtime: $DEV_STATE_ROOT"
+  service_status bridge
+  service_status control-plane
+  service_status desktop-mac
+  service_status desktop-mac-app
+}
+
+show_logs() {
+  local service="${1:-}"
+  if [[ -z "$service" ]]; then
+    echo "usage: scripts/dev logs <bridge|control-plane|desktop-mac|desktop-mac-app>" >&2
+    exit 1
+  fi
+  local log_file
+  log_file="$(service_log_file "$service")"
+  if [[ ! -f "$log_file" ]]; then
+    echo "no log file for $service at $log_file" >&2
+    exit 1
+  fi
+  exec tail -n 200 -F "$log_file"
+}
 
 usage() {
   cat <<'EOF'
-usage: scripts/dev [desktop|desktop-services|desktop-app|desktop-smoke]
+usage: scripts/dev [desktop|desktop-services|desktop-app|desktop-smoke|status|stop|logs]
 
   desktop           Start the monorepo desktop dev loop.
   desktop-services  Start bridge and control-plane only.
   desktop-app       Start the desktop app build/reload loop only.
   desktop-smoke     Verify the desktop dev loop contract end to end.
+  status            Show current dev service state and log locations.
+  stop              Stop the current desktop dev loop and clear owned listeners.
+  logs <service>    Tail a dev service log.
 EOF
 }
 
@@ -30,6 +168,17 @@ case "${1:-desktop}" in
     ;;
   desktop-smoke)
     exec "$DESKTOP_SMOKE_SCRIPT"
+    ;;
+  status)
+    show_status
+    ;;
+  stop)
+    stop_dev
+    show_status
+    ;;
+  logs)
+    shift
+    show_logs "${1:-}"
     ;;
   --help|-h|help)
     usage

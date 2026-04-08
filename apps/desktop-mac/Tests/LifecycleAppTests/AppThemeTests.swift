@@ -111,6 +111,89 @@ final class AppThemeTests: XCTestCase {
     XCTAssertNil(persistence["executablePath"])
   }
 
+  func testAppThemeStorePersistsClaudeProviderAuthMode() throws {
+    let rootURL = temporaryRootURL()
+    let settingsURL = rootURL.appendingPathComponent("settings.json")
+    try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+    try """
+    {
+      "customUserField": 42
+    }
+    """.write(to: settingsURL, atomically: true, encoding: .utf8)
+
+    let store = AppThemeStore(
+      environment: [
+        "HOME": NSHomeDirectory(),
+        "LIFECYCLE_ROOT": rootURL.path,
+      ]
+    )
+
+    store.setClaudeLoginMethod(.console)
+
+    let data = try Data(contentsOf: settingsURL)
+    let raw = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let providers = try XCTUnwrap(raw["providers"] as? [String: Any])
+    let claude = try XCTUnwrap(providers["claude"] as? [String: Any])
+
+    XCTAssertEqual(raw["customUserField"] as? Int, 42)
+    XCTAssertEqual(claude["loginMethod"] as? String, "console")
+  }
+
+  func testAppThemeStorePersistsTerminalProfilesInNewShape() throws {
+    let rootURL = temporaryRootURL()
+    let settingsURL = rootURL.appendingPathComponent("settings.json")
+    try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+    try """
+    {
+      "customUserField": 42,
+      "terminal": {
+        "profiles": {
+          "dev": {
+            "launcher": "command",
+            "label": "Dev Server",
+            "command": {
+              "program": "npm",
+              "args": ["run", "dev"],
+              "env": {
+                "PORT": "3000"
+              }
+            }
+          }
+        }
+      }
+    }
+    """.write(to: settingsURL, atomically: true, encoding: .utf8)
+
+    let store = AppThemeStore(
+      environment: [
+        "HOME": NSHomeDirectory(),
+        "LIFECYCLE_ROOT": rootURL.path,
+      ]
+    )
+
+    store.setTerminalDefaultProfile("dev")
+    store.setClaudeTerminalModel("claude-sonnet-4-6")
+    store.setCodexTerminalConfigProfile("fast")
+    store.setCodexTerminalWebSearch(.live)
+
+    let data = try Data(contentsOf: settingsURL)
+    let raw = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let terminal = try XCTUnwrap(raw["terminal"] as? [String: Any])
+    let profiles = try XCTUnwrap(terminal["profiles"] as? [String: Any])
+    let claude = try XCTUnwrap(profiles["claude"] as? [String: Any])
+    let claudeSettings = try XCTUnwrap(claude["settings"] as? [String: Any])
+    let codex = try XCTUnwrap(profiles["codex"] as? [String: Any])
+    let codexSettings = try XCTUnwrap(codex["settings"] as? [String: Any])
+    let dev = try XCTUnwrap(profiles["dev"] as? [String: Any])
+
+    XCTAssertEqual(raw["customUserField"] as? Int, 42)
+    XCTAssertEqual(terminal["defaultProfile"] as? String, "dev")
+    XCTAssertEqual(claudeSettings["model"] as? String, "claude-sonnet-4-6")
+    XCTAssertEqual(codexSettings["configProfile"] as? String, "fast")
+    XCTAssertEqual(codexSettings["webSearch"] as? String, "live")
+    XCTAssertEqual(dev["launcher"] as? String, "command")
+  }
+
   func testGhosttyThemeConfigWriterRendersTerminalPaletteFromPresetTokens() {
     let preset = AppThemeCatalog.resolve(preference: .monokai, systemAppearance: .dark)
     let contents = GhosttyThemeConfigWriter.render(preset: preset)

@@ -186,6 +186,34 @@ describe("agent auth and catalog commands", () => {
     });
   });
 
+  test("passes Claude login method through the auth status command", async () => {
+    queuedScenarios.push((command) => {
+      emitAuthEvent(command, {
+        kind: "auth.result",
+        provider: "claude",
+        state: "unauthenticated",
+      });
+      command.emitClose({ code: 0, signal: null });
+    });
+
+    const status = await runAgentAuthCommand(runner, "status", "claude", undefined, {
+      loginMethod: "console",
+    });
+
+    expect(createdCommands[0]?.args).toEqual([
+      "agent",
+      "auth",
+      "status",
+      "--provider",
+      "claude",
+      "--login-method",
+      "console",
+    ]);
+    expect(status).toEqual({
+      state: "unauthenticated",
+    });
+  });
+
   test("fetches the provider model catalog through lifecycle cli", async () => {
     queuedScenarios.push((command) => {
       command.stdout.emit(

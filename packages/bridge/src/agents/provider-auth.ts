@@ -6,7 +6,8 @@ import {
   type ClaudeLoginMethod,
 } from "@lifecycle/agents";
 import type { AgentProviderId } from "@lifecycle/contracts";
-import { BridgeError } from "./errors";
+import { BridgeError } from "../errors";
+import { readBridgeSettings } from "../settings";
 
 export interface BridgeProviderAuthEnvelope {
   provider: AgentProviderId;
@@ -14,26 +15,56 @@ export interface BridgeProviderAuthEnvelope {
 }
 
 interface BridgeProviderAuthDependencies {
-  checkAgentProviderAuth: (provider: AgentProviderId) => Promise<AgentAuthStatus>;
+  checkAgentProviderAuth: (
+    provider: AgentProviderId,
+    options?: AgentProviderAuthOptions,
+  ) => Promise<AgentAuthStatus>;
   loginAgentProviderAuth: (
     provider: AgentProviderId,
     onStatus?: (status: Extract<AgentAuthStatus, { state: "authenticating" }>) => void,
     options?: AgentProviderAuthOptions,
   ) => Promise<AgentAuthStatus>;
+  readBridgeSettings: (environment?: NodeJS.ProcessEnv) => Promise<{
+    settings: {
+      providers: {
+        claude: {
+          loginMethod: ClaudeLoginMethod;
+        };
+      };
+    };
+  }>;
 }
 
 const defaultDependencies: BridgeProviderAuthDependencies = {
   checkAgentProviderAuth,
   loginAgentProviderAuth,
+  readBridgeSettings,
 };
+
+async function resolveProviderAuthOptions(
+  provider: AgentProviderId,
+  dependencies: BridgeProviderAuthDependencies,
+  environment?: NodeJS.ProcessEnv,
+): Promise<AgentProviderAuthOptions | undefined> {
+  if (provider !== "claude") {
+    return undefined;
+  }
+
+  const envelope = await dependencies.readBridgeSettings(environment);
+  return {
+    loginMethod: envelope.settings.providers.claude.loginMethod,
+  };
+}
 
 export async function readBridgeProviderAuth(
   provider: AgentProviderId,
+  environment?: NodeJS.ProcessEnv,
   dependencies: BridgeProviderAuthDependencies = defaultDependencies,
 ): Promise<BridgeProviderAuthEnvelope> {
+  const options = await resolveProviderAuthOptions(provider, dependencies, environment);
   return {
     provider,
-    status: await dependencies.checkAgentProviderAuth(provider),
+    status: await dependencies.checkAgentProviderAuth(provider, options),
   };
 }
 
@@ -42,6 +73,7 @@ export async function loginBridgeProviderAuth(
     provider: AgentProviderId;
     loginMethod?: ClaudeLoginMethod;
   },
+  environment?: NodeJS.ProcessEnv,
   dependencies: BridgeProviderAuthDependencies = defaultDependencies,
 ): Promise<BridgeProviderAuthEnvelope> {
   if (input.provider !== "claude" && input.loginMethod !== undefined) {
@@ -52,14 +84,18 @@ export async function loginBridgeProviderAuth(
     });
   }
 
+  const configuredOptions = await resolveProviderAuthOptions(
+    input.provider,
+    dependencies,
+    environment,
+  );
+  const options =
+    input.provider === "claude" && input.loginMethod
+      ? { loginMethod: input.loginMethod }
+      : configuredOptions;
+
   return {
     provider: input.provider,
-    status: await dependencies.loginAgentProviderAuth(
-      input.provider,
-      undefined,
-      input.provider === "claude" && input.loginMethod
-        ? { loginMethod: input.loginMethod }
-        : undefined,
-    ),
+    status: await dependencies.loginAgentProviderAuth(input.provider, undefined, options),
   };
 }

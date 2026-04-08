@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Foundation
+import LifecycleGhosttyHost
 import LifecyclePresentation
 import SwiftUI
 
@@ -23,6 +24,14 @@ func clampedWorkspaceExtensionSidebarWidth(_ width: CGFloat, availableWidth: CGF
   )
   let lowerBound = min(minimumWorkspaceExtensionSidebarWidth, upperBound)
   return min(max(width, lowerBound), upperBound)
+}
+
+func workspaceCanvasDocumentContainsAgentSurface(_ document: WorkspaceCanvasDocument?) -> Bool {
+  guard let document else {
+    return false
+  }
+
+  return document.surfacesByID.values.contains { $0.surfaceKind == .agent }
 }
 
 @MainActor
@@ -643,39 +652,12 @@ final class AppModel: ObservableObject {
         workspaceID: targetWorkspaceID
       )
     }
-
-    // Force reconnection so the new NSView attaches to the terminal process.
-    if edge != .center {
-      Task {
-        await reconnectSurface(surfaceID, for: targetWorkspaceID)
-      }
-    }
   }
 
   func exportFeedbackBundle() {
     Task {
       await exportFeedbackBundleTask()
     }
-  }
-
-  private func reconnectSurface(_ surfaceID: String, for workspaceID: String) async {
-    guard terminalConnectionBySurfaceID[surfaceID] != nil,
-          let document = canvasDocumentsByWorkspaceID[workspaceID],
-          let surfaceRecord = document.surfacesByID[surfaceID],
-          let terminalBinding = TerminalSurfaceBinding(binding: surfaceRecord.binding)
-    else {
-      return
-    }
-
-    // Disconnect the old connection
-    try? await disconnectSurfaceConnection(
-      for: workspaceID,
-      terminalID: terminalBinding.terminalID,
-      surfaceID: surfaceID
-    )
-
-    // Re-establish so the new view gets a fresh connection
-    try? await ensureSurfaceConnection(for: workspaceID, surfaceRecord: surfaceRecord)
   }
 
   private func bootstrap() async {
@@ -743,8 +725,10 @@ final class AppModel: ObservableObject {
     await AppSignpost.withInterval(.workspace, "Open Workspace") {
       await loadTerminals(for: workspaceID, force: false)
       await loadStack(for: workspaceID, force: false)
-      await loadAgents(for: workspaceID, force: false)
-      enterVisibleAgentIfPresent(for: workspaceID)
+      if workspaceCanvasDocumentContainsAgentSurface(canvasDocumentsByWorkspaceID[workspaceID]) {
+        await loadAgents(for: workspaceID, force: false)
+        enterVisibleAgentIfPresent(for: workspaceID)
+      }
       AppLog.info(.workspace, "Workspace content loaded", metadata: ["workspaceID": workspaceID])
     }
   }
@@ -874,12 +858,7 @@ final class AppModel: ObservableObject {
   private func providerAuthenticatingStatus(
     for provider: BridgeAgentProvider
   ) -> BridgeProviderAuthStatus {
-    switch provider {
-    case .claude:
-      return .authenticating(output: ["Opening browser for Claude authentication..."])
-    case .codex:
-      return .authenticating(output: ["Starting Codex ChatGPT authentication..."])
-    }
+    .authenticating(output: ["Waiting for bridge authentication..."])
   }
 
   private func loadRepositories() async throws {
@@ -1491,6 +1470,8 @@ final class AppModel: ObservableObject {
         spatialLayout: document.spatialLayout
       )
     }
+
+    LifecycleGhosttyTerminalHostView.closeTerminalHost(withID: terminalHostID(for: surfaceID))
 
     // Close on the bridge so the tmux window is cleaned up.
     do {

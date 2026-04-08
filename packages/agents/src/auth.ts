@@ -8,10 +8,13 @@ export interface AgentProviderAuthOptions {
   loginMethod?: ClaudeLoginMethod;
 }
 
-export async function checkAgentProviderAuth(provider: AgentProviderId): Promise<AgentAuthStatus> {
+export async function checkAgentProviderAuth(
+  provider: AgentProviderId,
+  options?: AgentProviderAuthOptions,
+): Promise<AgentAuthStatus> {
   switch (provider) {
     case "claude":
-      return await checkClaudeAuthStatus();
+      return await checkClaudeAuthStatus(options?.loginMethod);
     case "codex":
       return await checkCodexAuthStatus();
   }

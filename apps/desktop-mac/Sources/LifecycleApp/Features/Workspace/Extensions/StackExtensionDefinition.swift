@@ -23,6 +23,7 @@ struct StackExtensionDefinition: WorkspaceExtensionDefinition {
     return ResolvedWorkspaceExtension(
       kind: kind,
       tab: WorkspaceExtensionTabPresentation(
+        icon: "shippingbox",
         title: "Stack",
         subtitle: subtitle
       ),

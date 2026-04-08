@@ -19,6 +19,30 @@ struct AppAppearanceSettings: Equatable, Sendable {
   var theme: AppThemePreference = .dark
 }
 
+enum AppClaudeLoginMethod: String, CaseIterable, Equatable, Identifiable, Sendable {
+  case claudeai
+  case console
+
+  var id: String { rawValue }
+
+  var label: String {
+    switch self {
+    case .claudeai:
+      "Claude"
+    case .console:
+      "Console"
+    }
+  }
+}
+
+struct AppClaudeProviderSettings: Equatable, Sendable {
+  var loginMethod: AppClaudeLoginMethod = .claudeai
+}
+
+struct AppProviderSettings: Equatable, Sendable {
+  var claude = AppClaudeProviderSettings()
+}
+
 struct AppTerminalCommandSettings: Equatable, Sendable {
   var program: String?
 }
@@ -61,13 +85,208 @@ struct AppTerminalPersistenceSettings: Equatable, Sendable {
   var executablePath: String?
 }
 
+enum AppTerminalLauncher: String, Equatable, Sendable {
+  case shell
+  case command
+  case claude
+  case codex
+
+  var label: String {
+    switch self {
+    case .shell:
+      "Shell"
+    case .command:
+      "Command"
+    case .claude:
+      "Claude"
+    case .codex:
+      "Codex"
+    }
+  }
+}
+
+enum AppClaudePermissionMode: String, CaseIterable, Equatable, Identifiable, Sendable {
+  case acceptEdits
+  case auto
+  case bypassPermissions
+  case `default`
+  case dontAsk
+  case plan
+
+  var id: String { rawValue }
+
+  var label: String {
+    switch self {
+    case .acceptEdits:
+      "Accept Edits"
+    case .auto:
+      "Auto"
+    case .bypassPermissions:
+      "Bypass Permissions"
+    case .default:
+      "CLI Default"
+    case .dontAsk:
+      "Don't Ask"
+    case .plan:
+      "Plan"
+    }
+  }
+}
+
+enum AppClaudeEffort: String, CaseIterable, Equatable, Identifiable, Sendable {
+  case low
+  case medium
+  case high
+  case max
+
+  var id: String { rawValue }
+
+  var label: String { rawValue.capitalized }
+}
+
+enum AppCodexApprovalPolicy: String, CaseIterable, Equatable, Identifiable, Sendable {
+  case untrusted
+  case onRequest = "on-request"
+  case never
+
+  var id: String { rawValue }
+
+  var label: String {
+    switch self {
+    case .untrusted:
+      "Untrusted"
+    case .onRequest:
+      "On Request"
+    case .never:
+      "Never"
+    }
+  }
+}
+
+enum AppCodexSandboxMode: String, CaseIterable, Equatable, Identifiable, Sendable {
+  case readOnly = "read-only"
+  case workspaceWrite = "workspace-write"
+  case dangerFullAccess = "danger-full-access"
+
+  var id: String { rawValue }
+
+  var label: String {
+    switch self {
+    case .readOnly:
+      "Read Only"
+    case .workspaceWrite:
+      "Workspace Write"
+    case .dangerFullAccess:
+      "Danger Full Access"
+    }
+  }
+}
+
+enum AppCodexReasoningEffort: String, CaseIterable, Equatable, Identifiable, Sendable {
+  case minimal
+  case low
+  case medium
+  case high
+  case xhigh
+
+  var id: String { rawValue }
+
+  var label: String {
+    switch self {
+    case .xhigh:
+      "Extra High"
+    default:
+      rawValue.capitalized
+    }
+  }
+}
+
+enum AppCodexWebSearchMode: String, CaseIterable, Equatable, Identifiable, Sendable {
+  case disabled
+  case cached
+  case live
+
+  var id: String { rawValue }
+
+  var label: String { rawValue.capitalized }
+}
+
+struct AppClaudeTerminalProfileSettings: Equatable, Sendable {
+  var model: String? = nil
+  var permissionMode: AppClaudePermissionMode? = nil
+  var effort: AppClaudeEffort? = nil
+}
+
+struct AppCodexTerminalProfileSettings: Equatable, Sendable {
+  var model: String? = nil
+  var configProfile: String? = nil
+  var approvalPolicy: AppCodexApprovalPolicy? = nil
+  var sandboxMode: AppCodexSandboxMode? = nil
+  var reasoningEffort: AppCodexReasoningEffort? = nil
+  var webSearch: AppCodexWebSearchMode? = nil
+}
+
+struct AppTerminalProfileCommand: Equatable, Sendable {
+  var program: String
+  var args: [String] = []
+  var env: [String: String] = [:]
+}
+
+struct AppTerminalProfile: Equatable, Sendable, Identifiable {
+  let id: String
+  var launcher: AppTerminalLauncher
+  var label: String?
+  var command: AppTerminalProfileCommand?
+  var claudeSettings: AppClaudeTerminalProfileSettings?
+  var codexSettings: AppCodexTerminalProfileSettings?
+
+  var displayLabel: String {
+    if let label, !label.isEmpty {
+      return label
+    }
+    return launcher.label
+  }
+}
+
+func defaultAppTerminalProfiles() -> [String: AppTerminalProfile] {
+  [
+    "shell": AppTerminalProfile(
+      id: "shell",
+      launcher: .shell,
+      label: "Shell",
+      command: nil,
+      claudeSettings: nil,
+      codexSettings: nil
+    ),
+    "claude": AppTerminalProfile(
+      id: "claude",
+      launcher: .claude,
+      label: "Claude",
+      command: nil,
+      claudeSettings: AppClaudeTerminalProfileSettings(),
+      codexSettings: nil
+    ),
+    "codex": AppTerminalProfile(
+      id: "codex",
+      launcher: .codex,
+      label: "Codex",
+      command: nil,
+      claudeSettings: nil,
+      codexSettings: AppCodexTerminalProfileSettings()
+    ),
+  ]
+}
+
 struct AppTerminalSettings: Equatable, Sendable {
   var command = AppTerminalCommandSettings()
   var persistence = AppTerminalPersistenceSettings()
+  var defaultProfile = "shell"
+  var profiles = defaultAppTerminalProfiles()
 }
 
 struct AppSettingsSnapshot: Equatable, Sendable {
   var appearance = AppAppearanceSettings()
+  var providers = AppProviderSettings()
   var terminal = AppTerminalSettings()
 
   static let `default` = AppSettingsSnapshot()
@@ -76,15 +295,24 @@ struct AppSettingsSnapshot: Equatable, Sendable {
 
   init(
     appearance: AppAppearanceSettings,
+    providers: AppProviderSettings,
     terminal: AppTerminalSettings
   ) {
     self.appearance = appearance
+    self.providers = providers
     self.terminal = terminal
   }
 
   init(bridgeSettings: BridgeSettings) {
     appearance = AppAppearanceSettings(
       theme: AppThemePreference(rawValue: bridgeSettings.appearance.theme) ?? .dark
+    )
+    providers = AppProviderSettings(
+      claude: AppClaudeProviderSettings(
+        loginMethod: AppClaudeLoginMethod(
+          rawValue: bridgeSettings.providers.claude.loginMethod
+        ) ?? .claudeai
+      )
     )
     terminal = AppTerminalSettings(
       command: AppTerminalCommandSettings(program: bridgeSettings.terminal.command.program),
@@ -96,7 +324,9 @@ struct AppSettingsSnapshot: Equatable, Sendable {
           rawValue: bridgeSettings.terminal.persistence.mode
         ) ?? .managed,
         executablePath: bridgeSettings.terminal.persistence.executablePath
-      )
+      ),
+      defaultProfile: bridgeSettings.terminal.defaultProfile,
+      profiles: appTerminalProfiles(from: bridgeSettings.terminal.profiles)
     )
   }
 }
@@ -221,6 +451,24 @@ final class AppSettingsStore: ObservableObject {
     }
   }
 
+  func setClaudeLoginMethod(_ loginMethod: AppClaudeLoginMethod) {
+    guard settings.providers.claude.loginMethod != loginMethod else {
+      return
+    }
+
+    updateSettings(
+      bridgePayload: [
+        "providers": [
+          "claude": [
+            "loginMethod": loginMethod.rawValue
+          ]
+        ]
+      ]
+    ) { nextSettings in
+      nextSettings.providers.claude.loginMethod = loginMethod
+    }
+  }
+
   func setTerminalPersistenceBackend(_ backend: AppTerminalPersistenceBackend) {
     guard settings.terminal.persistence.backend != backend else {
       return
@@ -273,6 +521,156 @@ final class AppSettingsStore: ObservableObject {
       ]
     ) { nextSettings in
       nextSettings.terminal.persistence.executablePath = normalizedPath
+    }
+  }
+
+  func setTerminalDefaultProfile(_ profileID: String) {
+    let normalizedProfileID = profileID.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !normalizedProfileID.isEmpty, settings.terminal.defaultProfile != normalizedProfileID else {
+      return
+    }
+
+    updateSettings(
+      bridgePayload: [
+        "terminal": [
+          "defaultProfile": normalizedProfileID
+        ]
+      ]
+    ) { nextSettings in
+      nextSettings.terminal.defaultProfile = normalizedProfileID
+    }
+  }
+
+  func setClaudeTerminalModel(_ model: String?) {
+    updateKnownTerminalProfile("claude") { profile in
+      var settings = profile.claudeSettings ?? AppClaudeTerminalProfileSettings()
+      let normalizedModel = normalizeOptionalSettingValue(model)
+      guard settings.model != normalizedModel else {
+        return false
+      }
+      settings.model = normalizedModel
+      profile.claudeSettings = settings
+      return true
+    }
+  }
+
+  func setClaudeTerminalPermissionMode(_ permissionMode: AppClaudePermissionMode?) {
+    updateKnownTerminalProfile("claude") { profile in
+      var settings = profile.claudeSettings ?? AppClaudeTerminalProfileSettings()
+      guard settings.permissionMode != permissionMode else {
+        return false
+      }
+      settings.permissionMode = permissionMode
+      profile.claudeSettings = settings
+      return true
+    }
+  }
+
+  func setClaudeTerminalEffort(_ effort: AppClaudeEffort?) {
+    updateKnownTerminalProfile("claude") { profile in
+      var settings = profile.claudeSettings ?? AppClaudeTerminalProfileSettings()
+      guard settings.effort != effort else {
+        return false
+      }
+      settings.effort = effort
+      profile.claudeSettings = settings
+      return true
+    }
+  }
+
+  func setCodexTerminalModel(_ model: String?) {
+    updateKnownTerminalProfile("codex") { profile in
+      var settings = profile.codexSettings ?? AppCodexTerminalProfileSettings()
+      let normalizedModel = normalizeOptionalSettingValue(model)
+      guard settings.model != normalizedModel else {
+        return false
+      }
+      settings.model = normalizedModel
+      profile.codexSettings = settings
+      return true
+    }
+  }
+
+  func setCodexTerminalConfigProfile(_ configProfile: String?) {
+    updateKnownTerminalProfile("codex") { profile in
+      var settings = profile.codexSettings ?? AppCodexTerminalProfileSettings()
+      let normalizedProfile = normalizeOptionalSettingValue(configProfile)
+      guard settings.configProfile != normalizedProfile else {
+        return false
+      }
+      settings.configProfile = normalizedProfile
+      profile.codexSettings = settings
+      return true
+    }
+  }
+
+  func setCodexTerminalApprovalPolicy(_ approvalPolicy: AppCodexApprovalPolicy?) {
+    updateKnownTerminalProfile("codex") { profile in
+      var settings = profile.codexSettings ?? AppCodexTerminalProfileSettings()
+      guard settings.approvalPolicy != approvalPolicy else {
+        return false
+      }
+      settings.approvalPolicy = approvalPolicy
+      profile.codexSettings = settings
+      return true
+    }
+  }
+
+  func setCodexTerminalSandboxMode(_ sandboxMode: AppCodexSandboxMode?) {
+    updateKnownTerminalProfile("codex") { profile in
+      var settings = profile.codexSettings ?? AppCodexTerminalProfileSettings()
+      guard settings.sandboxMode != sandboxMode else {
+        return false
+      }
+      settings.sandboxMode = sandboxMode
+      profile.codexSettings = settings
+      return true
+    }
+  }
+
+  func setCodexTerminalReasoningEffort(_ reasoningEffort: AppCodexReasoningEffort?) {
+    updateKnownTerminalProfile("codex") { profile in
+      var settings = profile.codexSettings ?? AppCodexTerminalProfileSettings()
+      guard settings.reasoningEffort != reasoningEffort else {
+        return false
+      }
+      settings.reasoningEffort = reasoningEffort
+      profile.codexSettings = settings
+      return true
+    }
+  }
+
+  func setCodexTerminalWebSearch(_ webSearch: AppCodexWebSearchMode?) {
+    updateKnownTerminalProfile("codex") { profile in
+      var settings = profile.codexSettings ?? AppCodexTerminalProfileSettings()
+      guard settings.webSearch != webSearch else {
+        return false
+      }
+      settings.webSearch = webSearch
+      profile.codexSettings = settings
+      return true
+    }
+  }
+
+  private func updateKnownTerminalProfile(
+    _ profileID: String,
+    mutate: (inout AppTerminalProfile) -> Bool
+  ) {
+    var profile = settings.terminal.profiles[profileID] ?? defaultAppTerminalProfile(id: profileID)
+    guard mutate(&profile) else {
+      return
+    }
+
+    updateSettings(
+      bridgePayload: [
+        "terminal": [
+          "profiles": [
+            profileID: appTerminalProfileJSONObject(profile)
+          ]
+        ]
+      ]
+    ) { nextSettings in
+      nextSettings.terminal.profiles[profileID] = profile
     }
   }
 
@@ -461,6 +859,185 @@ final class AppSettingsStore: ObservableObject {
   }
 }
 
+private func defaultAppTerminalProfile(id: String) -> AppTerminalProfile {
+  defaultAppTerminalProfiles()[id] ?? AppTerminalProfile(
+    id: id,
+    launcher: .command,
+    label: nil,
+    command: AppTerminalProfileCommand(program: "/bin/sh"),
+    claudeSettings: nil,
+    codexSettings: nil
+  )
+}
+
+private func appTerminalProfiles(
+  from bridgeProfiles: [String: BridgeTerminalLaunchProfile]
+) -> [String: AppTerminalProfile] {
+  var profiles = defaultAppTerminalProfiles()
+  for (profileID, profile) in bridgeProfiles {
+    profiles[profileID] = appTerminalProfile(id: profileID, from: profile)
+  }
+  return profiles
+}
+
+private func appTerminalProfiles(from rawProfiles: [String: Any]?) -> [String: AppTerminalProfile] {
+  var profiles = defaultAppTerminalProfiles()
+  for (profileID, rawProfile) in rawProfiles ?? [:] {
+    guard let profileObject = rawProfile as? [String: Any],
+          let launcherRaw = profileObject["launcher"] as? String,
+          let launcher = AppTerminalLauncher(rawValue: launcherRaw)
+    else {
+      continue
+    }
+
+    profiles[profileID] = AppTerminalProfile(
+      id: profileID,
+      launcher: launcher,
+      label: profileObject["label"] as? String,
+      command: appTerminalProfileCommand(from: profileObject["command"] as? [String: Any]),
+      claudeSettings: appClaudeTerminalProfileSettings(
+        from: profileObject["settings"] as? [String: Any]
+      ),
+      codexSettings: appCodexTerminalProfileSettings(
+        from: profileObject["settings"] as? [String: Any]
+      )
+    )
+  }
+  return profiles
+}
+
+private func appTerminalProfile(
+  id: String,
+  from bridgeProfile: BridgeTerminalLaunchProfile
+) -> AppTerminalProfile {
+  AppTerminalProfile(
+    id: id,
+    launcher: AppTerminalLauncher(rawValue: bridgeProfile.launcher) ?? .command,
+    label: bridgeProfile.label,
+    command: bridgeProfile.command.map {
+      AppTerminalProfileCommand(program: $0.program, args: $0.args, env: $0.env)
+    },
+    claudeSettings: AppClaudeTerminalProfileSettings(
+      model: bridgeProfile.settings?.model,
+      permissionMode: bridgeProfile.settings?.permissionMode.flatMap(AppClaudePermissionMode.init),
+      effort: bridgeProfile.settings?.effort.flatMap(AppClaudeEffort.init)
+    ),
+    codexSettings: AppCodexTerminalProfileSettings(
+      model: bridgeProfile.settings?.model,
+      configProfile: bridgeProfile.settings?.configProfile,
+      approvalPolicy: bridgeProfile.settings?.approvalPolicy.flatMap(AppCodexApprovalPolicy.init),
+      sandboxMode: bridgeProfile.settings?.sandboxMode.flatMap(AppCodexSandboxMode.init),
+      reasoningEffort: bridgeProfile.settings?.reasoningEffort.flatMap(
+        AppCodexReasoningEffort.init
+      ),
+      webSearch: bridgeProfile.settings?.webSearch.flatMap(AppCodexWebSearchMode.init)
+    )
+  )
+}
+
+private func appTerminalProfileCommand(
+  from rawCommand: [String: Any]?
+) -> AppTerminalProfileCommand? {
+  guard let rawCommand,
+        let program = rawCommand["program"] as? String,
+        !program.isEmpty
+  else {
+    return nil
+  }
+
+  return AppTerminalProfileCommand(
+    program: program,
+    args: rawCommand["args"] as? [String] ?? [],
+    env: rawCommand["env"] as? [String: String] ?? [:]
+  )
+}
+
+private func appClaudeTerminalProfileSettings(
+  from rawSettings: [String: Any]?
+) -> AppClaudeTerminalProfileSettings? {
+  guard let rawSettings else {
+    return nil
+  }
+
+  return AppClaudeTerminalProfileSettings(
+    model: rawSettings["model"] as? String,
+    permissionMode: (rawSettings["permissionMode"] as? String).flatMap(AppClaudePermissionMode.init),
+    effort: (rawSettings["effort"] as? String).flatMap(AppClaudeEffort.init)
+  )
+}
+
+private func appCodexTerminalProfileSettings(
+  from rawSettings: [String: Any]?
+) -> AppCodexTerminalProfileSettings? {
+  guard let rawSettings else {
+    return nil
+  }
+
+  return AppCodexTerminalProfileSettings(
+    model: rawSettings["model"] as? String,
+    configProfile: rawSettings["configProfile"] as? String,
+    approvalPolicy: (rawSettings["approvalPolicy"] as? String).flatMap(
+      AppCodexApprovalPolicy.init
+    ),
+    sandboxMode: (rawSettings["sandboxMode"] as? String).flatMap(AppCodexSandboxMode.init),
+    reasoningEffort: (rawSettings["reasoningEffort"] as? String).flatMap(
+      AppCodexReasoningEffort.init
+    ),
+    webSearch: (rawSettings["webSearch"] as? String).flatMap(AppCodexWebSearchMode.init)
+  )
+}
+
+private func appTerminalProfilesJSONObject(_ profiles: [String: AppTerminalProfile]) -> [String: Any] {
+  var object: [String: Any] = [:]
+  for profileID in profiles.keys.sorted() {
+    guard let profile = profiles[profileID] else {
+      continue
+    }
+    object[profileID] = appTerminalProfileJSONObject(profile)
+  }
+  return object
+}
+
+private func appTerminalProfileJSONObject(_ profile: AppTerminalProfile) -> [String: Any] {
+  var object: [String: Any] = [
+    "launcher": profile.launcher.rawValue
+  ]
+
+  if let label = normalizeOptionalSettingValue(profile.label) {
+    object["label"] = label
+  }
+
+  if let command = profile.command {
+    object["command"] = [
+      "program": command.program,
+      "args": command.args,
+      "env": command.env,
+    ]
+  }
+
+  switch profile.launcher {
+  case .claude:
+    object["settings"] = [
+      "model": jsonValue(profile.claudeSettings?.model),
+      "permissionMode": jsonValue(profile.claudeSettings?.permissionMode?.rawValue),
+      "effort": jsonValue(profile.claudeSettings?.effort?.rawValue),
+    ]
+  case .codex:
+    object["settings"] = [
+      "model": jsonValue(profile.codexSettings?.model),
+      "configProfile": jsonValue(profile.codexSettings?.configProfile),
+      "approvalPolicy": jsonValue(profile.codexSettings?.approvalPolicy?.rawValue),
+      "sandboxMode": jsonValue(profile.codexSettings?.sandboxMode?.rawValue),
+      "reasoningEffort": jsonValue(profile.codexSettings?.reasoningEffort?.rawValue),
+      "webSearch": jsonValue(profile.codexSettings?.webSearch?.rawValue),
+    ]
+  case .shell, .command:
+    break
+  }
+
+  return object
+}
+
 private func normalizeOptionalSettingValue(_ value: String?) -> String? {
   guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
     return nil
@@ -540,6 +1117,12 @@ enum LifecycleSettingsFile {
     nextObject["appearance"] = appearanceObject
     nextObject.removeValue(forKey: "theme")
 
+    var providersObject = (nextObject["providers"] as? [String: Any]) ?? [:]
+    var claudeObject = (providersObject["claude"] as? [String: Any]) ?? [:]
+    claudeObject["loginMethod"] = settings.providers.claude.loginMethod.rawValue
+    providersObject["claude"] = claudeObject
+    nextObject["providers"] = providersObject
+
     var terminalObject = migrateLegacyTerminalObject(
       nextObject["terminal"] as? [String: Any]
     )
@@ -560,6 +1143,8 @@ enum LifecycleSettingsFile {
       persistenceObject.removeValue(forKey: "executablePath")
     }
     terminalObject["persistence"] = persistenceObject
+    terminalObject["defaultProfile"] = settings.terminal.defaultProfile
+    terminalObject["profiles"] = appTerminalProfilesJSONObject(settings.terminal.profiles)
 
     nextObject["terminal"] = terminalObject
     try write(nextObject, to: url, fileManager: fileManager)
@@ -591,16 +1176,22 @@ enum LifecycleSettingsFile {
 
   private static func parseSettings(from object: [String: Any]) -> AppSettingsSnapshot {
     let appearanceObject = object["appearance"] as? [String: Any]
+    let providersObject = object["providers"] as? [String: Any]
+    let claudeObject = providersObject?["claude"] as? [String: Any]
     let terminalObject = object["terminal"] as? [String: Any]
     let commandObject = terminalObject?["command"] as? [String: Any]
     let shellObject = terminalObject?["shell"] as? [String: Any]
     let persistenceObject = terminalObject?["persistence"] as? [String: Any]
     let tmuxObject = terminalObject?["tmux"] as? [String: Any]
+    let profileObjects = terminalObject?["profiles"] as? [String: Any]
 
     let theme = AppThemePreference(
       rawValue: (appearanceObject?["theme"] as? String) ?? (object["theme"] as? String) ?? ""
     ) ?? .dark
     let commandProgram = (commandObject?["program"] as? String) ?? (shellObject?["program"] as? String)
+    let claudeLoginMethod = AppClaudeLoginMethod(
+      rawValue: claudeObject?["loginMethod"] as? String ?? ""
+    ) ?? .claudeai
     let persistenceBackend = AppTerminalPersistenceBackend(
       rawValue: persistenceObject?["backend"] as? String ?? ""
     ) ?? .tmux
@@ -609,16 +1200,23 @@ enum LifecycleSettingsFile {
     ) ?? .managed
     let persistenceExecutablePath = (persistenceObject?["executablePath"] as? String) ??
       (tmuxObject?["program"] as? String)
+    let defaultProfile = (terminalObject?["defaultProfile"] as? String) ?? "shell"
+    let profiles = appTerminalProfiles(from: profileObjects)
 
     return AppSettingsSnapshot(
       appearance: AppAppearanceSettings(theme: theme),
+      providers: AppProviderSettings(
+        claude: AppClaudeProviderSettings(loginMethod: claudeLoginMethod)
+      ),
       terminal: AppTerminalSettings(
         command: AppTerminalCommandSettings(program: commandProgram),
         persistence: AppTerminalPersistenceSettings(
           backend: persistenceBackend,
           mode: persistenceMode,
           executablePath: persistenceExecutablePath
-        )
+        ),
+        defaultProfile: defaultProfile,
+        profiles: profiles
       )
     )
   }

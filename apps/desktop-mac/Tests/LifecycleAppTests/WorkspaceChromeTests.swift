@@ -36,4 +36,23 @@ final class WorkspaceChromeTests: XCTestCase {
       .spatial
     )
   }
+
+  func testCanvasTiledSplitLayoutMetricsKeepTiledGroupsFlush() {
+    let metrics = canvasTiledSplitLayoutMetrics(ratio: 0.5, totalLength: 1000)
+
+    XCTAssertEqual(metrics.ratio, 0.5, accuracy: 0.001)
+    XCTAssertEqual(metrics.firstLength, 500, accuracy: 0.001)
+    XCTAssertEqual(metrics.secondLength, 500, accuracy: 0.001)
+    XCTAssertEqual(metrics.firstLength + metrics.secondLength, 1000, accuracy: 0.001)
+    XCTAssertEqual(metrics.dividerOffset, 495, accuracy: 0.001)
+  }
+
+  func testCanvasTiledSplitLayoutMetricsClampRatioWithoutCreatingGap() {
+    let metrics = canvasTiledSplitLayoutMetrics(ratio: 0.2, totalLength: 700)
+
+    XCTAssertEqual(metrics.ratio, 240 / 700, accuracy: 0.001)
+    XCTAssertEqual(metrics.firstLength, 240, accuracy: 0.001)
+    XCTAssertEqual(metrics.secondLength, 460, accuracy: 0.001)
+    XCTAssertEqual(metrics.firstLength + metrics.secondLength, 700, accuracy: 0.001)
+  }
 }

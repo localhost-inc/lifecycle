@@ -11,6 +11,7 @@ import {
 import { app } from "../routed.gen";
 import { createAgentManager, type AgentManager } from "./agents";
 import { createControlPlaneClient } from "./control-plane";
+import { ensureDevRepositorySeeded } from "./dev-bootstrap";
 import { BridgeError } from "./errors";
 import {
   bridgeRegistrationLookupPaths,
@@ -190,6 +191,8 @@ async function startBridgeHttpServer(options: {
   workspaceRegistry: WorkspaceClientRegistry;
 }) {
   await ensureLifecycleDb();
+  const db = await getLifecycleDb();
+  await ensureDevRepositorySeeded(db, options.workspaceRegistry);
   _workspaceRegistry = options.workspaceRegistry;
 
   const server = Bun.serve<BridgeSocketData>({
@@ -238,7 +241,7 @@ async function startBridgeHttpServer(options: {
 
   _agentManager = createAgentManager({
     baseUrl: `http://127.0.0.1:${server.port}`,
-    driver: await getLifecycleDb(),
+    driver: db,
     workspaceRegistry: options.workspaceRegistry,
   });
   await _agentManager.initialize();
@@ -253,6 +256,18 @@ export interface BridgeServer {
   wait(): Promise<never>;
 }
 
+let activeBridgeServer: BridgeHttpServer | null = null;
+let bridgeKeepAliveTimer: ReturnType<typeof setInterval> | null = null;
+
+function waitForever(): Promise<never> {
+  if (bridgeKeepAliveTimer === null) {
+    bridgeKeepAliveTimer = setInterval(() => {}, 1 << 30);
+  }
+  return new Promise<never>(() => {
+    void bridgeKeepAliveTimer;
+  });
+}
+
 export async function startBridgeServer(input: { port?: number } = {}): Promise<BridgeServer> {
   await stopRegisteredBridge();
 
@@ -260,6 +275,7 @@ export async function startBridgeServer(input: { port?: number } = {}): Promise<
     ...(input.port != null ? { port: input.port } : {}),
     workspaceRegistry: getBridgeWorkspaceClientRegistry(),
   });
+  activeBridgeServer = server;
 
   await writeBridgeRegistration({ pid: process.pid, port: port as number });
 
@@ -270,6 +286,11 @@ export async function startBridgeServer(input: { port?: number } = {}): Promise<
     }
 
     shuttingDown = true;
+    if (bridgeKeepAliveTimer !== null) {
+      clearInterval(bridgeKeepAliveTimer);
+      bridgeKeepAliveTimer = null;
+    }
+    activeBridgeServer = null;
     server.stop(true);
     await removeBridgeRegistration();
   };
@@ -282,9 +303,11 @@ export async function startBridgeServer(input: { port?: number } = {}): Promise<
     server,
     shutdown,
     wait: async () => {
-      // Keep a strong reference to the Bun server for the lifetime of the bridge process.
+      // Bun can exit even with a pending promise here, so keep an active timer
+      // to pin the event loop for the bridge lifetime.
       void server;
-      await new Promise(() => {});
+      void activeBridgeServer;
+      await waitForever();
       throw new Error("Unreachable");
     },
   };

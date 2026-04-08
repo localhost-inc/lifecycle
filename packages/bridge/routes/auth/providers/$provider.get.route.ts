@@ -1,6 +1,6 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
-import { readBridgeProviderAuth } from "../../../src/provider-auth";
+import { readBridgeProviderAuth } from "../../../src/agents/provider-auth";
 
 const providerSchema = z.enum(["claude", "codex"]);
 

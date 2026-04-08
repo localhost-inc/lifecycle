@@ -517,13 +517,52 @@ final class CanvasRuntimeTests: XCTestCase {
     XCTAssertEqual(path, "/tmp/custom-bridge.json")
   }
 
-  func testBridgeHealthRequiresAgentRouteCapability() throws {
+  func testBridgeHealthOnlyRequiresHealthyBridge() throws {
     let compatibleData = """
-      {"ok":true,"healthy":true,"capabilities":{"agents":true}}
+      {"ok":true,"healthy":true}
       """.data(using: .utf8)!
     let payload = try JSONDecoder().decode(HealthPayload.self, from: compatibleData)
 
-    XCTAssertTrue(bridgeHealthSupportsAgentRoutes(payload))
+    XCTAssertTrue(bridgeHealthSupportsDesktopRuntime(payload))
+  }
+
+  func testWorkspaceCanvasDocumentContainsAgentSurfaceDetectsPersistedAgentTabs() {
+    let emptyDocument = defaultCanvasDocument(for: "workspace-1")
+    XCTAssertFalse(workspaceCanvasDocumentContainsAgentSurface(emptyDocument))
+
+    let agentDocument = WorkspaceCanvasDocument(
+      activeGroupID: "group:workspace-1:root",
+      groupsByID: [
+        "group:workspace-1:root": CanvasGroup(
+          id: "group:workspace-1:root",
+          surfaceOrder: ["surface:workspace-1:agent:1"],
+          activeSurfaceID: "surface:workspace-1:agent:1"
+        )
+      ],
+      surfacesByID: [
+        "surface:workspace-1:agent:1": CanvasSurfaceRecord(
+          id: "surface:workspace-1:agent:1",
+          title: "Agent",
+          surfaceKind: .agent,
+          binding: SurfaceBinding(params: [:])
+        )
+      ],
+      activeLayoutMode: .tiled,
+      tiledLayout: .group("group:workspace-1:root"),
+      spatialLayout: CanvasSpatialLayout(
+        framesByGroupID: [
+          "group:workspace-1:root": CanvasSpatialFrame(
+            x: 0,
+            y: 0,
+            width: 800,
+            height: 600,
+            zIndex: 0
+          )
+        ]
+      )
+    )
+
+    XCTAssertTrue(workspaceCanvasDocumentContainsAgentSurface(agentDocument))
   }
 
   func testBridgeStartProcessUsesRepoBridgeInDevMode() {
@@ -702,7 +741,7 @@ final class CanvasRuntimeTests: XCTestCase {
   }
 
   @MainActor
-  func testRenderedSurfacesKeepsInactiveTabsMounted() {
+  func testRenderedSurfacesOnlyReturnsActiveTab() {
     let firstSurface = canvasSurface(id: "surface:workspace-1:@1", title: "Tab 1")
     let secondSurface = canvasSurface(id: "surface:workspace-1:@2", title: "Tab 2")
 
@@ -712,9 +751,8 @@ final class CanvasRuntimeTests: XCTestCase {
       groupIsActive: true
     )
 
-    XCTAssertEqual(rendered.map(\.id), [firstSurface.id, secondSurface.id])
-    XCTAssertEqual(rendered[0].renderState, SurfaceRenderState(isFocused: false, isVisible: false))
-    XCTAssertEqual(rendered[1].renderState, SurfaceRenderState(isFocused: true, isVisible: true))
+    XCTAssertEqual(rendered.map(\.id), [secondSurface.id])
+    XCTAssertEqual(rendered[0].renderState, SurfaceRenderState(isFocused: true, isVisible: true))
   }
 
   func testAgentSurfaceBindingRoundTripsWorkspaceAndAgent() throws {

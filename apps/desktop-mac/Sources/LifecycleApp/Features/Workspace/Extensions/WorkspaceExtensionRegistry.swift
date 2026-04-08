@@ -32,6 +32,7 @@ struct WorkspaceExtensionContext {
 }
 
 struct WorkspaceExtensionTabPresentation {
+  let icon: String
   let title: String
   let subtitle: String?
 }

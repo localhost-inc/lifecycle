@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import { EventEmitter } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -77,6 +78,20 @@ function createFakeAgentHandle() {
   return { handle, sendTurn, cancelTurn, resolveApproval };
 }
 
+function createFakeChildProcess() {
+  const child = new EventEmitter() as EventEmitter & {
+    stderr: EventEmitter;
+    stdin: { write: ReturnType<typeof mock> };
+    stdout: EventEmitter;
+  };
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = {
+    write: mock(() => true),
+  };
+  return child;
+}
+
 describe("AgentManager", () => {
   test("starts an agent and transitions to idle", async () => {
     const db = await createTestDb();
@@ -87,7 +102,9 @@ describe("AgentManager", () => {
     });
 
     const fake = createFakeAgentHandle();
-    const createAgentHandle = mock((_s: AgentRecord, _c: AgentContext, _cb: AgentCallbacks) => fake.handle);
+    const createAgentHandle = mock(
+      (_s: AgentRecord, _c: AgentContext, _cb: AgentCallbacks) => fake.handle,
+    );
     const manager = createAgentManager({
       baseUrl: "http://127.0.0.1:4444",
       createAgentHandle,
@@ -214,7 +231,9 @@ describe("AgentManager", () => {
     });
 
     const fake = createFakeAgentHandle();
-    const createAgentHandle = mock((_s: AgentRecord, _c: AgentContext, _cb: AgentCallbacks) => fake.handle);
+    const createAgentHandle = mock(
+      (_s: AgentRecord, _c: AgentContext, _cb: AgentCallbacks) => fake.handle,
+    );
     const manager = createAgentManager({
       baseUrl: "http://127.0.0.1:4444",
       createAgentHandle,
@@ -279,6 +298,88 @@ describe("AgentManager", () => {
       role: "user",
       text: "Hello",
     });
+
+    await db.close();
+  });
+
+  test("uses the configured Claude login method when the bridge launches an agent", async () => {
+    const db = await createTestDb();
+    await insertWorkspace(db, {
+      host: "local",
+      id: "workspace-local",
+      path: "/tmp/workspace-local",
+    });
+
+    const child = createFakeChildProcess();
+    const spawnAgentWorker = mock((input: { args: string[] }) => {
+      return child as never;
+    });
+
+    const manager = createAgentManager({
+      baseUrl: "http://127.0.0.1:4444",
+      driver: db,
+      now: () => "2026-04-04T00:00:00.000Z",
+      readBridgeSettings: async () => ({
+        settings: {
+          appearance: { theme: "dark" },
+          providers: {
+            claude: {
+              loginMethod: "console",
+            },
+          },
+          terminal: {
+            command: { program: null },
+            persistence: {
+              backend: "tmux",
+              mode: "managed",
+              executablePath: null,
+            },
+            profiles: {
+              shell: {
+                launcher: "shell",
+                label: "Shell",
+              },
+              claude: {
+                launcher: "claude",
+                label: "Claude",
+                settings: {
+                  model: null,
+                  permissionMode: null,
+                  effort: null,
+                },
+              },
+              codex: {
+                launcher: "codex",
+                label: "Codex",
+                settings: {
+                  model: null,
+                  configProfile: null,
+                  approvalPolicy: null,
+                  sandboxMode: null,
+                  reasoningEffort: null,
+                  webSearch: null,
+                },
+              },
+            },
+            defaultProfile: "shell",
+          },
+        },
+        settings_path: "/tmp/settings.json",
+      }),
+      spawnAgentWorker,
+      workspaceRegistry: createWorkspaceClientRegistry({ local: {} as never }),
+    });
+
+    await manager.startAgent({
+      provider: "claude",
+      workspaceId: "workspace-local",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(spawnAgentWorker).toHaveBeenCalledTimes(1);
+    expect(spawnAgentWorker.mock.calls[0]?.[0]?.args).toEqual(
+      expect.arrayContaining(["--login-method", "console"]),
+    );
 
     await db.close();
   });

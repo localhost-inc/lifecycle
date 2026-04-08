@@ -5,9 +5,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 DEV_SCRIPT="$REPO_ROOT/scripts/dev"
+DEV_STATE_ROOT="${LIFECYCLE_DEV_STATE_ROOT:-$REPO_ROOT/.lifecycle-runtime-dev/dev}"
+DEV_PID_DIR="$DEV_STATE_ROOT/pids"
 LOG_FILE="$(mktemp -t lifecycle-macos-dev-loop.XXXXXX.log)"
 
 SUPERVISOR_PID=""
+
+pid_file() {
+  printf '%s/%s.pid\n' "$DEV_PID_DIR" "$1"
+}
+
+read_pid_file() {
+  local path="$1"
+  [[ -f "$path" ]] || return 1
+  local pid
+  pid="$(tr -dc '0-9' <"$path")"
+  [[ -n "$pid" ]] || return 1
+  printf '%s\n' "$pid"
+}
 
 cleanup() {
   if [[ -n "$SUPERVISOR_PID" ]] && kill -0 "$SUPERVISOR_PID" >/dev/null 2>&1; then
@@ -26,11 +41,6 @@ cleanup() {
     if kill -0 "$SUPERVISOR_PID" >/dev/null 2>&1; then
       kill -KILL "$SUPERVISOR_PID" >/dev/null 2>&1 || true
     fi
-    pkill -KILL -f 'packages/bridge/scripts/dev.sh' >/dev/null 2>&1 || true
-    pkill -KILL -f 'src/app.ts --port 52222' >/dev/null 2>&1 || true
-    pkill -KILL -f 'control-plane/node_modules/.bin/wrangler dev --ip 127.0.0.1 --port 18787' >/dev/null 2>&1 || true
-    pkill -KILL -f 'workerd serve --binary --experimental --socket-addr=entry=127.0.0.1:18787' >/dev/null 2>&1 || true
-    pkill -KILL -f 'lifecycle-macos' >/dev/null 2>&1 || true
     wait "$SUPERVISOR_PID" >/dev/null 2>&1 || true
   fi
   rm -f "$LOG_FILE" >/dev/null 2>&1 || true
@@ -70,26 +80,20 @@ wait_for_command() {
 
 current_bridge_pid() {
   local registration_path="$REPO_ROOT/.lifecycle-runtime-dev/bridge.json"
-  if [[ -f "$registration_path" ]]; then
-    sed -nE 's/.*"pid"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' "$registration_path" | head -n 1
-    return
-  fi
-
-  pgrep -f 'packages/bridge/scripts/dev.sh' | head -n 1 || \
-    pgrep -f 'src/app.ts --port 52222' | head -n 1
+  [[ -f "$registration_path" ]] || return 1
+  sed -nE 's/.*"pid"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' "$registration_path" | head -n 1
 }
 
 current_control_plane_pid() {
-  pgrep -f 'wrangler-dist/cli.js dev --ip 127.0.0.1 --port 18787' | head -n 1 || \
-    pgrep -f 'wrangler dev --ip 127.0.0.1 --port 18787' | head -n 1
+  read_pid_file "$(pid_file "control-plane")"
 }
 
 desktop_process_running() {
-  pgrep -f 'dist/Lifecycle.app/Contents/MacOS/lifecycle-macos'
+  read_pid_file "$(pid_file "desktop-mac-app")" >/dev/null
 }
 
 current_desktop_pid() {
-  pgrep -n -f 'dist/Lifecycle.app/Contents/MacOS/lifecycle-macos'
+  read_pid_file "$(pid_file "desktop-mac-app")"
 }
 
 bridge_healthy() {

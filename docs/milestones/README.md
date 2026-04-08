@@ -2,7 +2,7 @@
 
 This directory contains active milestone contracts for Lifecycle.
 
-Current execution focus: CLI + TUI reliability, control plane (CF Workers + DO + D1), sandbox provider infrastructure, and OpenCode integration.
+Current execution focus: CLI + TUI reliability, terminal runtime, control plane (CF Workers + DO + D1), sandbox provider infrastructure, and thin OpenCode server routing for cloud workspaces.
 
 ## Active Milestones
 
@@ -12,9 +12,10 @@ None currently active. The next milestone will be cut from the active plans when
 
 Future delivery streams live in [docs/plans](../plans):
 
-1. Local CLI — command contract and workspace operations
-2. Kin Cloud V1 — auth, orgs, cloud workspaces, shell attach, PR workflow
-3. Cloud hardening — sleep/wake, TTL, quotas
+1. CLI — command contract and workspace operations
+2. Cloud — auth, orgs, cloud workspaces, shell attach, routed OpenCode endpoint, PR workflow
+3. Terminals — first-class terminal runtime across local and cloud
+4. Cloud hardening — sleep/wake, TTL, quotas
 
 ## Architectural Direction
 

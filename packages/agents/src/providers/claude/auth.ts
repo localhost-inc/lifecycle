@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import type { AgentAuthEvent, AgentAuthStatus } from "../auth";
-import type { ClaudeLoginMethod } from "./env";
+import { buildSessionEnv, type ClaudeLoginMethod } from "./env";
 
 function emit(event: AgentAuthEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
@@ -9,9 +9,12 @@ function emit(event: AgentAuthEvent): void {
 function run(
   command: string,
   args: string[],
+  input?: {
+    env?: NodeJS.ProcessEnv;
+  },
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve) => {
-    execFile(command, args, { timeout: 10_000 }, (error, stdout, stderr) => {
+    execFile(command, args, { env: input?.env, timeout: 10_000 }, (error, stdout, stderr) => {
       resolve({
         stdout: stdout?.toString() ?? "",
         stderr: stderr?.toString() ?? "",
@@ -99,9 +102,13 @@ function parseClaudeStatusResult(stdout: string): AgentAuthStatus {
   };
 }
 
-export async function checkClaudeAuthStatus(): Promise<AgentAuthStatus> {
+export async function checkClaudeAuthStatus(
+  loginMethod: ClaudeLoginMethod = "claudeai",
+): Promise<AgentAuthStatus> {
   try {
-    const { stdout, code } = await run("claude", ["auth", "status"]);
+    const { stdout, code } = await run("claude", ["auth", "status"], {
+      env: buildSessionEnv(loginMethod),
+    });
     if (code !== 0) {
       return { state: "unauthenticated" };
     }
@@ -131,10 +138,13 @@ export async function loginClaudeAuthStatus(
   onStatus?: (status: Extract<AgentAuthStatus, { state: "authenticating" }>) => void,
 ): Promise<AgentAuthStatus> {
   onStatus?.(authenticatingStatus(loginMethod));
+  const env = buildSessionEnv(loginMethod);
 
   try {
     const authFlag = loginMethod === "console" ? "--console" : "--claudeai";
-    const { stdout, stderr, code } = await run("claude", ["auth", "login", authFlag]);
+    const { stdout, stderr, code } = await run("claude", ["auth", "login", authFlag], {
+      env,
+    });
 
     if (code !== 0) {
       return {
@@ -143,7 +153,7 @@ export async function loginClaudeAuthStatus(
       };
     }
 
-    const statusResult = await run("claude", ["auth", "status"]);
+    const statusResult = await run("claude", ["auth", "status"], { env });
     try {
       const parsed = parseClaudeStatusResult(statusResult.stdout);
       if (parsed.state === "authenticated") {

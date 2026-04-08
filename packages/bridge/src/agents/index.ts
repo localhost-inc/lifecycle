@@ -5,3 +5,4 @@ export {
   type BridgeSocketAgentMessage,
 } from "./events";
 export { createAgentManager, type AgentManager, type AgentManagerInspectResult } from "./manager";
+export { loginBridgeProviderAuth, readBridgeProviderAuth } from "./provider-auth";

@@ -11,10 +11,13 @@ BRIDGE_PORT="${LIFECYCLE_BRIDGE_PORT:-52222}"
 RUNTIME_DIR="$(mktemp -d -t lifecycle-bridge-dev.XXXXXX)"
 RESTART_FILE="$RUNTIME_DIR/restart"
 
-BRIDGE_PID=""
-
 if [[ -n "${LIFECYCLE_RUNTIME_ROOT:-}" && -z "${LIFECYCLE_ROOT:-}" ]]; then
   export LIFECYCLE_ROOT="$LIFECYCLE_RUNTIME_ROOT"
+fi
+
+if [[ "${LIFECYCLE_DEV_SUPERVISOR:-}" == "monorepo" ]]; then
+  cd "$PACKAGE_DIR"
+  exec bun ./src/app.ts --port "$BRIDGE_PORT"
 fi
 
 bridge_registration_path() {
@@ -73,35 +76,11 @@ stop_bridge_process() {
   fi
 }
 
-stop_bridge() {
-  local current_pid="${BRIDGE_PID:-}"
-  local registered_pid=""
-
-  if registered_pid="$(registered_bridge_pid 2>/dev/null || true)"; then
-    :
-  else
-    registered_pid=""
+stop_registered_bridge() {
+  local pid=""
+  if pid="$(registered_bridge_pid 2>/dev/null || true)"; then
+    stop_bridge_process "$pid"
   fi
-
-  if [[ -n "$current_pid" ]]; then
-    stop_bridge_process "$current_pid"
-    wait "$current_pid" >/dev/null 2>&1 || true
-  fi
-
-  if [[ -n "$registered_pid" && "$registered_pid" != "$current_pid" ]]; then
-    stop_bridge_process "$registered_pid"
-  fi
-
-  BRIDGE_PID=""
-}
-
-start_bridge() {
-  stop_bridge
-  (
-    cd "$PACKAGE_DIR"
-    exec bun ./src/app.ts --port "$BRIDGE_PORT"
-  ) &
-  BRIDGE_PID="$!"
 }
 
 restart_requested() {
@@ -112,7 +91,36 @@ clear_restart_request() {
   rm -f "$RESTART_FILE" >/dev/null 2>&1 || true
 }
 
+drain_initial_watch_events() {
+  local stable_checks=0
+  while (( stable_checks < 5 )); do
+    if restart_requested; then
+      clear_restart_request
+      stable_checks=0
+    else
+      stable_checks=$((stable_checks + 1))
+    fi
+    sleep 0.1
+  done
+}
+
 install_watch() {
+  local registration_path
+  registration_path="$(bridge_registration_path)"
+  local trigger_script="$RUNTIME_DIR/restart-bridge.sh"
+
+  cat >"$trigger_script" <<EOF
+#!/bin/sh
+touch "$RESTART_FILE"
+if [ -f "$registration_path" ]; then
+  pid=\$(sed -nE 's/.*"pid"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' "$registration_path" | head -n 1)
+  if [ -n "\$pid" ]; then
+    kill -TERM "\$pid" >/dev/null 2>&1 || true
+  fi
+fi
+EOF
+  chmod +x "$trigger_script"
+
   watchman trigger-del "$WATCH_DIR" "$WATCH_NAME" >/dev/null 2>&1 || true
   watchman watch-del "$WATCH_DIR" >/dev/null 2>&1 || true
   watchman watch "$WATCH_DIR" >/dev/null
@@ -134,7 +142,7 @@ install_watch() {
     ["match", "package.json", "wholename"],
     ["match", "tsconfig.json", "wholename"]
   ],
-  "command": ["/bin/sh", "-lc", "touch \"$RESTART_FILE\""]
+  "command": ["$trigger_script"]
 }]
 EOF
 }
@@ -143,7 +151,7 @@ cleanup() {
   trap - EXIT INT TERM
   watchman trigger-del "$WATCH_DIR" "$WATCH_NAME" >/dev/null 2>&1 || true
   watchman watch-del "$WATCH_DIR" >/dev/null 2>&1 || true
-  stop_bridge
+  stop_registered_bridge
   rm -rf "$RUNTIME_DIR" >/dev/null 2>&1 || true
 }
 
@@ -157,32 +165,22 @@ trap request_stop INT TERM
 
 install_watch
 clear_restart_request
-start_bridge
+drain_initial_watch_events
 
 while true; do
-  if restart_requested; then
-    clear_restart_request
-    stop_bridge
-    start_bridge
-    continue
-  fi
-
-  if process_alive "$BRIDGE_PID"; then
-    sleep 0.2
-    continue
-  fi
+  clear_restart_request
 
   status=0
-  wait "$BRIDGE_PID" >/dev/null 2>&1 || status=$?
-  BRIDGE_PID=""
+  (
+    cd "$PACKAGE_DIR"
+    exec bun ./src/app.ts --port "$BRIDGE_PORT"
+  ) || status=$?
 
   if restart_requested; then
     clear_restart_request
-    start_bridge
     continue
   fi
 
   printf 'process exited with code %s; restarting in 1s\n' "$status"
   sleep 1
-  start_bridge
 done

@@ -1,6 +1,6 @@
 # Plan: TUI tmux support with host-bound workspace scope
 
-> Related: [docs/reference/workspace.md](../reference/workspace.md), [docs/reference/journey.md](../reference/journey.md), [docs/plans/local-cli.md](./local-cli.md), [docs/plans/cloud-workspaces.md](./cloud-workspaces.md)
+> Related: [docs/reference/workspace.md](../reference/workspace.md), [docs/reference/journey.md](../reference/journey.md), [docs/plans/cli.md](../../plans/cli.md), [docs/plans/cloud-workspaces.md](./cloud-workspaces.md)
 
 This document is the tracked execution plan for adding tmux-backed persistence and user-controlled splitting to the Lifecycle TUI without weakening the repository's host-bound workspace model.
 

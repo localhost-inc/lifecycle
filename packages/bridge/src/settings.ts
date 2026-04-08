@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { homedir } from "node:os";
 import {
+  LifecycleDefaultTerminalProfileItems,
   LifecycleSettingsSchema,
   type LifecycleSettings,
   type LifecycleSettingsUpdate,
@@ -109,6 +110,11 @@ function normalizeLifecycleSettings(raw: Record<string, unknown>): LifecycleSett
     appearance: {
       theme: readAppearanceTheme(raw),
     },
+    providers: {
+      claude: {
+        loginMethod: readClaudeProviderLoginMethod(raw),
+      },
+    },
     terminal: {
       command: {
         program: readTerminalCommandProgram(raw),
@@ -118,6 +124,8 @@ function normalizeLifecycleSettings(raw: Record<string, unknown>): LifecycleSett
         mode: readTerminalPersistenceMode(raw),
         executablePath: readTerminalPersistenceExecutablePath(raw),
       },
+      defaultProfile: readTerminalDefaultProfile(raw),
+      profiles: readTerminalProfiles(raw),
     },
   });
 }
@@ -132,6 +140,12 @@ function readTerminalCommandProgram(raw: Record<string, unknown>): unknown {
   const command = asObject(terminal?.command);
   const shell = asObject(terminal?.shell);
   return command?.program ?? shell?.program ?? null;
+}
+
+function readClaudeProviderLoginMethod(raw: Record<string, unknown>): unknown {
+  const providers = asObject(raw.providers);
+  const claude = asObject(providers?.claude);
+  return claude?.loginMethod ?? "claudeai";
 }
 
 function readTerminalPersistenceBackend(raw: Record<string, unknown>): unknown {
@@ -158,6 +172,20 @@ function readTerminalPersistenceExecutablePath(raw: Record<string, unknown>): un
   return persistence?.executablePath ?? tmux?.program ?? null;
 }
 
+function readTerminalDefaultProfile(raw: Record<string, unknown>): unknown {
+  const terminal = asObject(raw.terminal);
+  return terminal?.defaultProfile ?? "shell";
+}
+
+function readTerminalProfiles(raw: Record<string, unknown>): Record<string, unknown> {
+  const terminal = asObject(raw.terminal);
+  const profiles = asObject(terminal?.profiles);
+  return {
+    ...buildDefaultTerminalProfileItems(),
+    ...profiles,
+  };
+}
+
 function mergeSettingsUpdate(
   raw: Record<string, unknown>,
   update: LifecycleSettingsUpdate,
@@ -174,6 +202,14 @@ function mergeSettingsUpdate(
     appearance.theme = update.appearance.theme;
     next.appearance = appearance;
     delete next.theme;
+  }
+
+  if (update.providers?.claude?.loginMethod !== undefined) {
+    const providers = { ...asObject(next.providers) };
+    const claude = { ...asObject(providers.claude) };
+    claude.loginMethod = update.providers.claude.loginMethod;
+    providers.claude = claude;
+    next.providers = providers;
   }
 
   if (update.terminal?.command?.program !== undefined) {
@@ -215,6 +251,31 @@ function mergeSettingsUpdate(
 
     terminal.persistence = persistence;
     delete terminal.tmux;
+    next.terminal = terminal;
+  }
+
+  if (update.terminal?.defaultProfile !== undefined || update.terminal?.profiles !== undefined) {
+    const terminal = { ...asObject(next.terminal) };
+    const profiles = {
+      ...buildDefaultTerminalProfileItems(),
+      ...asObject(terminal.profiles),
+    };
+
+    if (update.terminal?.defaultProfile !== undefined) {
+      terminal.defaultProfile = update.terminal.defaultProfile;
+    }
+
+    if (update.terminal?.profiles !== undefined) {
+      for (const [profileId, profile] of Object.entries(update.terminal.profiles)) {
+        if (profile === null) {
+          delete profiles[profileId];
+          continue;
+        }
+        profiles[profileId] = profile;
+      }
+    }
+
+    terminal.profiles = profiles;
     next.terminal = terminal;
   }
 
@@ -262,4 +323,8 @@ function asObject(value: unknown): Record<string, unknown> | null {
   }
 
   return value as Record<string, unknown>;
+}
+
+function buildDefaultTerminalProfileItems(): Record<string, unknown> {
+  return structuredClone(LifecycleDefaultTerminalProfileItems) as Record<string, unknown>;
 }

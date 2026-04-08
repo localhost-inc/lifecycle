@@ -42,21 +42,14 @@ struct WorkspaceCanvasContainerView: View {
               .font(.system(size: 15, weight: .medium))
               .foregroundStyle(theme.primaryTextColor.opacity(0.85))
 
-            Text("Press \(Text("⌘T").fontWeight(.semibold)) to open a terminal")
+            Text("Start in a terminal. Press \(Text("⌘T").fontWeight(.semibold)) to open one.")
               .font(.system(size: 12))
               .foregroundStyle(theme.mutedColor)
+              .multilineTextAlignment(.center)
           }
 
-          HStack(spacing: 8) {
-            emptyStateButton("Terminal", icon: "terminal") {
-              model.createTerminalTab(workspaceID: workspace.id)
-            }
-            emptyStateButton("Claude", icon: "sparkle") {
-              model.createAgentSurface(provider: .claude, workspaceID: workspace.id)
-            }
-            emptyStateButton("Codex", icon: "chevron.left.forwardslash.chevron.right") {
-              model.createAgentSurface(provider: .codex, workspaceID: workspace.id)
-            }
+          emptyStateButton("Open Terminal", icon: "terminal") {
+            model.createTerminalTab(workspaceID: workspace.id)
           }
           .padding(.top, 4)
         }

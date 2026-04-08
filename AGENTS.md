@@ -58,10 +58,10 @@ Use this section to route work before implementation.
 
 1. System architecture, sandbox providers, control plane design, background agent orchestration -> `docs/reference/architecture.md`.
 2. TUI shell attach, tmux persistence, mouse/keyboard routing, and workspace activity -> `docs/reference/tui.md`.
-3. CLI workspace control, shell/runtime commands, and observability flows -> `docs/plans/local-cli.md`.
-4. Terminal data-model and legacy terminal persistence questions -> `docs/reference/terminal.md`.
-5. Workspace lifecycle controls, service runtime states, local preview exposure, sleep/wake/destroy UX -> M4.
-6. Cloud auth, orgs, workspace provisioning, shell attach, PR create/merge -> `docs/plans/kin-cloud-v1.md`.
+3. CLI workspace control, shell/runtime commands, and observability flows -> `docs/plans/cli.md`.
+4. Terminal runtime model, terminal identity, and persistence questions -> `docs/plans/terminals.md`.
+5. Workspace lifecycle controls, service runtime states, and destroy/reset UX -> `docs/plans/cli.md` for the core contract, plus `docs/plans/cloud-hardening.md` for cloud sleep/wake and lifecycle hardening.
+6. Cloud auth, orgs, workspace provisioning, shell attach, PR create/merge -> `docs/plans/cloud.md`.
 7. Cloud lifecycle hardening (sleep/wake restore, TTL, quotas) -> `docs/plans/cloud-hardening.md`.
 8. OpenCode integration, custom tools, and plugins -> `docs/reference/architecture.md` (OpenCode section).
 

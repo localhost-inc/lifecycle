@@ -118,7 +118,7 @@ enum BridgeBootstrap {
       }
 
       let payload = try JSONDecoder().decode(HealthPayload.self, from: data)
-      return bridgeHealthSupportsAgentRoutes(payload)
+      return bridgeHealthSupportsDesktopRuntime(payload)
     } catch {
       return false
     }
@@ -184,17 +184,17 @@ func bridgeURL(fromRegistrationData data: Data) -> URL? {
 
 struct HealthPayload: Decodable {
   let healthy: Bool
-  let capabilities: BridgeHealthCapabilities
+  let capabilities: BridgeHealthCapabilities?
 }
 
 struct BridgeHealthCapabilities: Decodable, Equatable {
-  let agents: Bool
+  let agents: Bool?
 
   enum CodingKeys: String, CodingKey {
     case agents = "agents"
   }
 }
 
-func bridgeHealthSupportsAgentRoutes(_ payload: HealthPayload) -> Bool {
-  payload.healthy && payload.capabilities.agents
+func bridgeHealthSupportsDesktopRuntime(_ payload: HealthPayload) -> Bool {
+  payload.healthy
 }
