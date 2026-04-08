@@ -6,7 +6,7 @@ export async function selectTasksByRepository(
   repositoryId: string,
 ): Promise<TaskRecord[]> {
   return driver.select<TaskRecord>(
-    `SELECT id, plan_id, repository_id, workspace_id, agent_session_id,
+    `SELECT id, plan_id, repository_id, workspace_id, agent_id,
             name, description, status, priority, position,
             completed_at, created_at, updated_at
      FROM task WHERE repository_id = $1 ORDER BY position`,
@@ -16,7 +16,7 @@ export async function selectTasksByRepository(
 
 export async function selectTasksByPlan(driver: SqlDriver, planId: string): Promise<TaskRecord[]> {
   return driver.select<TaskRecord>(
-    `SELECT id, plan_id, repository_id, workspace_id, agent_session_id,
+    `SELECT id, plan_id, repository_id, workspace_id, agent_id,
             name, description, status, priority, position,
             completed_at, created_at, updated_at
      FROM task WHERE plan_id = $1 ORDER BY position`,
@@ -40,7 +40,7 @@ export async function selectReadyTasks(
   repositoryId: string,
 ): Promise<TaskRecord[]> {
   return driver.select<TaskRecord>(
-    `SELECT t.id, t.plan_id, t.repository_id, t.workspace_id, t.agent_session_id,
+    `SELECT t.id, t.plan_id, t.repository_id, t.workspace_id, t.agent_id,
             t.name, t.description, t.status, t.priority, t.position,
             t.completed_at, t.created_at, t.updated_at
      FROM task t

@@ -12,6 +12,7 @@ export default createRoute({
   handler: async ({ body, ctx }) => {
     const c = ctx.raw as Context;
     const workosClientId = c.env.WORKOS_CLIENT_ID;
+    const workosApiKey = c.env.WORKOS_API_KEY;
     const db = ctx.get("db");
 
     const response = await fetch("https://api.workos.com/user_management/authenticate", {
@@ -19,6 +20,7 @@ export default createRoute({
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         client_id: workosClientId,
+        client_secret: workosApiKey,
         grant_type: "urn:ietf:params:oauth:grant-type:device_code",
         device_code: body.deviceCode,
       }),
@@ -123,16 +125,16 @@ export default createRoute({
       }
     }
 
-    const token = btoa(`${userId}:${workosUserId}`);
+    // Return the WorkOS access token as THE token.
+    // CLI stores this and sends it as `Authorization: Bearer {token}`.
     return {
-      token,
+      token: tokenData.access_token,
+      refreshToken: tokenData.refresh_token,
       userId,
       email,
       displayName,
       defaultOrgId,
       defaultOrgSlug,
-      accessToken: tokenData.access_token,
-      refreshToken: tokenData.refresh_token,
     };
   },
 });

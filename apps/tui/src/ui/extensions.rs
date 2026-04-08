@@ -37,7 +37,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
             app.workspace
                 .cwd
                 .as_deref()
-                .or(app.workspace.worktree_path.as_deref())
+                .or(app.workspace.workspace_root.as_deref())
                 .unwrap_or("unresolved"),
         ),
     ])

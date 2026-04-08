@@ -1,4 +1,5 @@
 import {
+  type LifecycleConfig,
   type GitBranchPullRequestResult,
   type GitCommitDiffResult,
   type GitCommitResult,
@@ -13,6 +14,8 @@ import {
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
 import { spawnSync as nodeSpawnSync } from "node:child_process";
+import { killPid, type StartStackInput, type StartStackResult } from "@lifecycle/stack";
+import { LocalStackClient } from "@lifecycle/stack/internal/local";
 import type {
   ArchiveWorkspaceInput,
   CreateWorkspaceTerminalInput,
@@ -30,6 +33,7 @@ import type {
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
   WorkspaceClient,
+  StopWorkspaceStackInput,
   WorkspaceTerminalConnection,
   WorkspaceTerminalConnectionInput,
   WorkspaceTerminalRecord,
@@ -39,6 +43,7 @@ import type {
 } from "../../workspace";
 import { readManifestFromPath, type FileReader, type ManifestStatus } from "../../manifest";
 import { computeArchiveInput } from "../../policy/workspace-archive";
+import { slugifyWorkspaceName } from "../../policy/workspace-names";
 import { computeRenameInput } from "../../policy/workspace-rename";
 import {
   buildTmuxLaunchEnv,
@@ -50,8 +55,11 @@ import {
   buildTmuxConnectionId,
   buildTmuxCreateTerminalArgs,
   buildTmuxListTerminalArgs,
+  normalizeTmuxTerminalId,
   normalizeTerminalTitle,
+  parseCreatedTmuxTerminalId,
   parseTmuxTerminalRecords,
+  resolveCreatedTmuxTerminal,
   resolveTmuxRuntimeProfile,
   shellEscape,
 } from "../shared/tmux-terminal-runtime";
@@ -60,6 +68,10 @@ export interface LocalClientDeps {
   invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
   fileReader?: FileReader;
   spawnSync?: typeof nodeSpawnSync;
+  stackController?: {
+    start(config: LifecycleConfig, input: StartStackInput): Promise<StartStackResult>;
+    stop(stackId: string, names: string[]): Promise<void>;
+  };
   watchPath?: (
     path: string,
     callback: () => void,
@@ -68,20 +80,22 @@ export interface LocalClientDeps {
 }
 
 function requireWorktreePath(workspace: WorkspaceRecord): string {
-  if (!workspace.worktree_path) {
+  if (!workspace.workspace_root) {
     throw new Error(`Workspace "${workspace.id}" has no worktree path.`);
   }
-  return workspace.worktree_path;
+  return workspace.workspace_root;
 }
 
 export class LocalWorkspaceClient implements WorkspaceClient {
   private fileReader: FileReader | undefined;
   private invoke: LocalClientDeps["invoke"];
+  private stackController: NonNullable<LocalClientDeps["stackController"]>;
   private spawnSync: typeof nodeSpawnSync;
   private watchPath: LocalClientDeps["watchPath"];
   constructor(deps: LocalClientDeps) {
     this.fileReader = deps.fileReader;
     this.invoke = deps.invoke;
+    this.stackController = deps.stackController ?? new LocalStackClient();
     this.spawnSync = deps.spawnSync ?? nodeSpawnSync;
     this.watchPath = deps.watchPath;
   }
@@ -122,7 +136,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     workspace: WorkspaceRecord,
     input: ResolveWorkspaceShellInput = {},
   ): Promise<WorkspaceShellRuntime> {
-    const cwd = input.cwd ?? workspace.worktree_path ?? null;
+    const cwd = input.cwd ?? workspace.workspace_root ?? null;
     const sessionName = input.sessionName?.trim() || null;
     const tmuxProfile = resolveTmuxRuntimeProfile(input);
 
@@ -214,7 +228,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     workspace: WorkspaceRecord,
     input: ResolveWorkspaceTerminalRuntimeInput = {},
   ): Promise<WorkspaceTerminalRuntime> {
-    const cwd = input.cwd ?? workspace.worktree_path ?? null;
+    const cwd = input.cwd ?? workspace.workspace_root ?? null;
     const sessionName = input.sessionName?.trim() || null;
     const tmuxProfile = resolveTmuxRuntimeProfile(input);
 
@@ -274,7 +288,15 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     input: ResolveWorkspaceTerminalRuntimeInput = {},
   ): Promise<WorkspaceTerminalRecord[]> {
     const context = await this.requireTerminalContext(workspace, input);
-    await this.ensureTmuxSession(workspace, context);
+
+    // Check if the session exists without creating it.
+    const hasSession = await this.execCommand(
+      workspace,
+      buildTmuxCommand(context.profile, ["has-session", "-t", context.sessionName]),
+    );
+    if (hasSession.exitCode !== 0) {
+      return [];
+    }
 
     const result = await this.execCommand(
       workspace,
@@ -293,6 +315,9 @@ export class LocalWorkspaceClient implements WorkspaceClient {
   ): Promise<WorkspaceTerminalRecord> {
     const context = await this.requireTerminalContext(workspace, input);
     await this.ensureTmuxSession(workspace, context);
+    const previousTerminalIds = new Set(
+      (await this.listTerminals(workspace, input)).map((terminal) => terminal.id),
+    );
 
     const title = normalizeTerminalTitle(input.title, input.kind);
     const result = await this.execCommand(
@@ -307,13 +332,26 @@ export class LocalWorkspaceClient implements WorkspaceClient {
       "Lifecycle could not create a local terminal for this workspace.",
     );
 
-    const created = parseTmuxTerminalRecords(result.stdout).at(0);
+    const createdId = parseCreatedTmuxTerminalId(result.stdout);
+    const created = await resolveCreatedTmuxTerminal(
+      () => this.listTerminals(workspace, input),
+      (terminal) => terminal.id,
+      {
+        createdId,
+        previousTerminalIds,
+      },
+    );
     if (!created) {
-      throw new Error("Lifecycle could not parse the created local terminal record.");
+      if (!createdId) {
+        throw new Error(
+          "Lifecycle could not resolve the created local terminal from the runtime listing.",
+        );
+      }
+
+      throw new Error(`Lifecycle could not resolve the created local terminal "${createdId}".`);
     }
 
-    const terminals = await this.listTerminals(workspace, context);
-    return terminals.find((terminal) => terminal.id === created.id) ?? created;
+    return created;
   }
 
   async closeTerminal(
@@ -322,10 +360,6 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     input: ResolveWorkspaceTerminalRuntimeInput = {},
   ): Promise<void> {
     const context = await this.requireTerminalContext(workspace, input);
-    const terminals = await this.listTerminals(workspace, context);
-    if (terminals.length <= 1) {
-      throw new Error("Lifecycle will not close the last terminal in a workspace runtime.");
-    }
 
     const result = await this.execCommand(
       workspace,
@@ -342,16 +376,13 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     input: WorkspaceTerminalConnectionInput & ResolveWorkspaceTerminalRuntimeInput,
   ): Promise<WorkspaceTerminalConnection> {
     const context = await this.requireTerminalContext(workspace, input);
-    const connectionId = buildTmuxConnectionId(
-      context.sessionName,
-      input.clientId,
-      input.terminalId,
-    );
+    const terminalId = normalizeTmuxTerminalId(input.terminalId);
+    const connectionId = buildTmuxConnectionId(context.sessionName, input.clientId, terminalId);
 
     if (input.preferredTransport === "stream") {
       return {
         connectionId,
-        terminalId: input.terminalId,
+        terminalId,
         transport: null,
         launchError: "Lifecycle does not support streamed local terminal connections yet.",
       };
@@ -359,7 +390,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
 
     return {
       connectionId,
-      terminalId: input.terminalId,
+      terminalId,
       transport: {
         kind: "spawn",
         prepare: {
@@ -370,7 +401,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
               context.profile,
               context.sessionName,
               connectionId,
-              input.terminalId,
+              terminalId,
               context.cwd,
             ),
           ],
@@ -406,6 +437,21 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     );
   }
 
+  async startStack(
+    _workspace: WorkspaceRecord,
+    config: LifecycleConfig,
+    input: StartStackInput,
+  ): Promise<StartStackResult> {
+    return this.stackController.start(config, input);
+  }
+
+  async stopStack(workspace: WorkspaceRecord, input: StopWorkspaceStackInput): Promise<void> {
+    for (const pid of input.processIds ?? []) {
+      killPid(pid);
+    }
+    await this.stackController.stop(workspace.id, input.names);
+  }
+
   async readManifest(dirPath: string): Promise<ManifestStatus> {
     if (!this.fileReader) {
       return { state: "missing" };
@@ -422,11 +468,11 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     const workspace = input.workspace;
     const isRoot = workspace.checkout_type === "root";
 
-    let worktreePath: string;
+    let workspaceRoot: string;
     let gitSha: string | null = null;
 
     if (isRoot) {
-      worktreePath = input.projectPath;
+      workspaceRoot = input.projectPath;
       try {
         gitSha = (await this.invoke("get_git_sha", {
           repoPath: input.projectPath,
@@ -442,7 +488,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
           repoPath: input.projectPath,
         })) as string);
 
-      worktreePath = (await this.invoke("create_git_worktree", {
+      workspaceRoot = (await this.invoke("create_git_worktree", {
         repoPath: input.projectPath,
         baseRef,
         branch: workspace.source_ref,
@@ -467,7 +513,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
       ...workspace,
       git_sha: gitSha,
       manifest_fingerprint: input.manifestFingerprint ?? null,
-      worktree_path: worktreePath,
+      workspace_root: workspaceRoot,
       status: "active",
       failure_reason: null,
       failed_at: null,
@@ -480,12 +526,12 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     const { workspace, projectPath, name } = input;
     let branchHasUpstream = false;
     let currentWorktreeBranch: string | null = null;
-    if (workspace.worktree_path) {
+    if (workspace.workspace_root) {
       try {
         [currentWorktreeBranch, branchHasUpstream] = await Promise.all([
-          this.getGitCurrentBranch(workspace.worktree_path),
+          this.getGitCurrentBranch(workspace.workspace_root),
           this.invoke("git_branch_has_upstream", {
-            worktreePath: workspace.worktree_path,
+            workspaceRoot: workspace.workspace_root,
             branchName: workspace.source_ref,
           }) as Promise<boolean>,
         ]);
@@ -502,7 +548,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     );
 
     const result = (await this.invoke("rename_git_worktree_branch", {
-      worktreePath: workspace.worktree_path ?? "",
+      workspaceRoot: workspace.workspace_root ?? "",
       currentSourceRef: workspace.source_ref,
       newSourceRef: renameInput.sourceRef,
       renameBranch: renameInput.renameBranch,
@@ -516,8 +562,9 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     return {
       ...workspace,
       name: renameInput.name,
+      slug: slugifyWorkspaceName(renameInput.name),
       source_ref: renameInput.sourceRef,
-      worktree_path: result ?? workspace.worktree_path,
+      workspace_root: result ?? workspace.workspace_root,
       updated_at: now,
       last_active_at: now,
     };
@@ -526,7 +573,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
   async inspectArchive(workspace: WorkspaceRecord): Promise<WorkspaceArchiveDisposition> {
     if (
       (workspace.host !== "local" && workspace.host !== "docker") ||
-      workspace.worktree_path === null
+      workspace.workspace_root === null
     ) {
       return { hasUncommittedChanges: false };
     }
@@ -542,10 +589,10 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     const lifecycleRoot = (await this.invoke("resolve_lifecycle_root_path")) as string;
     const archiveInput = computeArchiveInput(workspace, lifecycleRoot);
 
-    if (archiveInput.removeWorktree && workspace.worktree_path) {
+    if (archiveInput.removeWorktree && workspace.workspace_root) {
       await this.invoke("remove_git_worktree", {
         repoPath: projectPath,
-        worktreePath: workspace.worktree_path,
+        workspaceRoot: workspace.workspace_root,
       });
     }
 
@@ -577,7 +624,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     input: SubscribeWorkspaceFileEventsInput,
     listener: WorkspaceFileEventListener,
   ): Promise<WorkspaceFileEventSubscription> {
-    if (!this.watchPath || !input.worktreePath) {
+    if (!this.watchPath || !input.workspaceRoot) {
       return () => {};
     }
 
@@ -597,14 +644,14 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     let unwatch: (() => void) | undefined;
     try {
       unwatch = await this.watchPath(
-        input.worktreePath,
+        input.workspaceRoot,
         () => {
           if (!disposed) emitChanged();
         },
         { recursive: true, delayMs: 150 },
       );
     } catch (error) {
-      console.error("Failed to watch workspace file tree:", input.worktreePath, error);
+      console.error("Failed to watch workspace file tree:", input.workspaceRoot, error);
     }
 
     return () => {

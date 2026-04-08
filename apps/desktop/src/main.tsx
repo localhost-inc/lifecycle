@@ -7,8 +7,6 @@ import { createAgentSessionHistoryObserver } from "@lifecycle/agents/internal/se
 import { createLocalAgentWorker } from "@lifecycle/agents/internal/local";
 import { reattachActiveAgentSessions } from "@lifecycle/agents/internal/session-restore";
 import { recordAgentSessionEvent } from "@lifecycle/agents/internal/session-store";
-import { createStackClientRegistry } from "@lifecycle/stack";
-import { LocalStackClient } from "@lifecycle/stack/internal/local";
 import {
   createAgentMessageCollectionRegistry,
   createAgentSessionCollectionRegistry,
@@ -63,11 +61,6 @@ const agentMessageRegistry =
   hotData?.agentMessageRegistry ?? createAgentMessageCollectionRegistry();
 const agentSessionRegistry =
   hotData?.agentSessionRegistry ?? createAgentSessionCollectionRegistry();
-const localStackClient = new LocalStackClient();
-const stackClientRegistry = createStackClientRegistry({
-  docker: localStackClient,
-  local: localStackClient,
-});
 const localAgentWorker =
   hotData?.localAgentWorker ??
   createLocalAgentWorker({
@@ -197,7 +190,6 @@ root.render(
     agentClientRegistry={agentClientRegistry}
     agentMessageRegistry={agentMessageRegistry}
     agentSessionRegistry={agentSessionRegistry}
-    stackClientRegistry={stackClientRegistry}
     workspaceClientRegistry={workspaceClientRegistry}
   />,
 );

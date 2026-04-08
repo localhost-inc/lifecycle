@@ -325,8 +325,8 @@ When a harness session runs inside the app, the CLI should feel local and zero-c
 Keep the implementation split by concern instead of burying everything in the CLI package.
 
 1. `packages/cli` -- command parsing, help, output formatting, command-family routing
-2. `apps/desktop/src-tauri/src/capabilities/...` -- desktop rpc listener plus workspace/stack request handlers
-3. `apps/desktop/src/features/workspaces/...` -- frontend shell request handlers for tab open, focus, browser reload, and browser snapshot
+2. `apps/desktop-legacy-do-not-touch/src-tauri/src/capabilities/...` -- desktop rpc listener plus workspace/stack request handlers
+3. `apps/desktop-legacy-do-not-touch/src/features/workspaces/...` -- frontend shell request handlers for tab open, focus, browser reload, and browser snapshot
 4. shared request/response schemas should live with other typed contracts, not as ad hoc JSON in the CLI
 
 #### Non-Goals

@@ -23,22 +23,22 @@ export {
 } from "./collections/services";
 
 export {
-  selectAgentSessionsByWorkspace,
-  selectAgentSessionById,
-  saveAgentSession,
-  createAgentSessionCollectionRegistry,
-  type AgentSessionCollectionRegistry,
-} from "./collections/agent-sessions";
+  selectAgentsByWorkspace,
+  selectAgentById,
+  saveAgent,
+  createAgentCollectionRegistry,
+  type AgentCollectionRegistry,
+} from "./collections/agents";
 
 export {
   insertAgentEvent,
-  selectAgentEventsBySession,
+  selectAgentEventsByAgent,
   selectNextAgentEventIndex,
 } from "./collections/agent-events";
 
 export {
   selectAgentMessageById,
-  selectAgentMessagesBySession,
+  selectAgentMessagesByAgent,
   upsertAgentMessageWithParts,
   createAgentMessageCollectionRegistry,
   type AgentMessageCollectionRegistry,

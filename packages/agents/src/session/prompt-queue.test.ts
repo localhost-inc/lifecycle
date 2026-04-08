@@ -35,19 +35,19 @@ describe("agent prompt queue store", () => {
         id: "prompt_1",
         input: [{ type: "text", text: "First" }],
       }),
-      sessionId: "session_1",
+      agentId: "session_1",
     });
     state = enqueueAgentPrompt(state, {
       prompt: createAgentQueuedPrompt({
         id: "prompt_2",
         input: [{ type: "text", text: "Second" }],
       }),
-      sessionId: "session_1",
+      agentId: "session_1",
     });
 
     const claimed = beginAgentPromptDispatch(state, {
       promptId: "prompt_1",
-      sessionId: "session_1",
+      agentId: "session_1",
     });
 
     expect(claimed.prompt?.id).toBe("prompt_1");
@@ -68,17 +68,17 @@ describe("agent prompt queue store", () => {
         id: "prompt_1",
         input: [{ type: "text", text: "First" }],
       }),
-      sessionId: "session_1",
+      agentId: "session_1",
     });
     state = beginAgentPromptDispatch(state, {
       promptId: "prompt_1",
-      sessionId: "session_1",
+      agentId: "session_1",
     }).state;
 
     state = failAgentPromptDispatch(state, {
       error: "Failed to send prompt.",
       promptId: "prompt_1",
-      sessionId: "session_1",
+      agentId: "session_1",
     });
 
     expect(selectAgentPromptQueueState(state, "session_1")).toEqual({
@@ -88,7 +88,7 @@ describe("agent prompt queue store", () => {
 
     state = retryAgentPrompt(state, {
       promptId: "prompt_1",
-      sessionId: "session_1",
+      agentId: "session_1",
     });
 
     expect(selectAgentPromptQueueState(state, "session_1")).toEqual({
@@ -104,27 +104,27 @@ describe("agent prompt queue store", () => {
         id: "prompt_1",
         input: [{ type: "text", text: "First" }],
       }),
-      sessionId: "session_1",
+      agentId: "session_1",
     });
     state = beginAgentPromptDispatch(state, {
       promptId: "prompt_1",
-      sessionId: "session_1",
+      agentId: "session_1",
     }).state;
 
     state = completeAgentPromptDispatch(state, {
       promptId: "prompt_1",
-      sessionId: "session_1",
+      agentId: "session_1",
     });
     state = enqueueAgentPrompt(state, {
       prompt: createAgentQueuedPrompt({
         id: "prompt_2",
         input: [{ type: "text", text: "Second" }],
       }),
-      sessionId: "session_1",
+      agentId: "session_1",
     });
     state = dismissAgentPrompt(state, {
       promptId: "prompt_2",
-      sessionId: "session_1",
+      agentId: "session_1",
     });
 
     expect(selectAgentPromptQueueState(state, "session_1")).toEqual({

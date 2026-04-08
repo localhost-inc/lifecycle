@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import type { AgentAuthEvent } from "../auth";
+import type { AgentAuthEvent, AgentAuthStatus } from "../auth";
 import type { ClaudeLoginMethod } from "./env";
 
 function emit(event: AgentAuthEvent): void {
@@ -29,46 +29,141 @@ interface ClaudeAuthStatusResult {
   subscriptionType?: string;
 }
 
+function resultEventFromStatus(
+  status: Exclude<AgentAuthStatus, { state: "authenticating" }>,
+): AgentAuthEvent {
+  switch (status.state) {
+    case "authenticated":
+      return {
+        kind: "auth.result",
+        provider: "claude",
+        state: "authenticated",
+        email: status.email,
+        organization: status.organization,
+      };
+    case "unauthenticated":
+      return {
+        kind: "auth.result",
+        provider: "claude",
+        state: "unauthenticated",
+      };
+    case "error":
+      return {
+        kind: "auth.result",
+        provider: "claude",
+        state: "error",
+        message: status.message,
+      };
+    case "not_checked":
+      return {
+        kind: "auth.result",
+        provider: "claude",
+        state: "not_checked",
+      };
+    case "checking":
+      return {
+        kind: "auth.result",
+        provider: "claude",
+        state: "checking",
+      };
+  }
+}
+
+function authenticatingStatus(
+  loginMethod: ClaudeLoginMethod,
+): Extract<AgentAuthStatus, { state: "authenticating" }> {
+  return {
+    state: "authenticating",
+    output: [
+      loginMethod === "console"
+        ? "Opening browser for Anthropic Console authentication..."
+        : "Opening browser for Claude authentication...",
+    ],
+  };
+}
+
+function parseClaudeStatusResult(stdout: string): AgentAuthStatus {
+  if (!stdout.trim()) {
+    return { state: "unauthenticated" };
+  }
+
+  const result = JSON.parse(stdout.trim()) as ClaudeAuthStatusResult;
+  if (!result.loggedIn) {
+    return { state: "unauthenticated" };
+  }
+
+  return {
+    state: "authenticated",
+    email: result.email ?? null,
+    organization: result.orgName ?? null,
+  };
+}
+
+export async function checkClaudeAuthStatus(): Promise<AgentAuthStatus> {
+  try {
+    const { stdout, code } = await run("claude", ["auth", "status"]);
+    if (code !== 0) {
+      return { state: "unauthenticated" };
+    }
+
+    return parseClaudeStatusResult(stdout);
+  } catch (error) {
+    return {
+      state: "error",
+      message: error instanceof Error ? error.message : "Failed to check Claude auth status.",
+    };
+  }
+}
+
 /**
  * Check whether Claude credentials exist by running `claude auth status`.
  */
 export async function checkClaudeAuth(): Promise<void> {
+  const status = await checkClaudeAuthStatus();
+  if (status.state === "authenticating") {
+    throw new Error("Claude auth status should not enter the authenticating state.");
+  }
+  emit(resultEventFromStatus(status));
+}
+
+export async function loginClaudeAuthStatus(
+  loginMethod: ClaudeLoginMethod = "claudeai",
+  onStatus?: (status: Extract<AgentAuthStatus, { state: "authenticating" }>) => void,
+): Promise<AgentAuthStatus> {
+  onStatus?.(authenticatingStatus(loginMethod));
+
   try {
-    const { stdout, code } = await run("claude", ["auth", "status"]);
+    const authFlag = loginMethod === "console" ? "--console" : "--claudeai";
+    const { stdout, stderr, code } = await run("claude", ["auth", "login", authFlag]);
 
-    if (code !== 0 || !stdout.trim()) {
-      emit({
-        kind: "auth.result",
-        provider: "claude",
-        state: "unauthenticated",
-      });
-      return;
+    if (code !== 0) {
+      return {
+        state: "error",
+        message: stderr.trim() || "Claude login failed.",
+      };
     }
 
-    const result = JSON.parse(stdout.trim()) as ClaudeAuthStatusResult;
-
-    if (result.loggedIn) {
-      emit({
-        kind: "auth.result",
-        provider: "claude",
-        state: "authenticated",
-        email: result.email ?? null,
-        organization: result.orgName ?? null,
-      });
-    } else {
-      emit({
-        kind: "auth.result",
-        provider: "claude",
-        state: "unauthenticated",
-      });
+    const statusResult = await run("claude", ["auth", "status"]);
+    try {
+      const parsed = parseClaudeStatusResult(statusResult.stdout);
+      if (parsed.state === "authenticated") {
+        return parsed;
+      }
+    } catch {
+      // Fall through to the successful login fallback below.
     }
+
+    void stdout;
+    return {
+      state: "authenticated",
+      email: null,
+      organization: null,
+    };
   } catch (error) {
-    emit({
-      kind: "auth.result",
-      provider: "claude",
+    return {
       state: "error",
-      message: error instanceof Error ? error.message : "Failed to check Claude auth status.",
-    });
+      message: error instanceof Error ? error.message : "Failed to run Claude login.",
+    };
   }
 }
 
@@ -77,59 +172,17 @@ export async function checkClaudeAuth(): Promise<void> {
  * The CLI opens the browser for OAuth and blocks until complete.
  */
 export async function loginClaudeAuth(loginMethod: ClaudeLoginMethod = "claudeai"): Promise<void> {
-  emit({
-    kind: "auth.status",
-    provider: "claude",
-    isAuthenticating: true,
-    output: [
-      loginMethod === "console"
-        ? "Opening browser for Anthropic Console authentication..."
-        : "Opening browser for Claude authentication...",
-    ],
+  const status = await loginClaudeAuthStatus(loginMethod, (nextStatus) => {
+    emit({
+      kind: "auth.status",
+      provider: "claude",
+      isAuthenticating: true,
+      output: nextStatus.output,
+    });
   });
 
-  try {
-    const authFlag = loginMethod === "console" ? "--console" : "--claudeai";
-    const { stdout, stderr, code } = await run("claude", ["auth", "login", authFlag]);
-
-    if (code !== 0) {
-      emit({
-        kind: "auth.result",
-        provider: "claude",
-        state: "error",
-        message: stderr.trim() || "Claude login failed.",
-      });
-      return;
-    }
-
-    // After login succeeds, check status for account details
-    const statusResult = await run("claude", ["auth", "status"]);
-    let email: string | null = null;
-    let organization: string | null = null;
-
-    try {
-      const parsed = JSON.parse(statusResult.stdout.trim()) as ClaudeAuthStatusResult;
-      email = parsed.email ?? null;
-      organization = parsed.orgName ?? null;
-    } catch {
-      // Status parsing is best-effort after successful login
-    }
-
-    emit({
-      kind: "auth.result",
-      provider: "claude",
-      state: "authenticated",
-      email,
-      organization,
-    });
-
-    void stdout;
-  } catch (error) {
-    emit({
-      kind: "auth.result",
-      provider: "claude",
-      state: "error",
-      message: error instanceof Error ? error.message : "Failed to run Claude login.",
-    });
+  if (status.state === "authenticating") {
+    throw new Error("Claude login should not settle in the authenticating state.");
   }
+  emit(resultEventFromStatus(status));
 }

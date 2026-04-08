@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { type ServiceRecord, type WorkspaceRecord } from "@lifecycle/contracts";
-import type { StackClient } from "@lifecycle/stack";
-import { StackClientProvider } from "@lifecycle/stack/react";
+import type { WorkspaceClient } from "@lifecycle/workspace";
+import { WorkspaceClientProvider } from "@lifecycle/workspace/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
@@ -13,10 +13,10 @@ import { WorkspaceToolbarProvider } from "@/features/workspaces/state/workspace-
 import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
 
 function renderWorkspaceShell(element: ReturnType<typeof createElement>) {
-  const stackClient: StackClient = {
-    start: async () => ({ preparedAt: null, startedServices: [] }),
-    stop: async () => {},
-  };
+  const workspaceClient = {
+    startStack: async () => ({ preparedAt: null, startedServices: [] }),
+    stopStack: async () => {},
+  } as unknown as WorkspaceClient;
 
   return renderToStaticMarkup(
     createElement(MemoryRouter, {
@@ -24,8 +24,8 @@ function renderWorkspaceShell(element: ReturnType<typeof createElement>) {
       children: createElement(ReactQueryProvider, {
         children: createElement(WorkspaceOpenRequestsProvider, {
           children: createElement(WorkspaceToolbarProvider, {
-            children: createElement(StackClientProvider, {
-              stackClient,
+            children: createElement(WorkspaceClientProvider, {
+              workspaceClient,
               children: element,
             }),
           }),

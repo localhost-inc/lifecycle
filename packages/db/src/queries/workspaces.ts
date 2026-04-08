@@ -5,16 +5,18 @@ import type {
   WorkspaceRecord,
   WorkspaceStatus,
 } from "@lifecycle/contracts";
+import { slugWithSuffix, slugifyName } from "@lifecycle/contracts";
 import type { SqlDriver, SqlStatement } from "../types";
 
 export interface WorkspaceRow {
   id: string;
   repository_id: string;
   name: string;
+  slug: string;
   checkout_type: WorkspaceCheckoutType;
   source_ref: string;
   git_sha: string | null;
-  worktree_path: string | null;
+  workspace_root: string | null;
   host: WorkspaceHost;
   manifest_fingerprint: string | null;
   prepared_at: string | null;
@@ -31,7 +33,7 @@ export function workspaceRecordFromRow(row: WorkspaceRow): WorkspaceRecord {
 }
 
 const WORKSPACE_COLUMNS = `
-  id, repository_id, name, checkout_type, source_ref, git_sha, worktree_path,
+  id, repository_id, name, slug, checkout_type, source_ref, git_sha, workspace_root,
   host, manifest_fingerprint, prepared_at,
   status, failure_reason, failed_at,
   created_at, updated_at, last_active_at
@@ -92,25 +94,26 @@ export function insertWorkspaceStatement(
 ): SqlStatement {
   return {
     sql: `INSERT INTO workspace (
-            id, repository_id, name, name_origin, source_ref, source_ref_origin,
-            git_sha, worktree_path, host, checkout_type, manifest_fingerprint,
+            id, repository_id, name, slug, name_origin, source_ref, source_ref_origin,
+            git_sha, workspace_root, host, checkout_type, manifest_fingerprint,
             prepared_at, status, failure_reason, failed_at,
             created_at, updated_at, last_active_at
          ) VALUES (
-            $1, $2, $3, $4, $5, $6,
-            $7, $8, $9, $10, $11,
-            $12, $13, $14, $15,
-            $16, $17, $18
+            $1, $2, $3, $4, $5, $6, $7,
+            $8, $9, $10, $11, $12,
+            $13, $14, $15, $16,
+            $17, $18, $19
          )`,
     params: [
       workspace.id,
       workspace.repository_id,
       workspace.name,
+      workspace.slug,
       options?.nameOrigin ?? "manual",
       workspace.source_ref,
       options?.sourceRefOrigin ?? "manual",
       workspace.git_sha,
-      workspace.worktree_path,
+      workspace.workspace_root,
       workspace.host,
       workspace.checkout_type,
       workspace.manifest_fingerprint ?? null,
@@ -130,26 +133,28 @@ export function updateWorkspaceStatement(workspace: WorkspaceRow): SqlStatement 
     sql: `UPDATE workspace
          SET repository_id = $2,
              name = $3,
-             source_ref = $4,
-             git_sha = $5,
-             worktree_path = $6,
-             host = $7,
-             checkout_type = $8,
-             manifest_fingerprint = $9,
-             prepared_at = $10,
-             status = $11,
-             failure_reason = $12,
-             failed_at = $13,
-             updated_at = $14,
-             last_active_at = $15
+             slug = $4,
+             source_ref = $5,
+             git_sha = $6,
+             workspace_root = $7,
+             host = $8,
+             checkout_type = $9,
+             manifest_fingerprint = $10,
+             prepared_at = $11,
+             status = $12,
+             failure_reason = $13,
+             failed_at = $14,
+             updated_at = $15,
+             last_active_at = $16
          WHERE id = $1`,
     params: [
       workspace.id,
       workspace.repository_id,
       workspace.name,
+      workspace.slug,
       workspace.source_ref,
       workspace.git_sha,
-      workspace.worktree_path,
+      workspace.workspace_root,
       workspace.host,
       workspace.checkout_type,
       workspace.manifest_fingerprint ?? null,
@@ -180,21 +185,23 @@ export async function insertWorkspace(
     repositoryId: string;
     name: string;
     sourceRef: string;
-    worktreePath?: string | null;
+    workspaceRoot?: string | null;
     host?: WorkspaceHost;
     checkoutType?: WorkspaceCheckoutType;
   },
 ): Promise<string> {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
+  const slug = await resolveUniqueWorkspaceSlug(db, input.repositoryId, input.name);
   const stmt = insertWorkspaceStatement({
     id,
     repository_id: input.repositoryId,
     name: input.name,
+    slug,
     checkout_type: input.checkoutType ?? "worktree",
     source_ref: input.sourceRef,
     git_sha: null,
-    worktree_path: input.worktreePath ?? null,
+    workspace_root: input.workspaceRoot ?? null,
     host: input.host ?? "local",
     manifest_fingerprint: null,
     prepared_at: null,
@@ -229,14 +236,15 @@ export interface RepositoryWithWorkspaces {
   id: string;
   path: string;
   name: string;
+  slug: string;
   workspaces: WorkspaceRow[];
 }
 
 export async function listRepositoriesWithWorkspaces(
   db: SqlDriver,
 ): Promise<RepositoryWithWorkspaces[]> {
-  const repos = await db.select<{ id: string; path: string; name: string }>(
-    "SELECT id, path, name FROM repository ORDER BY name COLLATE NOCASE",
+  const repos = await db.select<{ id: string; path: string; name: string; slug: string }>(
+    "SELECT id, path, name, slug FROM repository ORDER BY name COLLATE NOCASE",
   );
 
   const result: RepositoryWithWorkspaces[] = [];
@@ -250,4 +258,26 @@ export async function listRepositoriesWithWorkspaces(
   }
 
   return result;
+}
+
+export async function resolveUniqueWorkspaceSlug(
+  db: SqlDriver,
+  repositoryId: string,
+  name: string,
+): Promise<string> {
+  const baseSlug = slugifyName(name, "workspace");
+  const matches = await db.select<{ slug: string }>(
+    "SELECT slug FROM workspace WHERE repository_id = $1 AND (slug = $2 OR slug LIKE $3)",
+    [repositoryId, baseSlug, `${baseSlug}-%`],
+  );
+  const existing = new Set(matches.map((row) => row.slug));
+
+  let index = 1;
+  while (true) {
+    const candidate = slugWithSuffix(baseSlug, index);
+    if (!existing.has(candidate)) {
+      return candidate;
+    }
+    index += 1;
+  }
 }

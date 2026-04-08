@@ -137,6 +137,8 @@ The full workspace-scoped area inside a workspace tab.
 
 Contains: workspace header, workspace canvas, optional workspace extension panel, optional workspace extension strip
 
+Workspace records carry both a human `name` and a canonical `slug`. Use the name for display and the slug for stable path-like identity.
+
 ### Workspace header
 
 The compact workspace-scoped rail directly below the page tabs.
@@ -206,11 +208,13 @@ Avoid this term in new target-state docs; use `workspace extension strip` or `wo
 
 ### Lifecycle bridge
 
-The authoritative host-local or remote process that owns workspace/runtime reads and workspace-shell operations for Lifecycle clients.
+The authoritative runtime process that owns workspace/runtime reads and workspace-shell operations for Lifecycle clients.
+
+The bridge runs on the workspace host. A client may reach that authority through a forwarded transport, but `bridge` always names the authority nearest the workspace, not an arbitrary local helper or UI-side proxy.
 
 Use `bridge` for this authority boundary.
 
-Avoid: local runtime, TUI runtime, server when the meaning is "the authoritative host process"
+Avoid: local runtime, TUI runtime, server, proxy when the meaning is "the authoritative host process"
 
 Operation naming rule:
 
@@ -222,9 +226,10 @@ Operation naming rule:
 Bridge-first rule:
 
 1. clients ask the bridge to do runtime work
-2. the bridge responds with authoritative results
-3. runtime changes stream back out of the bridge as lifecycle events
-4. clients update UI state from bridge responses and bridge events rather than inventing alternate authority paths
+2. clients address work by workspace identity rather than resolving host placement themselves
+3. the bridge layer resolves the authoritative bridge and only that bridge executes the runtime work
+4. runtime changes stream back out of the bridge as lifecycle events, and agent session UIs may also subscribe to raw agent event streams on the same socket
+5. clients update UI state from bridge responses and bridge events rather than inventing alternate authority paths
 
 ### Selected workspace
 
@@ -303,6 +308,8 @@ Use `service` for node-scoped runtime operations such as:
 2. `lifecycle service logs api`
 3. `lifecycle service start api`
 
+Service logs are one logical stream per service. Entries may still carry `stdout` or `stderr` metadata, but clients should present a unified log stream. Local log storage lives under `~/.lifecycle/logs/<repo_slug>/<workspace_slug>/` and may include an extra `<org_slug>/` segment when organization scope exists.
+
 ### Context
 
 The aggregate CLI read across project, workspace, stack, service, git, and desktop-shell facts.
@@ -326,6 +333,8 @@ Examples: `Personal`, `Kin`
 
 Use `organization` for cloud ownership and policy. Do not use it as a synonym for `project`.
 
+Organization records carry both a human `name` and a canonical `slug`.
+
 ### Personal organization
 
 The default organization activated for a user after cloud sign-in when they have not yet switched to a shared organization.
@@ -337,6 +346,8 @@ Use `Personal` as the user-facing label for this scope.
 The linked VCS identity for a project.
 
 Repository records own provider linkage for clone, push, pull request create, and pull request merge. They do not define the runtime contract; that still lives in `lifecycle.json`.
+
+Repository records carry both a human `name` and a canonical `slug`.
 
 ### Remote collaboration
 

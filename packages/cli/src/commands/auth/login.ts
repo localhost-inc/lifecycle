@@ -1,8 +1,8 @@
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
-import { createControlPlaneClient } from "../../control-plane-client";
-import { readCredentials, writeCredentials } from "../../credentials";
+import { readCredentials } from "../../credentials";
 import { detectEnvironment } from "../../env-sync";
 import { failCommand, jsonFlag } from "../_shared";
 
@@ -13,7 +13,6 @@ export default defineCommand({
   }),
   run: async (input, context) => {
     try {
-      // Check if already logged in
       const existing = await readCredentials();
       if (existing) {
         if (input.json) {
@@ -38,8 +37,7 @@ export default defineCommand({
         return 0;
       }
 
-      // Start device auth flow (unauthenticated)
-      const client = createControlPlaneClient({ requireAuth: false });
+      const { client } = await ensureBridge();
 
       const deviceCodeRes = await client.auth["device-code"].$post();
       const deviceCode = await deviceCodeRes.json();
@@ -54,7 +52,6 @@ export default defineCommand({
         context.stdout("Waiting for authentication...");
       }
 
-      // Poll for completion
       const interval = (deviceCode.interval ?? 5) * 1000;
       const deadline = Date.now() + deviceCode.expiresIn * 1000;
 
@@ -71,18 +68,7 @@ export default defineCommand({
         }
 
         if ("token" in tokenResult) {
-          // Success — store credentials
-          await writeCredentials({
-            token: tokenResult.token,
-            userId: tokenResult.userId,
-            email: tokenResult.email,
-            displayName: tokenResult.displayName,
-            activeOrgId: tokenResult.defaultOrgId,
-            activeOrgSlug: tokenResult.defaultOrgSlug,
-            accessToken: tokenResult.accessToken,
-            refreshToken: tokenResult.refreshToken,
-          });
-
+          // Bridge already persisted credentials.
           if (input.json) {
             context.stdout(
               JSON.stringify({
@@ -101,12 +87,10 @@ export default defineCommand({
             context.stdout(`Active organization: ${tokenResult.defaultOrgSlug}`);
           }
 
-          // Silent env sync — detect local environment and upload profile.
-          // Runs in the background of the success message. Failures are silent.
+          // Silent env sync through the bridge.
           try {
             const profile = detectEnvironment();
-            const authedClient = createControlPlaneClient();
-            await authedClient.users.me.environment.$put({
+            await client.users.me.environment.$put({
               json: {
                 git: profile.git
                   ? {
@@ -142,7 +126,6 @@ export default defineCommand({
         }
       }
 
-      // Expired
       context.stderr("Authentication timed out. Run `lifecycle auth login` to try again.");
       return 1;
     } catch (error) {

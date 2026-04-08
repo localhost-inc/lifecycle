@@ -37,7 +37,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@lifecycle/contracts": "workspace:*"
+    "@lifecycle/contracts": "workspace:*",
+    "@lifecycle/stack": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",

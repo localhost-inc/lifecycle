@@ -8,6 +8,7 @@ import {
   jsonFlag,
   printServiceSummary,
   resolveWorkspaceId,
+  stackServices,
   workspaceIdFlag,
 } from "../_shared";
 
@@ -38,11 +39,11 @@ export default defineCommand({
     try {
       const workspaceId = resolveWorkspaceId(input.workspaceId);
       const { client } = await ensureBridge();
-      const response = await client.workspaces[":id"].services.$get({
+      const response = await client.workspaces[":id"].stack.$get({
         param: { id: workspaceId },
       });
       const result = await response.json();
-      const service = result.services.find((entry) => entry.name === (input.args[0] ?? ""));
+      const service = stackServices(result.stack).find((entry) => entry.name === (input.args[0] ?? ""));
       if (!service) {
         throw new Error(`Service "${input.args[0]}" was not found in workspace ${workspaceId}.`);
       }

@@ -2,7 +2,7 @@
 
 Lifecycle is a workspace runtime and agent orchestration platform. It manages development workspaces across local machines, containers, remote servers, and cloud sandboxes — and provides the infrastructure for both interactive development and autonomous background agent work.
 
-`lifecycle.json` is the project contract. The `lifecycle` CLI is the primary control surface. The bridge is the local host authority for clients. The control plane on Cloudflare Workers orchestrates background agents and cloud workspaces. Sandbox providers (`local`, `docker`, `remote`, `cloud`) run the same workspace contract everywhere.
+`lifecycle.json` is the project contract. The `lifecycle` CLI is the primary control surface. The bridge is the workspace-host authority for clients. The control plane on Cloudflare Workers orchestrates background agents and cloud workspaces. Sandbox providers (`local`, `docker`, `remote`, `cloud`) run the same workspace contract everywhere.
 
 ## Status
 
@@ -46,10 +46,12 @@ Both modes share the same `lifecycle.json`, the same workspace environment, and 
 Lifecycle clients do not invent their own authority paths.
 
 1. The CLI and TUI ask the bridge to read or mutate workspace state.
-2. The bridge owns host-local orchestration: workspace records, shell attach, stack/service runtime control, git status, activity, and host-aware execution.
-3. When a request needs cloud or organization authority, the bridge calls the control plane.
-4. When runtime state changes on the bridge side, the bridge streams lifecycle events over WebSocket and clients update UI state from those events.
-5. Clients stay thin. They own presentation state such as selection, focus, and layout. They do not shell out to fresh `lifecycle` subprocesses for core reads or mutations when the bridge is available.
+2. Clients address operations by workspace identity rather than resolving host placement themselves.
+3. The bridge layer resolves the authoritative bridge for the workspace, and only that bridge executes runtime work.
+4. The authoritative bridge owns shell attach, stack/service runtime control, git status, activity, and host-local execution.
+5. When a request needs cloud or organization authority above the workspace runtime, the bridge calls the control plane.
+6. When runtime state changes on the bridge side, the bridge streams lifecycle and agent session events over WebSocket and clients update UI state from those events.
+7. Clients stay thin. They own presentation state such as selection, focus, and layout. They do not shell out to fresh `lifecycle` subprocesses for core reads or mutations when the bridge is available.
 
 ## What Exists Today
 
@@ -60,8 +62,10 @@ Lifecycle clients do not invent their own authority paths.
 5. **Contracts package** (`packages/contracts`) — shared domain types, manifest parsing, Zod validation
 6. **DB package** (`packages/db`) — control-plane persistence (Turso/SQLite)
 7. **API scaffold** (`apps/control-plane`) — Hono-based backend
-8. **Desktop app** (`apps/desktop`) — Tauri app, maintenance-only
-9. **Landing page** (`apps/www`)
+8. **Bridge package** (`packages/bridge`) — bridge runtime, authority routing, routes, registration, client bootstrap
+9. **Native desktop app** (`apps/desktop-mac`) — Swift/AppKit client
+10. **Desktop app** (`apps/desktop-legacy-do-not-touch`) — Tauri app, maintenance-only
+11. **Landing page** (`apps/www`)
 
 ## CLI Interface
 
@@ -97,10 +101,11 @@ Three tiers: clients, bridge, control plane, sandbox providers.
 
 ```
 Clients (CLI, TUI)
-  → Bridge (host authority + WebSocket event source)
-    → Control Plane (CF Workers + Durable Objects + D1)
-      → Sandbox Providers (local, docker, remote, cloud)
-        → OpenCode server + lifecycle CLI + full dev environment
+  → Bridge layer (workspace-id API + authority routing)
+    → Authoritative bridge (workspace host + WebSocket event source)
+      → Workspace runtime (tmux, git, files, stack)
+      → Control Plane when org/cloud authority is required
+        → Sandbox Providers (local, docker, remote, cloud)
 ```
 
 See [docs/reference/architecture.md](./docs/reference/architecture.md) for the full system design.
@@ -120,7 +125,7 @@ git clone https://github.com/localhost-inc/lifecycle.git
 cd lifecycle
 bun install
 bun run qa
-bun run dev
+bun run dev   # desktop loop: bridge + control plane + desktop-mac
 ```
 
 ## Common Commands
@@ -134,19 +139,25 @@ From repo root:
 5. `bun run test:rust` — TUI Rust tests (`lifecycle-tui`)
 6. `bun run qa` — full quality gate
 7. `bun run build` — workspace builds
-8. `bun run dev` — development loops
+8. `bun run dev` — desktop loop: bridge, control plane, and `desktop-mac`
+9. `bun run dev:desktop` — explicit desktop dev loop
+10. `bun run dev:desktop:services` — bridge + control plane only, for Xcode/native debugging
+11. `bun run dev:tui` — focused TUI dev loop
+12. `bun run desktop:mac:xcode-env` — print the canonical Xcode Run environment for `desktop-mac`
 
 ## Repository Layout
 
 ```text
 apps/
   control-plane/ Hosted Hono control plane
-  desktop/      Tauri desktop app (maintenance-only)
+  desktop-mac/  Native Swift desktop app
+  desktop-legacy-do-not-touch/ Tauri desktop app (maintenance-only)
   tui/          Rust TUI — tmux-backed workspace shell
   www/          Landing page
 packages/
   agents/       Agent orchestration contracts and adapter interfaces
   auth/         Auth helpers and contracts
+  bridge/       Runnable bridge package + server library
   cli/          lifecycle CLI
   cmd/          Filesystem-based command framework
   config/       Shared TypeScript config

@@ -165,15 +165,15 @@ export function printWorkspaceSummary(
     name: string;
     source_ref: string;
     status: string;
-    worktree_path: string | null;
+    workspace_root: string | null;
   },
   stdout: (message: string) => void,
 ): void {
   stdout(`${workspace.name}`);
   stdout(`status: ${workspace.status}`);
   stdout(`ref: ${workspace.source_ref}`);
-  if (workspace.worktree_path) {
-    stdout(`path: ${workspace.worktree_path}`);
+  if (workspace.workspace_root) {
+    stdout(`path: ${workspace.workspace_root}`);
   }
   stdout(`id: ${workspace.id}`);
 }
@@ -222,4 +222,41 @@ export function printServiceSummary(
   if (service.preview_url) {
     stdout(`preview: ${service.preview_url}`);
   }
+}
+
+export function stackServices<
+  T extends {
+    nodes: Array<{
+      assigned_port?: number | null;
+      kind: string;
+      name: string;
+      preview_url?: string | null;
+      status?: string;
+      status_reason?: string | null;
+    }>;
+  },
+>(
+  stack: T,
+): Array<{
+  assigned_port: number | null;
+  name: string;
+  preview_url: string | null;
+  status: string;
+  status_reason: string | null;
+}> {
+  return stack.nodes.flatMap((node) => {
+    if (node.kind !== "service") {
+      return [];
+    }
+
+    return [
+      {
+        assigned_port: node.assigned_port ?? null,
+        name: node.name,
+        preview_url: node.preview_url ?? null,
+        status: node.status ?? "stopped",
+        status_reason: node.status_reason ?? null,
+      },
+    ];
+  });
 }

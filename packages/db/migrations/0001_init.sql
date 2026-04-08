@@ -43,29 +43,13 @@ CREATE INDEX IF NOT EXISTS idx_workspace_repository ON workspace(repository_id, 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_repository_root_unique
 ON workspace(repository_id) WHERE checkout_type = 'root';
 
--- Services -----------------------------------------------------------------
+-- Agents -------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS service (
-    id            TEXT PRIMARY KEY NOT NULL,
-    workspace_id  TEXT NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
-    name          TEXT NOT NULL,
-    status        TEXT NOT NULL DEFAULT 'stopped'
-                    CHECK (status IN ('stopped', 'starting', 'ready', 'failed')),
-    status_reason TEXT,
-    assigned_port INTEGER,
-    pid           INTEGER,
-    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(workspace_id, name)
-);
-
--- Agent sessions -----------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS agent_session (
+CREATE TABLE IF NOT EXISTS agent (
     id                  TEXT PRIMARY KEY NOT NULL,
     workspace_id        TEXT NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
     provider            TEXT NOT NULL CHECK (provider IN ('claude', 'codex')),
-    provider_session_id TEXT,
+    provider_id         TEXT,
     title               TEXT NOT NULL DEFAULT '',
     status              TEXT NOT NULL DEFAULT 'starting'
                           CHECK (status IN ('starting', 'idle', 'running', 'waiting_input',
@@ -76,29 +60,29 @@ CREATE TABLE IF NOT EXISTS agent_session (
     updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_agent_session_workspace
-ON agent_session(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_workspace
+ON agent(workspace_id, created_at DESC);
 
 -- Agent messages -----------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS agent_message (
     id         TEXT PRIMARY KEY NOT NULL,
-    session_id TEXT NOT NULL REFERENCES agent_session(id) ON DELETE CASCADE,
+    agent_id   TEXT NOT NULL REFERENCES agent(id) ON DELETE CASCADE,
     role       TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
     text       TEXT NOT NULL DEFAULT '',
     turn_id    TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_agent_message_session
-ON agent_message(session_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_agent_message_agent
+ON agent_message(agent_id, created_at ASC);
 
 -- Agent message parts ------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS agent_message_part (
     id         TEXT PRIMARY KEY NOT NULL,
     message_id TEXT NOT NULL REFERENCES agent_message(id) ON DELETE CASCADE,
-    session_id TEXT NOT NULL,
+    agent_id   TEXT NOT NULL,
     part_index INTEGER NOT NULL DEFAULT 0,
     part_type  TEXT NOT NULL,
     text       TEXT,
@@ -114,20 +98,20 @@ ON agent_message_part(message_id, part_index ASC);
 
 CREATE TABLE IF NOT EXISTS agent_event (
     id                  TEXT PRIMARY KEY NOT NULL,
-    session_id          TEXT NOT NULL REFERENCES agent_session(id) ON DELETE CASCADE,
+    agent_id            TEXT NOT NULL REFERENCES agent(id) ON DELETE CASCADE,
     workspace_id        TEXT NOT NULL,
     provider            TEXT NOT NULL CHECK (provider IN ('claude', 'codex')),
-    provider_session_id TEXT,
+    provider_id         TEXT,
     turn_id             TEXT,
     event_index         INTEGER NOT NULL,
     event_kind          TEXT NOT NULL,
     payload             TEXT NOT NULL,
     created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(session_id, event_index)
+    UNIQUE(agent_id, event_index)
 );
 
-CREATE INDEX IF NOT EXISTS idx_agent_event_session
-ON agent_event(session_id, event_index ASC);
+CREATE INDEX IF NOT EXISTS idx_agent_event_agent
+ON agent_event(agent_id, event_index ASC);
 
 -- Plans --------------------------------------------------------------------
 
@@ -154,7 +138,7 @@ CREATE TABLE IF NOT EXISTS task (
     plan_id          TEXT NOT NULL REFERENCES plan(id) ON DELETE CASCADE,
     repository_id    TEXT NOT NULL REFERENCES repository(id) ON DELETE CASCADE,
     workspace_id     TEXT REFERENCES workspace(id) ON DELETE SET NULL,
-    agent_session_id TEXT REFERENCES agent_session(id) ON DELETE SET NULL,
+    agent_id        TEXT REFERENCES agent(id) ON DELETE SET NULL,
     name             TEXT NOT NULL,
     description      TEXT NOT NULL DEFAULT '',
     status           TEXT NOT NULL DEFAULT 'pending'

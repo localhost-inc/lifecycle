@@ -70,7 +70,8 @@ pub struct WorkspaceScope {
     pub status: Option<String>,
     pub source_ref: Option<String>,
     pub cwd: Option<String>,
-    pub worktree_path: Option<String>,
+    pub workspace_root: Option<String>,
+    #[serde(default)]
     pub services: Vec<ServiceSummary>,
     pub resolution_note: Option<String>,
     pub resolution_error: Option<String>,
@@ -119,7 +120,7 @@ fn build_shell_runtime(scope: &WorkspaceScope, tmux_available: bool) -> ShellPla
         };
     }
 
-    let cwd = scope.cwd.clone().or_else(|| scope.worktree_path.clone());
+    let cwd = scope.cwd.clone().or_else(|| scope.workspace_root.clone());
     let session_name = build_tmux_session_name(scope);
 
     match scope.host {
@@ -340,7 +341,7 @@ mod tests {
             status: Some("active".to_string()),
             source_ref: Some("main".to_string()),
             cwd: Some("/tmp/project".to_string()),
-            worktree_path: Some("/tmp/project".to_string()),
+            workspace_root: Some("/tmp/project".to_string()),
             services: vec![],
             resolution_note: None,
             resolution_error: None,
@@ -374,7 +375,7 @@ mod tests {
     fn local_runtime_preserves_literal_cwd_in_tmux_args() {
         let mut scoped = scope(WorkspaceHost::Local);
         scoped.cwd = Some("/tmp/it's-real".to_string());
-        scoped.worktree_path = scoped.cwd.clone();
+        scoped.workspace_root = scoped.cwd.clone();
 
         let plan = build_shell_runtime(&scoped, true);
         let spec = plan.spec.expect("expected local launch spec");

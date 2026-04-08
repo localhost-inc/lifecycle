@@ -8,8 +8,8 @@ BUILD_DIR="$APP_DIR/.build/arm64-apple-macosx/debug"
 DIST_DIR="$APP_DIR/dist"
 APP_NAME="Lifecycle"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
-EXECUTABLE_NAME="lifecycle-desktop-mac"
-RESOURCE_BUNDLE_NAME="LifecycleDesktopMac_LifecycleDesktopMac.bundle"
+EXECUTABLE_NAME="lifecycle-macos"
+RESOURCE_BUNDLE_NAME="LifecycleMac_LifecycleApp.bundle"
 APP_ICON_PATH="$APP_DIR/Resources/AppIcon.icns"
 
 "$APP_DIR/scripts/prepare-ghosttykit.sh" >/dev/null
@@ -32,11 +32,11 @@ cat >"$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleExecutable</key>
-  <string>lifecycle-desktop-mac</string>
+  <string>lifecycle-macos</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleIdentifier</key>
-  <string>dev.lifecycle.desktop-mac</string>
+  <string>dev.lifecycle.macos</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>

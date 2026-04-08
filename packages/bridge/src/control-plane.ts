@@ -1,26 +1,7 @@
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-
 import { hc, type ClientResponse } from "hono/client";
 import type { AppType } from "@lifecycle/control-plane/rpc";
 import { resolveControlPlaneUrl } from "./control-plane-url";
-
-const CREDENTIALS_PATH = join(homedir(), ".lifecycle", "credentials.json");
-
-interface StoredCredentials {
-  token: string;
-  activeOrgId: string | null;
-}
-
-function readCredentials(): StoredCredentials | null {
-  try {
-    const text = readFileSync(CREDENTIALS_PATH, "utf8");
-    return JSON.parse(text) as StoredCredentials;
-  } catch {
-    return null;
-  }
-}
+import { clearCredentials, readCredentials, updateCredentials } from "./credentials";
 
 export function createControlPlaneClient() {
   const baseUrl = resolveControlPlaneUrl();
@@ -34,9 +15,43 @@ export function createControlPlaneClient() {
 
       const headers = new Headers(init?.headers);
       headers.set("Authorization", `Bearer ${credentials.token}`);
-      return fetch(input, { ...init, headers });
+      const res = await fetch(input, { ...init, headers });
+
+      // Auto-refresh on 401 if we have a refresh token
+      if (res.status === 401 && credentials.refreshToken) {
+        const newToken = await tryRefresh(baseUrl, credentials.refreshToken);
+        if (newToken) {
+          headers.set("Authorization", `Bearer ${newToken}`);
+          return fetch(input, { ...init, headers });
+        }
+
+        clearCredentials();
+      }
+
+      return res;
     },
   });
+}
+
+async function tryRefresh(baseUrl: string, refreshToken: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${baseUrl}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as { token: string; refreshToken: string };
+    updateCredentials({
+      token: data.token,
+      accessToken: data.token,
+      refreshToken: data.refreshToken,
+    });
+    return data.token;
+  } catch {
+    return null;
+  }
 }
 
 type JsonResponseLike<T> = Pick<Response, "ok" | "status"> & {

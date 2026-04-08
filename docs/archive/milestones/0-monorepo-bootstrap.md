@@ -66,7 +66,7 @@ docs/
 - [x] Add `packages/contracts` with initial shared types (`workspace`, `workspace_service`, error envelope).
 - [x] Add `packages/backend` and `packages/workspace` with `Backend` and `Workspace` interface placeholders.
 - [x] Add `packages/cli` command scaffold with no-op `lifecycle --help`.
-- [x] Add `apps/desktop`, `apps/api`, and `apps/www` starter scaffolds.
+- [x] Add `apps/desktop-legacy-do-not-touch`, `apps/api`, and `apps/www` starter scaffolds.
 
 ### 4) Developer Experience
 

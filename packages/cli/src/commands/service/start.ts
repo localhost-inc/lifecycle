@@ -7,6 +7,7 @@ import {
   jsonFlag,
   printServiceSummary,
   resolveWorkspaceId,
+  stackServices,
   workspaceIdFlag,
 } from "../_shared";
 
@@ -23,11 +24,12 @@ export default defineCommand({
     try {
       const workspaceId = resolveWorkspaceId(input.workspaceId);
       const { client } = await ensureBridge();
-      const response = await client.workspaces[":id"].services.start.$post({
+      const response = await client.workspaces[":id"].stack.start.$post({
         param: { id: workspaceId },
         json: input.args.length > 0 ? { serviceNames: input.args } : {},
       });
       const result = await response.json();
+      const services = stackServices(result.stack);
 
       if (input.json) {
         context.stdout(JSON.stringify(result, null, 2));
@@ -40,7 +42,7 @@ export default defineCommand({
         context.stdout(`Started workspace services for ${result.workspaceId}.`);
       }
 
-      for (const service of result.services) {
+      for (const service of services) {
         printServiceSummary(service, context.stdout);
       }
 

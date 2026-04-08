@@ -22,5 +22,7 @@ app.onError((err, c) => {
   );
 });
 
+export { WorkspaceDO } from "./workspace-do";
+
 export type AppType = typeof app;
 export default app;

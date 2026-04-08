@@ -1,5 +1,5 @@
 /**
- * Lifecycle system prompt injected into agent sessions.
+ * Lifecycle system prompt injected into agents.
  *
  * Claude receives this via `systemPrompt.append`.
  * Codex receives this via `developerInstructions` in thread/start.
@@ -22,7 +22,7 @@ These are set automatically in your session:
 - \`LIFECYCLE_WORKSPACE_PATH\` — Root path of the workspace checkout.
 - \`LIFECYCLE_DESKTOP_SOCKET\` — Socket path for the desktop rpc (used by the CLI internally).
 - \`LIFECYCLE_DESKTOP_SESSION_TOKEN\` — Auth token for desktop rpc requests.
-- \`LIFECYCLE_AGENT_SESSION_ID\` — Identifier for this agent session (only set when running as an agent).
+- \`LIFECYCLE_AGENT_ID\` — Identifier for this agent (only set when running as an agent).
 
 ### CLI commands
 
@@ -47,8 +47,8 @@ All commands accept \`--json\` for machine-readable output.
 - \`lifecycle workspace archive\` — Archive the current workspace.
 - \`lifecycle workspace logs --service <name> [-f] [--tail N] [--since DURATION] [--grep PATTERN]\` — Tail workspace service logs.
 
-**Agent session:**
-- \`lifecycle agent session inspect [--session-id ID]\` — Inspect your own agent session: metadata, messages, and parts. Reads \`LIFECYCLE_AGENT_SESSION_ID\` by default. Use \`--json\` for the full message/part payloads.
+**Agent:**
+- \`lifecycle agent inspect [--agent-id ID]\` — Inspect your own agent: metadata, messages, and parts. Reads \`LIFECYCLE_AGENT_ID\` by default. Use \`--json\` for the full message/part payloads.
 
 **Desktop integration:**
 - \`lifecycle tab open --surface preview --url <url>\` — Open a URL in the workspace preview surface.

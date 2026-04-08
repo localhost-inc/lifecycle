@@ -1,3 +1,5 @@
+import { slugifyName } from "@lifecycle/contracts";
+
 /**
  * Workspace naming utilities — auto-naming, branch name derivation, slugification.
  *
@@ -124,26 +126,7 @@ export function autoWorkspaceName(workspaceId: string): string {
  * Alphanumeric → lowercase, separators → dash, collapse runs, trim dashes.
  */
 export function slugifyWorkspaceName(value: string): string {
-  let slug = "";
-  let previousDash = false;
-
-  for (const ch of value) {
-    if (/[a-zA-Z0-9]/.test(ch)) {
-      slug += ch.toLowerCase();
-      previousDash = false;
-    } else if (" -_/.".includes(ch)) {
-      if (slug.length > 0 && !previousDash) {
-        slug += "-";
-        previousDash = true;
-      }
-    }
-  }
-
-  while (slug.endsWith("-")) {
-    slug = slug.slice(0, -1);
-  }
-
-  return slug || "workspace";
+  return slugifyName(value, "workspace");
 }
 
 /**

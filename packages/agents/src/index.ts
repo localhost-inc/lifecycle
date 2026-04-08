@@ -1,10 +1,21 @@
 export type { AgentEvent, AgentEventKind, AgentEventObserver, AgentEventOf } from "./events";
+export {
+  AgentProtocolStore,
+  createAgentProtocolStore,
+  DEFAULT_AGENT_PROTOCOL_STATE,
+  reduceAgentProtocolEvent,
+} from "./protocol";
+export type {
+  AgentProtocolRequestState,
+  AgentProtocolState,
+  AgentProtocolTurnState,
+} from "./protocol";
 export { deriveAgentDisplayStatus } from "./session/state";
 export type {
-  AgentSessionAuthStatus,
-  AgentSessionDisplayStatus,
-  AgentSessionState,
-  AgentSessionUsage,
+  AgentAuthState,
+  AgentDisplayStatus,
+  AgentState,
+  AgentUsage,
   AgentTurnActivity,
   AgentTurnPhase,
   AgentWorkspaceStatus,
@@ -12,7 +23,7 @@ export type {
 export { resolveAgentPromptDispatchDecision } from "./session/prompt-queue";
 export type { AgentPromptDispatchDecision } from "./session/prompt-queue";
 export type { AgentModelCatalog, AgentModelCatalogEntry } from "./catalog";
-export type { AgentAuthOptions, AgentModelCatalogOptions } from "./worker";
+export type { AgentAuthOptions, AgentModelCatalogOptions } from "./process";
 export {
   buildClaudeHarnessLaunchConfig,
   buildClaudeHarnessSettingsFromPreset,
@@ -48,27 +59,13 @@ export type {
   HarnessPreset,
   HarnessSettings,
 } from "./harness";
-export { createAgentClientRegistry } from "./client-registry";
-export type { AgentClientRegistry, AgentClientRegistryClients } from "./client-registry";
-export { createAgentClient } from "./client";
-export type { AgentClient, AgentSessionContext, StartAgentSessionInput } from "./client";
-export type {
-  AgentApprovalDecision,
-  AgentApprovalKind,
-  AgentApprovalRequest,
-  AgentApprovalResolution,
-  AgentApprovalStatus,
-  AgentArtifactDescriptor,
-  AgentArtifactType,
-  AgentImageMediaType,
-  AgentInputPart,
-  AgentMessagePart,
-  AgentMessageRole,
-  AgentToolCallStatus,
-  AgentToolCallUpdate,
-  AgentTurnCancelRequest,
-  AgentTurnRequest,
-} from "./turn";
+export type { AgentContext } from "./context";
+export type { AgentTurnCancelRequest, AgentTurnRequest } from "./turn";
+export {
+  checkAgentProviderAuth,
+  loginAgentProviderAuth,
+} from "./auth";
+export type { AgentProviderAuthOptions } from "./auth";
 export type {
   AgentAuthEvent,
   AgentAuthResult,

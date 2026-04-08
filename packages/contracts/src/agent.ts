@@ -1,8 +1,8 @@
-export type AgentSessionProviderId = "claude" | "codex";
+export type AgentProviderId = "claude" | "codex";
 
 export type AgentMessageRole = "user" | "assistant" | "system" | "tool";
 
-export type AgentSessionStatus =
+export type AgentStatus =
   | "starting"
   | "idle"
   | "running"
@@ -12,13 +12,13 @@ export type AgentSessionStatus =
   | "failed"
   | "cancelled";
 
-export interface AgentSessionRecord {
+export interface AgentRecord {
   id: string;
   workspace_id: string;
-  provider: AgentSessionProviderId;
-  provider_session_id: string | null;
+  provider: AgentProviderId;
+  provider_id: string | null;
   title: string;
-  status: AgentSessionStatus;
+  status: AgentStatus;
   last_message_at: string | null;
   created_at: string;
   updated_at: string;
@@ -26,7 +26,7 @@ export interface AgentSessionRecord {
 
 export interface AgentMessageRecord {
   id: string;
-  session_id: string;
+  agent_id: string;
   role: AgentMessageRole;
   text: string;
   turn_id: string | null;
@@ -36,7 +36,7 @@ export interface AgentMessageRecord {
 /** Hydrated message with inline parts — the shape the UI consumes. */
 export interface AgentMessageWithParts {
   id: string;
-  session_id: string;
+  agent_id: string;
   role: AgentMessageRole;
   text: string;
   turn_id: string | null;
@@ -116,7 +116,7 @@ export type AgentMessagePartDataOf<Type extends AgentMessagePartType> =
 export interface AgentMessagePartRecord {
   id: string;
   message_id: string;
-  session_id: string;
+  agent_id: string;
   part_index: number;
   part_type: AgentMessagePartType;
   text: string | null;
@@ -126,10 +126,10 @@ export interface AgentMessagePartRecord {
 
 export interface AgentEventRecord {
   id: string;
-  session_id: string;
+  agent_id: string;
   workspace_id: string;
-  provider: AgentSessionProviderId;
-  provider_session_id: string | null;
+  provider: AgentProviderId;
+  provider_id: string | null;
   turn_id: string | null;
   event_index: number;
   event_kind: string;

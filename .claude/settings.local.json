@@ -26,7 +26,7 @@
       "Bash(curl -s \"https://api.github.com/repos/openai/codex/readme\")",
       "Bash(python3 -c \"import sys,json,base64; d=json.load\\(sys.stdin\\); print\\(base64.b64decode\\(d[''''content'''']\\).decode\\(\\)\\)\")",
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
-      "Bash(ls -la /Users/kyle/dev/lifecycle/apps/desktop/src/features/agents/components/*.tsx)",
+      "Bash(ls -la /Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/agents/components/*.tsx)",
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
       "Bash(grep -A 20 'case \"\"worker.cancel_turn\"\"' /Users/kyle/dev/lifecycle/packages/agents/src/providers/claude/worker.ts)",
       "Bash(find /Users/kyle/dev/lifecycle -path */streamdown* -name *.css -not -path */src/*)",

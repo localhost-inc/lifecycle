@@ -423,7 +423,7 @@ export default defineCommand({
           rootWorkspace: {
             name: currentBranch,
             sourceRef: currentBranch,
-            worktreePath: resolvedRepoPath,
+            workspaceRoot: resolvedRepoPath,
           },
         },
       });

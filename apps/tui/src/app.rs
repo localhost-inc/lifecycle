@@ -140,7 +140,7 @@ fn empty_workspace() -> WorkspaceScope {
         status: None,
         source_ref: None,
         cwd: None,
-        worktree_path: None,
+        workspace_root: None,
         services: vec![],
         resolution_note: Some("Select a workspace from the sidebar to open its shell.".to_string()),
         resolution_error: None,
@@ -363,6 +363,27 @@ impl App {
                     }
                     changed = true;
                 }
+                BridgeEvent::WorkspaceProvisioning { workspace_id } => {
+                    crate::debug::log(format!("workspace provisioning: {workspace_id}"));
+                    changed = true;
+                }
+                BridgeEvent::WorkspaceReady { workspace_id } => {
+                    crate::debug::log(format!("workspace ready: {workspace_id}"));
+                    if self.workspace.workspace_id.as_deref() == Some(workspace_id.as_str()) {
+                        self.refresh_workspace_panels_async();
+                    }
+                    changed = true;
+                }
+                BridgeEvent::WorkspaceFailed { workspace_id, error } => {
+                    let detail = error
+                        .map(|message| format!("workspace failed: {workspace_id} ({message})"))
+                        .unwrap_or_else(|| format!("workspace failed: {workspace_id}"));
+                    crate::debug::log(detail.clone());
+                    if self.workspace.workspace_id.as_deref() == Some(workspace_id.as_str()) {
+                        self.set_status(detail, 5);
+                    }
+                    changed = true;
+                }
                 _ => {
                     crate::debug::log(format!("bridge event: {:?}", event));
                     changed = true;
@@ -419,7 +440,7 @@ impl App {
         let workspace_host = ws.host.clone();
         let workspace_status = ws.status.clone();
         let workspace_source_ref = ws.source_ref.clone();
-        let workspace_path = ws.worktree_path.clone();
+        let workspace_path = ws.workspace_root.clone();
 
         if self.pending_workspace_switch.as_deref() == Some(workspace_id.as_str()) {
             return;
@@ -446,7 +467,7 @@ impl App {
             status: Some(workspace_status),
             source_ref: Some(workspace_source_ref),
             cwd: workspace_path.clone(),
-            worktree_path: workspace_path,
+            workspace_root: workspace_path,
             services: vec![],
             resolution_note: Some("Opening workspace shell…".to_string()),
             resolution_error: None,
@@ -1089,17 +1110,19 @@ impl App {
 
         std::thread::spawn(move || {
             let result = if running {
-                bridge.service_stop(&workspace_id, &[])
+                bridge.stack_stop(&workspace_id, &[])
             } else {
-                bridge.service_start(&workspace_id, &[])
+                bridge.stack_start(&workspace_id, &[])
             }
             .map(|payload| {
                 payload
-                    .services
+                    .stack
+                    .nodes
                     .into_iter()
+                    .filter(|node| node.kind == "service")
                     .map(|service| ServiceEntry {
                         name: service.name,
-                        status: service.status,
+                        status: service.status.unwrap_or_else(|| "stopped".to_string()),
                         port: service.assigned_port,
                         preview_url: service.preview_url,
                     })

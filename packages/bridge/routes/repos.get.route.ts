@@ -16,15 +16,17 @@ export default createRoute({
       repositories: rows.map((repo) => ({
         id: repo.id,
         name: repo.name,
+        slug: repo.slug,
         source: "local" as const,
         path: repo.path,
         workspaces: repo.workspaces.map((ws) => ({
           id: ws.id,
           name: ws.name,
+          slug: ws.slug,
           host: ws.host,
           status: ws.status,
           ...(ws.source_ref ? { ref: ws.source_ref } : {}),
-          ...(ws.worktree_path ? { path: ws.worktree_path } : {}),
+          ...(ws.workspace_root ? { path: ws.workspace_root } : {}),
         })),
       })),
     };

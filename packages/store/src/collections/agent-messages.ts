@@ -10,7 +10,7 @@ export type AgentMessageCollectionRegistry = Map<string, SqlCollection<AgentMess
 
 interface MessagePartRow {
   id: string;
-  session_id: string;
+  agent_id: string;
   role: string;
   text: string;
   turn_id: string | null;
@@ -31,7 +31,7 @@ function rowsToAgentMessages(rows: MessagePartRow[]): AgentMessageWithParts[] {
     if (!msg) {
       msg = {
         id: row.id,
-        session_id: row.session_id,
+        agent_id: row.agent_id,
         role: row.role as AgentMessageWithParts["role"],
         text: row.text,
         turn_id: row.turn_id,
@@ -48,7 +48,7 @@ function rowsToAgentMessages(rows: MessagePartRow[]): AgentMessageWithParts[] {
     msg.parts.push({
       id: row.part_id,
       message_id: row.id,
-      session_id: row.session_id,
+      agent_id: row.agent_id,
       part_index: row.part_index ?? 0,
       part_type: row.part_type as AgentMessagePartRecord["part_type"],
       text: row.part_text,
@@ -60,14 +60,14 @@ function rowsToAgentMessages(rows: MessagePartRow[]): AgentMessageWithParts[] {
   return [...messagesMap.values()];
 }
 
-export async function selectAgentMessagesBySession(
+export async function selectAgentMessagesByAgent(
   driver: SqlDriver,
-  sessionId: string,
+  agentId: string,
 ): Promise<AgentMessageWithParts[]> {
   const rows = await driver.select<MessagePartRow>(
     `SELECT
        m.id,
-       m.session_id,
+       m.agent_id,
        m.role,
        m.text,
        m.turn_id,
@@ -80,9 +80,9 @@ export async function selectAgentMessagesBySession(
        p.created_at AS part_created_at
      FROM agent_message m
      LEFT JOIN agent_message_part p ON p.message_id = m.id
-     WHERE m.session_id = $1
+     WHERE m.agent_id = $1
      ORDER BY m.created_at ASC, m.id ASC, p.part_index ASC`,
-    [sessionId],
+    [agentId],
   );
 
   return rowsToAgentMessages(rows);
@@ -95,7 +95,7 @@ export async function selectAgentMessageById(
   const rows = await driver.select<MessagePartRow>(
     `SELECT
        m.id,
-       m.session_id,
+       m.agent_id,
        m.role,
        m.text,
        m.turn_id,
@@ -121,16 +121,16 @@ export async function upsertAgentMessage(
   message: AgentMessageRecord,
 ): Promise<void> {
   await driver.execute(
-    `INSERT INTO agent_message (id, session_id, role, text, turn_id, created_at)
+    `INSERT INTO agent_message (id, agent_id, role, text, turn_id, created_at)
      VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT(id) DO UPDATE SET
-       session_id = excluded.session_id,
+       agent_id = excluded.agent_id,
        role = excluded.role,
        text = excluded.text,
        turn_id = excluded.turn_id`,
     [
       message.id,
-      message.session_id,
+      message.agent_id,
       message.role,
       message.text,
       message.turn_id,
@@ -145,7 +145,7 @@ export async function upsertAgentMessageWithParts(
 ): Promise<void> {
   await upsertAgentMessage(driver, {
     id: message.id,
-    session_id: message.session_id,
+    agent_id: message.agent_id,
     role: message.role,
     text: message.text,
     turn_id: message.turn_id,
@@ -170,7 +170,7 @@ export async function upsertAgentMessageWithParts(
     params.push(
       part.id,
       part.message_id,
-      part.session_id,
+      part.agent_id,
       part.part_index,
       part.part_type,
       part.text,
@@ -181,7 +181,7 @@ export async function upsertAgentMessageWithParts(
 
   await driver.execute(
     `INSERT OR REPLACE INTO agent_message_part (
-       id, message_id, session_id, part_index, part_type, text, data, created_at
+       id, message_id, agent_id, part_index, part_type, text, data, created_at
      )
      VALUES ${placeholders.join(", ")}`,
     params,
@@ -195,17 +195,17 @@ export function createAgentMessageCollectionRegistry(): AgentMessageCollectionRe
 export function getOrCreateAgentMessageCollection(
   registry: AgentMessageCollectionRegistry,
   driver: SqlDriver,
-  sessionId: string,
+  agentId: string,
 ): SqlCollection<AgentMessageWithParts> {
-  let collection = registry.get(sessionId);
+  let collection = registry.get(agentId);
   if (!collection) {
     collection = createSqlCollection<AgentMessageWithParts>({
-      id: `agent-messages-${sessionId}`,
+      id: `agent-messages-${agentId}`,
       driver,
-      loadFn: (runtimeDriver) => selectAgentMessagesBySession(runtimeDriver, sessionId),
+      loadFn: (runtimeDriver) => selectAgentMessagesByAgent(runtimeDriver, agentId),
       getKey: (message) => message.id,
     });
-    registry.set(sessionId, collection);
+    registry.set(agentId, collection);
   }
 
   return collection;
@@ -214,8 +214,8 @@ export function getOrCreateAgentMessageCollection(
 export function upsertAgentMessageInCollection(
   registry: AgentMessageCollectionRegistry,
   driver: SqlDriver,
-  sessionId: string,
+  agentId: string,
   message: AgentMessageWithParts,
 ): void {
-  getOrCreateAgentMessageCollection(registry, driver, sessionId).utils.upsert(message);
+  getOrCreateAgentMessageCollection(registry, driver, agentId).utils.upsert(message);
 }

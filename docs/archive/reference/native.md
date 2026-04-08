@@ -69,10 +69,10 @@ Rules:
 - The `unsupported` platform module provides a clear stub path without shaping the macOS implementation.
 
 Key files:
-- `apps/desktop/src-tauri/src/platform/native_terminal/macos.rs` — macOS adapter
-- `apps/desktop/src-tauri/src/platform/native_terminal/mod.rs` — facade
-- `apps/desktop/src-tauri/src/platform/native_overlay/macos.rs` — macOS overlay adapter
-- `apps/desktop/src-tauri/src/platform/native_overlay/mod.rs` — overlay facade
+- `apps/desktop-legacy-do-not-touch/src-tauri/src/platform/native_terminal/macos.rs` — macOS adapter
+- `apps/desktop-legacy-do-not-touch/src-tauri/src/platform/native_terminal/mod.rs` — facade
+- `apps/desktop-legacy-do-not-touch/src-tauri/src/platform/native_overlay/macos.rs` — macOS overlay adapter
+- `apps/desktop-legacy-do-not-touch/src-tauri/src/platform/native_overlay/mod.rs` — overlay facade
 
 ## Compositor Layering
 
@@ -135,6 +135,6 @@ Rules:
 - If a crash survives selector-level containment, treat it as evidence of a non-Objective-C fault (native memory bug or invalid surface lifecycle).
 
 Key files:
-- `apps/desktop/src-tauri/native/lifecycle_native_terminal.m` — terminal bridge with exception boundaries
-- `apps/desktop/src-tauri/native/lifecycle_native_overlay.m` — overlay bridge
-- `apps/desktop/src-tauri/native/lifecycle_native_platform.m` — platform bootstrap
+- `apps/desktop-legacy-do-not-touch/src-tauri/native/lifecycle_native_terminal.m` — terminal bridge with exception boundaries
+- `apps/desktop-legacy-do-not-touch/src-tauri/native/lifecycle_native_overlay.m` — overlay bridge
+- `apps/desktop-legacy-do-not-touch/src-tauri/native/lifecycle_native_platform.m` — platform bootstrap

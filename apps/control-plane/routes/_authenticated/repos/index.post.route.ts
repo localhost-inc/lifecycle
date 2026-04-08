@@ -1,10 +1,12 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
-import { eq, and } from "drizzle-orm";
+import { eq, and, like, or } from "drizzle-orm";
 import type { Context } from "hono";
 import { repository, organizationMembership } from "../../../src/db/schema";
+import type { Db } from "../../../src/db";
 import { forbidden, badRequest } from "../../../src/errors";
 import { getRepoInstallation, appInstallUrl } from "../../../src/github";
+import { slugWithSuffix, toSlug } from "../../../src/slug";
 
 export default createRoute({
   schemas: {
@@ -52,6 +54,7 @@ export default createRoute({
       );
     }
 
+    const slug = await resolveRepositorySlug(db, body.organizationId, body.name);
     const id = crypto.randomUUID();
     await db.insert(repository).values({
       id,
@@ -61,6 +64,7 @@ export default createRoute({
       installationId: installation.installationId,
       owner: body.owner,
       name: body.name,
+      slug,
       defaultBranch: body.defaultBranch ?? "main",
       path: body.path,
       status: "connected",
@@ -73,9 +77,37 @@ export default createRoute({
       provider: "github",
       owner: body.owner,
       name: body.name,
+      slug,
       defaultBranch: body.defaultBranch ?? "main",
       path: body.path,
       status: "connected",
     };
   },
 });
+
+async function resolveRepositorySlug(
+  db: Db,
+  organizationId: string,
+  name: string,
+) {
+  const baseSlug = toSlug(name, "repository");
+  const rows = await db
+    .select({ slug: repository.slug })
+    .from(repository)
+    .where(
+      and(
+        eq(repository.organizationId, organizationId),
+        or(eq(repository.slug, baseSlug), like(repository.slug, `${baseSlug}-%`)),
+      ),
+    );
+  const existing = new Set(rows.map((row: { slug: string }) => row.slug));
+
+  let index = 1;
+  while (true) {
+    const candidate = slugWithSuffix(baseSlug, index);
+    if (!existing.has(candidate)) {
+      return candidate;
+    }
+    index += 1;
+  }
+}

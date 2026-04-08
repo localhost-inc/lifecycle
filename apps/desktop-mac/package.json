@@ -1,0 +1,12 @@
+{
+  "name": "@lifecycle/desktop-mac",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "./scripts/build.sh",
+    "dev": "./scripts/dev.sh --app-only",
+    "open": "./scripts/open.sh",
+    "smoke:dev-loop": "./scripts/dev-loop-smoke.sh",
+    "test": "swift test"
+  }
+}

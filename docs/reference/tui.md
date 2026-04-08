@@ -12,12 +12,13 @@ The TUI is a bridge client.
 
 Rules:
 
-1. The TUI asks the bridge to perform runtime reads and mutations.
+1. The TUI asks the bridge to perform runtime reads and mutations by workspace identity.
 2. The TUI does not shell out to fresh `lifecycle` subprocesses for core workspace operations when the bridge is available.
 3. The bridge is the source of runtime truth.
-4. If the pinned bridge endpoint dies or the bridge registration in `~/.lifecycle/bridge.json` changes, the TUI must rediscover the current bridge endpoint and retry bridge reads and mutations instead of staying pinned to a dead URL.
-5. When bridge-side runtime state changes, the bridge streams lifecycle events over WebSocket and the TUI updates UI state from those events.
-6. The TUI owns only presentation state such as selection, focus, layout, scrolling, and dialogs.
+4. The TUI does not resolve workspace host placement or pick host adapters on its own.
+5. If the pinned bridge endpoint dies or the bridge registration in `~/.lifecycle/bridge.json` changes, the TUI must rediscover the current bridge endpoint and retry bridge reads and mutations instead of staying pinned to a dead URL.
+6. When bridge-side runtime state changes, the bridge streams lifecycle events over WebSocket and the TUI updates UI state from those events.
+7. The TUI owns only presentation state such as selection, focus, layout, scrolling, and dialogs.
 
 ## Core model
 
@@ -39,8 +40,8 @@ Rules:
 2. `packages/cli/src/tui/launch.ts` ensures the Lifecycle bridge is available before the Rust process starts.
 3. The Lifecycle bridge endpoint is passed through `LIFECYCLE_BRIDGE_URL` and `LIFECYCLE_BRIDGE_TOKEN`.
 4. The client owns selected-workspace state and may restore it from local state or an initial hint such as `LIFECYCLE_INITIAL_WORKSPACE_ID`.
-5. The TUI must not resolve workspace host, shell attach policy, or tmux session naming on its own when the bridge is available.
-6. The bridge owns authoritative workspace facts and runtime operations for a selected workspace.
+5. The TUI must not resolve workspace host, bridge authority, shell attach policy, or tmux session naming on its own when the bridge is available.
+6. The bridge layer resolves the authoritative bridge for a selected workspace and only that bridge executes runtime work.
 7. Bridge requests use singular dotted method names such as `repo.list`, `workspace.get`, `workspace.activity`, `workspace.shell`, `service.list`, `service.start`, and `service.stop`.
 8. In repository development mode, the TUI and bridge must inherit the local control-plane URL from the process environment. Root `bun dev` sets `LIFECYCLE_API_URL=http://127.0.0.1:8787`, and the TUI should not silently fall back to the production API in that mode.
 
@@ -120,9 +121,10 @@ Rules:
 
 1. `lifecycle bridge start` starts the Lifecycle bridge for the current host context.
 2. The same bridge boundary is intended to run on local, remote, and cloud hosts.
-3. The bridge owns workspace-shell resolution, shared workspace reads, repository/workspace listing, workspace activity, git status, and stack/service runtime operations.
-4. The TUI should prefer the bridge for shared reads and mutations instead of shelling out to fresh `lifecycle` subprocesses.
-5. Clients stay thin; the bridge owns stateful coordination.
+3. Clients address workspace operations by workspace id; the bridge layer resolves the authoritative bridge when needed.
+4. The authoritative bridge owns workspace-shell resolution, shared workspace reads, repository/workspace listing, workspace activity, git status, and stack/service runtime operations.
+5. The TUI should prefer the bridge for shared reads and mutations instead of shelling out to fresh `lifecycle` subprocesses.
+6. Clients stay thin; the bridge owns stateful coordination.
 
 ## Input and layout
 

@@ -39,46 +39,46 @@ Switching tabs in the workspace center panel has visible latency. Static inspect
 The controller rebuilds several full-tree derived objects on the active render path, including normalized tabs, `tabsByKey`, visible tabs per pane, rendered active tab lookup, and full `panesById` models that include tab-bar and surface models for every visible tab.
 
 References:
-1. [workspace-canvas-controller.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/canvas/workspace-canvas-controller.tsx#L132)
-2. [workspace-canvas-controller.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/canvas/workspace-canvas-controller.tsx#L153)
-3. [workspace-canvas-controller.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/canvas/workspace-canvas-controller.tsx#L201)
+1. [workspace-canvas-controller.tsx](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/canvas/workspace-canvas-controller.tsx#L132)
+2. [workspace-canvas-controller.tsx](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/canvas/workspace-canvas-controller.tsx#L153)
+3. [workspace-canvas-controller.tsx](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/canvas/workspace-canvas-controller.tsx#L201)
 
 ### B. Tab-bar memo invalidation from unstable `leading`
 
 `createWorkspacePaneTabModels(...)` rebuilds each tab model on every pass, and `areWorkspacePaneTabModelsEqual(...)` compares `leading` by reference. Since tab presentation returns fresh React nodes, pane headers re-render even when the semantic tab state did not change.
 
 References:
-1. [workspace-canvas-controller.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/canvas/workspace-canvas-controller.tsx#L230)
-2. [workspace-pane-tree.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/canvas/panes/workspace-pane-tree.tsx#L470)
-3. [agent-surface-definition.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/surfaces/agent-surface-definition.tsx#L75)
+1. [workspace-canvas-controller.tsx](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/canvas/workspace-canvas-controller.tsx#L230)
+2. [workspace-pane-tree.tsx](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/canvas/panes/workspace-pane-tree.tsx#L470)
+3. [agent-surface-definition.tsx](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/surfaces/agent-surface-definition.tsx#L75)
 
 ### C. Active-tab switches re-render every mounted surface in the pane
 
 `WorkspacePaneContent` maps all `tabSurfaces` on every render and calls `renderWorkspacePaneActiveSurface(...)` for every mounted tab. Because hidden surfaces remain mounted and the concrete surface components are not isolated behind stable memo boundaries, same-pane tab switches can still re-render hidden agent, file, and preview surfaces.
 
 References:
-1. [workspace-pane-content.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/canvas/panes/workspace-pane-content.tsx#L27)
-2. [agent-surface-definition.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/surfaces/agent-surface-definition.tsx#L143)
-3. [file-editor-surface-definition.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/explorer/surfaces/file-editor-surface-definition.tsx#L36)
-4. [preview-surface-definition.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/surfaces/preview-surface-definition.tsx#L29)
+1. [workspace-pane-content.tsx](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/canvas/panes/workspace-pane-content.tsx#L27)
+2. [agent-surface-definition.tsx](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/surfaces/agent-surface-definition.tsx#L143)
+3. [file-editor-surface-definition.tsx](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/explorer/surfaces/file-editor-surface-definition.tsx#L36)
+4. [preview-surface-definition.tsx](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/surfaces/preview-surface-definition.tsx#L29)
 
 ### D. Drag path still performs full DOM geometry reads
 
 During tab drag, drop intent resolution reads pane, body, tab-bar, and tab rects from the DOM and stores drag state in React state on pointer movement. That path is separate from ordinary tab switching, but it still needs tuning because it shares the same tree and can easily regress perceived responsiveness.
 
 References:
-1. [workspace-pane-tree.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/canvas/panes/workspace-pane-tree.tsx#L736)
-2. [workspace-pane-tree.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/canvas/panes/workspace-pane-tree.tsx#L818)
-3. [workspace-pane-tab-bar.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/canvas/tabs/workspace-pane-tab-bar.tsx#L220)
+1. [workspace-pane-tree.tsx](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/canvas/panes/workspace-pane-tree.tsx#L736)
+2. [workspace-pane-tree.tsx](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/canvas/panes/workspace-pane-tree.tsx#L818)
+3. [workspace-pane-tab-bar.tsx](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/canvas/tabs/workspace-pane-tab-bar.tsx#L220)
 
 ### E. Repeated tree inspection and tab lookup work in reducer/helpers
 
 The pane layout helpers and reducer repeatedly traverse the recursive layout and tab ownership structures. This is not the primary cause of visible tab-switch latency, but it contributes avoidable work and should be tightened once the render path is under control.
 
 References:
-1. [workspace-pane-layout.ts](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/lib/workspace-pane-layout.ts#L136)
-2. [workspace-canvas-state.ts](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/state/workspace-canvas-state.ts#L196)
-3. [workspace-canvas-reducer.ts](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/canvas/workspace-canvas-reducer.ts#L299)
+1. [workspace-pane-layout.ts](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/lib/workspace-pane-layout.ts#L136)
+2. [workspace-canvas-state.ts](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/state/workspace-canvas-state.ts#L196)
+3. [workspace-canvas-reducer.ts](/Users/kyle/dev/lifecycle/apps/desktop-legacy-do-not-touch/src/features/workspaces/canvas/workspace-canvas-reducer.ts#L299)
 
 ## Performance Contract
 

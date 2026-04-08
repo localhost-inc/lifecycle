@@ -24,7 +24,7 @@ export const SERVICE_LOGS_OPERATION = "service.logs";
 export const CONTEXT_READ_OPERATION = "context.read";
 export const TAB_OPEN_OPERATION = "tab.open";
 
-export const AGENT_SESSION_INSPECT_OPERATION = "agent.session.inspect";
+export const AGENT_INSPECT_OPERATION = "agent.inspect";
 
 export const PLAN_LIST_OPERATION = "plan.list";
 export const PLAN_CREATE_OPERATION = "plan.create";

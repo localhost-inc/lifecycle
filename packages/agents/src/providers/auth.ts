@@ -1,4 +1,4 @@
-import type { AgentSessionProviderId } from "@lifecycle/contracts";
+import type { AgentProviderId } from "@lifecycle/contracts";
 
 export type AgentAuthStatus =
   | { state: "not_checked" }
@@ -10,7 +10,7 @@ export type AgentAuthStatus =
 
 export interface AgentAuthResult {
   kind: "auth.result";
-  provider: AgentSessionProviderId;
+  provider: AgentProviderId;
   state: AgentAuthStatus["state"];
   email?: string | null;
   organization?: string | null;
@@ -19,7 +19,7 @@ export interface AgentAuthResult {
 
 export interface AgentAuthStatusEvent {
   kind: "auth.status";
-  provider: AgentSessionProviderId;
+  provider: AgentProviderId;
   isAuthenticating: boolean;
   output: string[];
   error?: string;

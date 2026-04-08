@@ -12,9 +12,9 @@
       "types": "./src/collections/agent-messages.ts",
       "default": "./src/collections/agent-messages.ts"
     },
-    "./internal/agent-sessions": {
-      "types": "./src/collections/agent-sessions.ts",
-      "default": "./src/collections/agent-sessions.ts"
+    "./internal/agents": {
+      "types": "./src/collections/agents.ts",
+      "default": "./src/collections/agents.ts"
     }
   },
   "scripts": {

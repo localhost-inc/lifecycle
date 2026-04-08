@@ -1,5 +1,4 @@
-import type { AgentSessionProviderId } from "@lifecycle/contracts";
-import type { AgentInputPart } from "../turn";
+import type { AgentInputPart, AgentProviderId } from "@lifecycle/contracts";
 
 export interface AgentPromptPreview {
   attachmentSummary: string | null;
@@ -13,13 +12,13 @@ export interface AgentQueuedPrompt {
   preview: AgentPromptPreview;
 }
 
-export interface AgentPromptQueueSessionState {
+export interface AgentPromptQueueState {
   dispatchingPromptId: string | null;
   prompts: AgentQueuedPrompt[];
 }
 
 export interface AgentPromptQueueStore {
-  sessionsById: Record<string, AgentPromptQueueSessionState>;
+  agentsById: Record<string, AgentPromptQueueState>;
 }
 
 export interface AgentPromptDispatchDecision {
@@ -27,7 +26,7 @@ export interface AgentPromptDispatchDecision {
   type: "dispatch_turn" | "hold";
 }
 
-const DEFAULT_AGENT_PROMPT_QUEUE_SESSION_STATE: AgentPromptQueueSessionState = {
+const DEFAULT_AGENT_PROMPT_QUEUE_STATE: AgentPromptQueueState = {
   dispatchingPromptId: null,
   prompts: [],
 };
@@ -36,45 +35,45 @@ function pluralize(count: number, singular: string): string {
   return `${count} ${singular}${count === 1 ? "" : "s"}`;
 }
 
-function updateSessionPromptQueue(
+function updateAgentPromptQueue(
   state: AgentPromptQueueStore,
-  sessionId: string,
-  updater: (sessionState: AgentPromptQueueSessionState) => AgentPromptQueueSessionState,
+  agentId: string,
+  updater: (agentState: AgentPromptQueueState) => AgentPromptQueueState,
 ): AgentPromptQueueStore {
-  const current = selectAgentPromptQueueState(state, sessionId);
+  const current = selectAgentPromptQueueState(state, agentId);
   const next = updater(current);
   if (next === current) {
     return state;
   }
 
   if (next.dispatchingPromptId === null && next.prompts.length === 0) {
-    if (!(sessionId in state.sessionsById)) {
+    if (!(agentId in state.agentsById)) {
       return state;
     }
-    const sessionsById = { ...state.sessionsById };
-    delete sessionsById[sessionId];
-    return { sessionsById };
+    const agentsById = { ...state.agentsById };
+    delete agentsById[agentId];
+    return { agentsById };
   }
 
   return {
-    sessionsById: {
-      ...state.sessionsById,
-      [sessionId]: next,
+    agentsById: {
+      ...state.agentsById,
+      [agentId]: next,
     },
   };
 }
 
 export function createAgentPromptQueueStore(): AgentPromptQueueStore {
   return {
-    sessionsById: {},
+    agentsById: {},
   };
 }
 
 export function selectAgentPromptQueueState(
   state: AgentPromptQueueStore,
-  sessionId: string,
-): AgentPromptQueueSessionState {
-  return state.sessionsById[sessionId] ?? DEFAULT_AGENT_PROMPT_QUEUE_SESSION_STATE;
+  agentId: string,
+): AgentPromptQueueState {
+  return state.agentsById[agentId] ?? DEFAULT_AGENT_PROMPT_QUEUE_STATE;
 }
 
 export function buildAgentPromptPreview(input: AgentInputPart[]): AgentPromptPreview {
@@ -118,31 +117,31 @@ export function createAgentQueuedPrompt(input: {
 
 export function enqueueAgentPrompt(
   state: AgentPromptQueueStore,
-  input: { prompt: AgentQueuedPrompt; sessionId: string },
+  input: { prompt: AgentQueuedPrompt; agentId: string },
 ): AgentPromptQueueStore {
-  return updateSessionPromptQueue(state, input.sessionId, (sessionState) => ({
-    ...sessionState,
-    prompts: [...sessionState.prompts, input.prompt],
+  return updateAgentPromptQueue(state, input.agentId, (agentState) => ({
+    ...agentState,
+    prompts: [...agentState.prompts, input.prompt],
   }));
 }
 
 export function beginAgentPromptDispatch(
   state: AgentPromptQueueStore,
-  input: { promptId: string; sessionId: string },
+  input: { promptId: string; agentId: string },
 ): { prompt: AgentQueuedPrompt | null; state: AgentPromptQueueStore } {
-  const sessionState = selectAgentPromptQueueState(state, input.sessionId);
-  if (sessionState.dispatchingPromptId !== null) {
+  const agentState = selectAgentPromptQueueState(state, input.agentId);
+  if (agentState.dispatchingPromptId !== null) {
     return { prompt: null, state };
   }
 
-  const prompt = sessionState.prompts.find((entry) => entry.id === input.promptId) ?? null;
+  const prompt = agentState.prompts.find((entry) => entry.id === input.promptId) ?? null;
   if (!prompt) {
     return { prompt: null, state };
   }
 
   return {
     prompt,
-    state: updateSessionPromptQueue(state, input.sessionId, (current) => ({
+    state: updateAgentPromptQueue(state, input.agentId, (current) => ({
       ...current,
       dispatchingPromptId: input.promptId,
     })),
@@ -151,23 +150,23 @@ export function beginAgentPromptDispatch(
 
 export function completeAgentPromptDispatch(
   state: AgentPromptQueueStore,
-  input: { promptId: string; sessionId: string },
+  input: { promptId: string; agentId: string },
 ): AgentPromptQueueStore {
-  return updateSessionPromptQueue(state, input.sessionId, (sessionState) => ({
+  return updateAgentPromptQueue(state, input.agentId, (agentState) => ({
     dispatchingPromptId:
-      sessionState.dispatchingPromptId === input.promptId ? null : sessionState.dispatchingPromptId,
-    prompts: sessionState.prompts.filter((entry) => entry.id !== input.promptId),
+      agentState.dispatchingPromptId === input.promptId ? null : agentState.dispatchingPromptId,
+    prompts: agentState.prompts.filter((entry) => entry.id !== input.promptId),
   }));
 }
 
 export function failAgentPromptDispatch(
   state: AgentPromptQueueStore,
-  input: { error: string; promptId: string; sessionId: string },
+  input: { error: string; promptId: string; agentId: string },
 ): AgentPromptQueueStore {
-  return updateSessionPromptQueue(state, input.sessionId, (sessionState) => ({
+  return updateAgentPromptQueue(state, input.agentId, (agentState) => ({
     dispatchingPromptId:
-      sessionState.dispatchingPromptId === input.promptId ? null : sessionState.dispatchingPromptId,
-    prompts: sessionState.prompts.map((entry) =>
+      agentState.dispatchingPromptId === input.promptId ? null : agentState.dispatchingPromptId,
+    prompts: agentState.prompts.map((entry) =>
       entry.id === input.promptId ? { ...entry, error: input.error } : entry,
     ),
   }));
@@ -175,11 +174,11 @@ export function failAgentPromptDispatch(
 
 export function retryAgentPrompt(
   state: AgentPromptQueueStore,
-  input: { promptId: string; sessionId: string },
+  input: { promptId: string; agentId: string },
 ): AgentPromptQueueStore {
-  return updateSessionPromptQueue(state, input.sessionId, (sessionState) => ({
-    ...sessionState,
-    prompts: sessionState.prompts.map((entry) =>
+  return updateAgentPromptQueue(state, input.agentId, (agentState) => ({
+    ...agentState,
+    prompts: agentState.prompts.map((entry) =>
       entry.id === input.promptId ? { ...entry, error: null } : entry,
     ),
   }));
@@ -187,44 +186,44 @@ export function retryAgentPrompt(
 
 export function dismissAgentPrompt(
   state: AgentPromptQueueStore,
-  input: { promptId: string; sessionId: string },
+  input: { promptId: string; agentId: string },
 ): AgentPromptQueueStore {
-  return updateSessionPromptQueue(state, input.sessionId, (sessionState) => ({
+  return updateAgentPromptQueue(state, input.agentId, (agentState) => ({
     dispatchingPromptId:
-      sessionState.dispatchingPromptId === input.promptId ? null : sessionState.dispatchingPromptId,
-    prompts: sessionState.prompts.filter((entry) => entry.id !== input.promptId),
+      agentState.dispatchingPromptId === input.promptId ? null : agentState.dispatchingPromptId,
+    prompts: agentState.prompts.filter((entry) => entry.id !== input.promptId),
   }));
 }
 
 export function clearAgentPromptQueue(
   state: AgentPromptQueueStore,
-  sessionId: string,
+  agentId: string,
 ): AgentPromptQueueStore {
-  return updateSessionPromptQueue(state, sessionId, () => DEFAULT_AGENT_PROMPT_QUEUE_SESSION_STATE);
+  return updateAgentPromptQueue(state, agentId, () => DEFAULT_AGENT_PROMPT_QUEUE_STATE);
 }
 
 export function selectQueuedAgentPromptCount(
   state: AgentPromptQueueStore,
-  sessionId: string,
+  agentId: string,
 ): number {
-  const sessionState = selectAgentPromptQueueState(state, sessionId);
+  const agentState = selectAgentPromptQueueState(state, agentId);
   return Math.max(
     0,
-    sessionState.prompts.length - (sessionState.dispatchingPromptId !== null ? 1 : 0),
+    agentState.prompts.length - (agentState.dispatchingPromptId !== null ? 1 : 0),
   );
 }
 
 export function resolveAgentPromptDispatchDecision(input: {
   activeTurnId: string | null;
   hasPendingApprovals: boolean;
-  provider: AgentSessionProviderId;
+  provider: AgentProviderId;
 }): AgentPromptDispatchDecision {
   if (input.hasPendingApprovals) {
     return { reason: "awaiting_approval", type: "hold" };
   }
 
   if (input.activeTurnId) {
-    // Codex can eventually steer into an active turn, but the current worker
+    // Codex can eventually steer into an active turn, but the current
     // transport only gives us fire-and-forget commands. Keep the submission
     // queued locally until we have an acknowledged steer path.
     return {

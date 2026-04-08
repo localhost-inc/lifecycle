@@ -6,6 +6,6 @@ export default createRoute({
   schemas: { params: z.object({ workspaceId: z.string() }) },
   handler: async ({ params, ctx }) => {
     const ws = await requireWorkspaceAccess(ctx.get("db"), ctx.get("userId"), params.workspaceId);
-    return { ...ws, worktreePath: CLOUD_WORKTREE_PATH };
+    return { ...ws, workspaceRoot: CLOUD_WORKTREE_PATH };
   },
 });

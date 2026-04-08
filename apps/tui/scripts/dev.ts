@@ -20,8 +20,6 @@ const bridgeWatchTargets = [
   path.join(projectRoot, "packages", "bridge", "routes"),
   path.join(projectRoot, "packages", "bridge", "routed.gen.ts"),
   path.join(projectRoot, "packages", "cli", "src", "commands", "bridge"),
-  path.join(projectRoot, "packages", "cli", "src", "stack-registry.ts"),
-  path.join(projectRoot, "packages", "cli", "src", "workspace-registry.ts"),
   path.join(projectRoot, "packages", "workspace", "src"),
   path.join(projectRoot, "packages", "stack", "src"),
   path.join(projectRoot, "packages", "db", "src"),

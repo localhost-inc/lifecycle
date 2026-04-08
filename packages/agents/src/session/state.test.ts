@@ -1,39 +1,39 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentEvent } from "../events";
 import {
-  clearAgentSessionResponseReady,
+  clearAgentResponseReady,
   clearAgentWorkspaceResponseReady,
-  createAgentSessionStore,
-  reduceAgentSessionEvent,
-  selectAgentSessionState,
-  selectAgentSessionResponseReady,
-  selectAgentSessionRunning,
+  createAgentStore,
+  reduceAgentEvent,
+  selectAgentState,
+  selectAgentResponseReady,
+  selectAgentRunning,
   selectAgentWorkspaceStatus,
 } from "./state";
 
 function applyEvents(events: AgentEvent[]) {
-  return events.reduce(reduceAgentSessionEvent, createAgentSessionStore());
+  return events.reduce(reduceAgentEvent, createAgentStore());
 }
 
-describe("agent session store", () => {
+describe("agent store", () => {
   test("tracks session running and ready state across turn lifecycle events", () => {
     const state = applyEvents([
       {
         kind: "agent.turn.started",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-1",
         workspaceId: "workspace-1",
       },
       {
         kind: "agent.turn.completed",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-1",
         workspaceId: "workspace-1",
       },
     ]);
 
-    expect(selectAgentSessionRunning(state, "session-1")).toBeFalse();
-    expect(selectAgentSessionResponseReady(state, "session-1")).toBeTrue();
+    expect(selectAgentRunning(state, "session-1")).toBeFalse();
+    expect(selectAgentResponseReady(state, "session-1")).toBeTrue();
     expect(selectAgentWorkspaceStatus(state, "workspace-1")).toEqual({
       responseReady: true,
       running: false,
@@ -44,27 +44,27 @@ describe("agent session store", () => {
     const state = applyEvents([
       {
         kind: "agent.turn.started",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-1",
         workspaceId: "workspace-1",
       },
       {
         kind: "agent.turn.started",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-2",
         workspaceId: "workspace-1",
       },
       {
         kind: "agent.turn.completed",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-2",
         workspaceId: "workspace-1",
       },
     ]);
 
-    expect(selectAgentSessionState(state, "session-1").pendingTurnIds).toEqual([]);
-    expect(selectAgentSessionRunning(state, "session-1")).toBeFalse();
-    expect(selectAgentSessionResponseReady(state, "session-1")).toBeTrue();
+    expect(selectAgentState(state, "session-1").pendingTurnIds).toEqual([]);
+    expect(selectAgentRunning(state, "session-1")).toBeFalse();
+    expect(selectAgentResponseReady(state, "session-1")).toBeTrue();
   });
 
   test("tracks turn activity phase through thinking, tool_use, and responding", () => {
@@ -72,42 +72,42 @@ describe("agent session store", () => {
     let state = applyEvents([
       {
         kind: "agent.turn.started",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-1",
         workspaceId: "workspace-1",
       },
     ]);
-    expect(selectAgentSessionState(state, "session-1").turnActivity).toEqual({
+    expect(selectAgentState(state, "session-1").turnActivity).toEqual({
       phase: "thinking",
       toolName: null,
       toolCallCount: 0,
     });
 
     // Thinking delta keeps thinking phase
-    state = reduceAgentSessionEvent(state, {
+    state = reduceAgentEvent(state, {
       kind: "agent.message.part.delta",
-      sessionId: "session-1",
+      agentId: "session-1",
       workspaceId: "workspace-1",
       messageId: "turn-1:assistant",
       partId: "turn-1:assistant:thinking:0",
       part: { type: "thinking", text: "Let me analyze..." },
     });
-    expect(selectAgentSessionState(state, "session-1").turnActivity).toEqual({
+    expect(selectAgentState(state, "session-1").turnActivity).toEqual({
       phase: "thinking",
       toolName: null,
       toolCallCount: 0,
     });
 
     // Tool call → tool_use phase
-    state = reduceAgentSessionEvent(state, {
+    state = reduceAgentEvent(state, {
       kind: "agent.message.part.completed",
-      sessionId: "session-1",
+      agentId: "session-1",
       workspaceId: "workspace-1",
       messageId: "turn-1:assistant",
       partId: "turn-1:assistant:tool:1",
       part: { type: "tool_call", toolCallId: "tc-1", toolName: "Read", inputJson: "{}" },
     });
-    expect(selectAgentSessionState(state, "session-1").turnActivity).toEqual({
+    expect(selectAgentState(state, "session-1").turnActivity).toEqual({
       phase: "tool_use",
       toolCallId: "tc-1",
       toolName: "Read",
@@ -115,15 +115,15 @@ describe("agent session store", () => {
     });
 
     // Second tool call increments count
-    state = reduceAgentSessionEvent(state, {
+    state = reduceAgentEvent(state, {
       kind: "agent.message.part.completed",
-      sessionId: "session-1",
+      agentId: "session-1",
       workspaceId: "workspace-1",
       messageId: "turn-1:assistant",
       partId: "turn-1:assistant:tool:2",
       part: { type: "tool_call", toolCallId: "tc-2", toolName: "Grep", inputJson: "{}" },
     });
-    expect(selectAgentSessionState(state, "session-1").turnActivity).toEqual({
+    expect(selectAgentState(state, "session-1").turnActivity).toEqual({
       phase: "tool_use",
       toolCallId: "tc-2",
       toolName: "Grep",
@@ -131,92 +131,92 @@ describe("agent session store", () => {
     });
 
     // Text delta → responding phase
-    state = reduceAgentSessionEvent(state, {
+    state = reduceAgentEvent(state, {
       kind: "agent.message.part.delta",
-      sessionId: "session-1",
+      agentId: "session-1",
       workspaceId: "workspace-1",
       messageId: "turn-1:assistant",
       partId: "turn-1:assistant:text:0",
       part: { type: "text", text: "Here is what I found..." },
     });
-    expect(selectAgentSessionState(state, "session-1").turnActivity).toEqual({
+    expect(selectAgentState(state, "session-1").turnActivity).toEqual({
       phase: "responding",
       toolName: null,
       toolCallCount: 2,
     });
 
     // Turn completes → activity cleared
-    state = reduceAgentSessionEvent(state, {
+    state = reduceAgentEvent(state, {
       kind: "agent.turn.completed",
-      sessionId: "session-1",
+      agentId: "session-1",
       turnId: "turn-1",
       workspaceId: "workspace-1",
     });
-    expect(selectAgentSessionState(state, "session-1").turnActivity).toBeNull();
+    expect(selectAgentState(state, "session-1").turnActivity).toBeNull();
   });
 
   test("clears turn activity on turn failure", () => {
     const state = applyEvents([
       {
         kind: "agent.turn.started",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-1",
         workspaceId: "workspace-1",
       },
       {
         kind: "agent.turn.failed",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-1",
         workspaceId: "workspace-1",
         error: "interrupted",
       },
     ]);
-    expect(selectAgentSessionState(state, "session-1").turnActivity).toBeNull();
+    expect(selectAgentState(state, "session-1").turnActivity).toBeNull();
   });
 
   test("counts repeated same-named tool calls by toolCallId", () => {
     let state = applyEvents([
       {
         kind: "agent.turn.started",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-1",
         workspaceId: "workspace-1",
       },
     ]);
 
-    state = reduceAgentSessionEvent(state, {
+    state = reduceAgentEvent(state, {
       kind: "agent.message.part.completed",
-      sessionId: "session-1",
+      agentId: "session-1",
       workspaceId: "workspace-1",
       messageId: "turn-1:assistant",
       partId: "turn-1:assistant:tool:read-1",
       part: { type: "tool_call", toolCallId: "read-1", toolName: "Read", inputJson: "{}" },
     });
-    expect(selectAgentSessionState(state, "session-1").turnActivity).toEqual({
+    expect(selectAgentState(state, "session-1").turnActivity).toEqual({
       phase: "tool_use",
       toolCallId: "read-1",
       toolName: "Read",
       toolCallCount: 1,
     });
 
-    state = reduceAgentSessionEvent(state, {
+    state = reduceAgentEvent(state, {
       kind: "agent.message.part.completed",
-      sessionId: "session-1",
+      agentId: "session-1",
       workspaceId: "workspace-1",
       messageId: "turn-1:assistant",
       partId: "turn-1:assistant:tool:read-2",
       part: { type: "tool_call", toolCallId: "read-2", toolName: "Read", inputJson: "{}" },
     });
-    expect(selectAgentSessionState(state, "session-1").turnActivity).toEqual({
+    expect(selectAgentState(state, "session-1").turnActivity).toEqual({
       phase: "tool_use",
       toolCallId: "read-2",
       toolName: "Read",
       toolCallCount: 2,
     });
 
-    state = reduceAgentSessionEvent(state, {
+    state = reduceAgentEvent(state, {
       kind: "agent.message.part.completed",
-      sessionId: "session-1",
+      agentId: "session-1",
       workspaceId: "workspace-1",
       messageId: "turn-1:assistant",
       partId: "turn-1:assistant:tool:read-2",
@@ -228,7 +228,7 @@ describe("agent session store", () => {
         status: "completed",
       },
     });
-    expect(selectAgentSessionState(state, "session-1").turnActivity).toEqual({
+    expect(selectAgentState(state, "session-1").turnActivity).toEqual({
       phase: "tool_use",
       toolCallId: "read-2",
       toolName: "Read",
@@ -240,7 +240,7 @@ describe("agent session store", () => {
     const state = applyEvents([
       {
         kind: "agent.turn.started",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-1",
         workspaceId: "workspace-1",
       },
@@ -250,23 +250,23 @@ describe("agent session store", () => {
           kind: "shell",
           message: "Run command?",
           scopeKey: "command:1",
-          sessionId: "session-1",
+          agentId: "session-1",
           status: "pending",
         },
         kind: "agent.approval.requested",
-        sessionId: "session-1",
+        agentId: "session-1",
         workspaceId: "workspace-1",
       },
       {
         error: "failed",
         kind: "agent.turn.failed",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-1",
         workspaceId: "workspace-1",
       },
     ]);
 
-    expect(selectAgentSessionState(state, "session-1")).toMatchObject({
+    expect(selectAgentState(state, "session-1")).toMatchObject({
       lastError: "failed",
       pendingApprovals: [],
       responseReady: false,
@@ -279,13 +279,13 @@ describe("agent session store", () => {
       {
         detail: "Codex login failed.",
         kind: "agent.status.updated",
-        sessionId: "session-1",
+        agentId: "session-1",
         status: "startup failed",
         workspaceId: "workspace-1",
       },
     ]);
 
-    expect(selectAgentSessionState(state, "session-1")).toMatchObject({
+    expect(selectAgentState(state, "session-1")).toMatchObject({
       providerStatus: "Codex login failed.",
       workspaceId: "workspace-1",
     });
@@ -294,22 +294,22 @@ describe("agent session store", () => {
   test("clears provider status when an empty update is emitted", () => {
     const state = applyEvents([
       {
-        detail: "Reconnecting to agent runtime...",
+        detail: "Reconnecting to agent...",
         kind: "agent.status.updated",
-        sessionId: "session-1",
+        agentId: "session-1",
         status: "reconnecting",
         workspaceId: "workspace-1",
       },
       {
         detail: null,
         kind: "agent.status.updated",
-        sessionId: "session-1",
+        agentId: "session-1",
         status: "",
         workspaceId: "workspace-1",
       },
     ]);
 
-    expect(selectAgentSessionState(state, "session-1")).toMatchObject({
+    expect(selectAgentState(state, "session-1")).toMatchObject({
       providerStatus: null,
       workspaceId: "workspace-1",
     });
@@ -319,13 +319,13 @@ describe("agent session store", () => {
     const state = applyEvents([
       {
         kind: "agent.turn.started",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-1",
         workspaceId: "workspace-1",
       },
       {
         kind: "agent.turn.completed",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-1",
         workspaceId: "workspace-1",
         usage: { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 500 },
@@ -333,13 +333,13 @@ describe("agent session store", () => {
       },
       {
         kind: "agent.turn.started",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-2",
         workspaceId: "workspace-1",
       },
       {
         kind: "agent.turn.completed",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-2",
         workspaceId: "workspace-1",
         usage: { inputTokens: 2000, outputTokens: 400 },
@@ -347,8 +347,8 @@ describe("agent session store", () => {
       },
     ]);
 
-    const sessionState = selectAgentSessionState(state, "session-1");
-    expect(sessionState.usage).toEqual({
+    const agentState = selectAgentState(state, "session-1");
+    expect(agentState.usage).toEqual({
       inputTokens: 3000,
       outputTokens: 600,
       cacheReadTokens: 500,
@@ -360,7 +360,7 @@ describe("agent session store", () => {
     const state = applyEvents([
       {
         kind: "agent.turn.completed",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-1",
         workspaceId: "workspace-1",
         usage: { inputTokens: 1000, outputTokens: 200 },
@@ -368,14 +368,14 @@ describe("agent session store", () => {
       },
       {
         kind: "agent.turn.completed",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-2",
         workspaceId: "workspace-1",
       },
     ]);
 
-    const sessionState = selectAgentSessionState(state, "session-1");
-    expect(sessionState.usage).toEqual({
+    const agentState = selectAgentState(state, "session-1");
+    expect(agentState.usage).toEqual({
       inputTokens: 1000,
       outputTokens: 200,
       cacheReadTokens: 0,
@@ -387,19 +387,19 @@ describe("agent session store", () => {
     const baseState = applyEvents([
       {
         kind: "agent.turn.completed",
-        sessionId: "session-1",
+        agentId: "session-1",
         turnId: "turn-1",
         workspaceId: "workspace-1",
       },
       {
         kind: "agent.turn.started",
-        sessionId: "session-2",
+        agentId: "session-2",
         turnId: "turn-2",
         workspaceId: "workspace-1",
       },
       {
         kind: "agent.turn.completed",
-        sessionId: "session-3",
+        agentId: "session-3",
         turnId: "turn-3",
         workspaceId: "workspace-2",
       },
@@ -410,9 +410,9 @@ describe("agent session store", () => {
       running: true,
     });
 
-    const clearedSessionState = clearAgentSessionResponseReady(baseState, "session-1");
-    expect(selectAgentSessionResponseReady(clearedSessionState, "session-1")).toBeFalse();
-    expect(selectAgentWorkspaceStatus(clearedSessionState, "workspace-1")).toEqual({
+    const clearedAgentState = clearAgentResponseReady(baseState, "session-1");
+    expect(selectAgentResponseReady(clearedAgentState, "session-1")).toBeFalse();
+    expect(selectAgentWorkspaceStatus(clearedAgentState, "workspace-1")).toEqual({
       responseReady: false,
       running: true,
     });

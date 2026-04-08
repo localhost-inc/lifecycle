@@ -15,12 +15,36 @@ const DB_MIGRATIONS: DbMigration[] = [
     description: "init",
     fileName: "0001_init.sql",
   },
+  {
+    version: 2,
+    description: "rename worktree_path to workspace_root",
+    fileName: "0002_rename_worktree_path.sql",
+  },
+  {
+    version: 3,
+    description: "add repository and workspace slug columns",
+    fileName: "0003_add_slugs.sql",
+  },
+  {
+    version: 4,
+    description: "rename legacy agent schema to agent",
+    fileName: "0004_rename_agent_session.sql",
+  },
+  {
+    version: 5,
+    description: "drop legacy service table",
+    fileName: "0005_drop_service.sql",
+  },
 ];
 
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
 interface MigrationRow {
   version: number;
+}
+
+interface SqliteObjectRow {
+  name: string;
 }
 
 export function getDbMigrations(): DbMigration[] {
@@ -54,6 +78,16 @@ async function selectAppliedVersions(driver: SqlDriver): Promise<Set<number>> {
   return new Set(rows.map((row) => row.version));
 }
 
+async function tableExists(driver: SqlDriver, tableName: string): Promise<boolean> {
+  const rows = await driver.select<SqliteObjectRow>(
+    `SELECT name
+       FROM sqlite_master
+      WHERE type = 'table' AND name = $1`,
+    [tableName],
+  );
+  return rows.length > 0;
+}
+
 export async function applyDbMigrations(driver: SqlDriver): Promise<void> {
   await ensureMigrationTable(driver);
   const appliedVersions = await selectAppliedVersions(driver);
@@ -61,6 +95,26 @@ export async function applyDbMigrations(driver: SqlDriver): Promise<void> {
   for (const migration of DB_MIGRATIONS) {
     if (appliedVersions.has(migration.version)) {
       continue;
+    }
+
+    if (migration.version === 4) {
+      const hasLegacyAgentTable = await tableExists(driver, "agent_session");
+      if (!hasLegacyAgentTable) {
+        const hasAgentTable = await tableExists(driver, "agent");
+        if (!hasAgentTable) {
+          throw new Error(
+            "Database is missing both legacy agent_session and current agent tables.",
+          );
+        }
+
+        await driver.execute(
+          `INSERT INTO lifecycle_migration (version, description)
+            VALUES ($1, $2)`,
+          [migration.version, migration.description],
+        );
+        appliedVersions.add(migration.version);
+        continue;
+      }
     }
 
     const sql = await readDbMigrationSql(migration.fileName);

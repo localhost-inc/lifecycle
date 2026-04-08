@@ -1,5 +1,18 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "LIFECYCLE_API_HOST",
+    "LIFECYCLE_API_PORT",
+    "LIFECYCLE_API_URL",
+    "LIFECYCLE_BRIDGE_PORT",
+    "LIFECYCLE_BRIDGE_REGISTRATION",
+    "LIFECYCLE_BRIDGE_URL",
+    "LIFECYCLE_DEV",
+    "LIFECYCLE_GIT_SHA",
+    "LIFECYCLE_REPO_ROOT",
+    "LIFECYCLE_ROOT",
+    "LIFECYCLE_RUNTIME_ROOT"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

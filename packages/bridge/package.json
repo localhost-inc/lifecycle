@@ -8,6 +8,10 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./runtime-paths": {
+      "types": "./src/runtime-paths.ts",
+      "default": "./src/runtime-paths.ts"
+    },
     "./server": {
       "types": "./src/server.ts",
       "default": "./src/server.ts"
@@ -16,12 +20,15 @@
   "scripts": {
     "generate": "bun run node_modules/routedjs/src/cli/index.ts generate",
     "build": "tsc -b tsconfig.json",
+    "dev": "./scripts/dev.sh",
     "format": "oxfmt src",
     "lint": "oxlint src",
+    "start": "bun run src/app.ts",
     "test": "bun test src --pass-with-no-tests",
     "typecheck": "tsc -b tsconfig.json"
   },
   "dependencies": {
+    "@lifecycle/agents": "workspace:*",
     "@lifecycle/contracts": "workspace:*",
     "@lifecycle/control-plane": "workspace:*",
     "@lifecycle/db": "workspace:*",
@@ -29,7 +36,7 @@
     "@lifecycle/workspace": "workspace:*",
     "@standard-schema/spec": "^1.1.0",
     "hono": "^4.7.10",
-    "routedjs": "0.1.4",
+    "routedjs": "0.1.5",
     "zod": "^4.3.6"
   }
 }

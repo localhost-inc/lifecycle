@@ -89,7 +89,8 @@ export class ProcessSupervisor {
   }
 
   killAll(): void {
-    for (const id of [...this.processes.keys()]) {
+    const ids = Array.from(this.processes.keys());
+    for (const id of ids) {
       this.kill(id);
     }
   }

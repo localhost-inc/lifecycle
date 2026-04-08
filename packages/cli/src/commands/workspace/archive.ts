@@ -31,13 +31,13 @@ export default defineCommand({
       const { repositories } = await res.json();
       const repo = repositories.find((r) => r.path === repoPath);
       const ws = repo?.workspaces?.find((w) => w.name === name);
-      const worktreePath = ws?.path;
+      const workspaceRoot = ws?.path;
 
       // Check for uncommitted changes
-      if (!input.force && worktreePath) {
+      if (!input.force && workspaceRoot) {
         try {
           const out = execSync("git status --porcelain", {
-            cwd: worktreePath,
+            cwd: workspaceRoot,
             encoding: "utf8",
             stdio: ["pipe", "pipe", "pipe"],
           });
@@ -45,7 +45,7 @@ export default defineCommand({
             if (input.json) {
               context.stdout(
                 JSON.stringify(
-                  { archived: false, reason: "uncommitted_changes", name, worktreePath },
+                  { archived: false, reason: "uncommitted_changes", name, workspaceRoot },
                   null,
                   2,
                 ),
@@ -63,8 +63,8 @@ export default defineCommand({
       }
 
       // Remove git worktree
-      if (worktreePath) {
-        removeWorktree(repoPath, worktreePath);
+      if (workspaceRoot) {
+        removeWorktree(repoPath, workspaceRoot);
       }
 
       // Archive via bridge
@@ -77,7 +77,7 @@ export default defineCommand({
       if (input.json) {
         context.stdout(
           JSON.stringify(
-            { archived: true, name, repoPath, worktreePath: worktreePath ?? null },
+            { archived: true, name, repoPath, workspaceRoot: workspaceRoot ?? null },
             null,
             2,
           ),

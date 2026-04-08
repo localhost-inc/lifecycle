@@ -3,14 +3,14 @@
 import PackageDescription
 
 let package = Package(
-  name: "LifecycleDesktopMac",
+  name: "LifecycleMac",
   platforms: [
     .macOS(.v13),
   ],
   products: [
     .executable(
-      name: "lifecycle-desktop-mac",
-      targets: ["LifecycleDesktopMac"]
+      name: "lifecycle-macos",
+      targets: ["LifecycleApp"]
     ),
   ],
   targets: [
@@ -41,18 +41,28 @@ let package = Package(
         .linkedFramework("UniformTypeIdentifiers"),
       ]
     ),
+    .target(
+      name: "LifecyclePresentation",
+      path: "Sources/LifecyclePresentation"
+    ),
     .executableTarget(
-      name: "LifecycleDesktopMac",
-      dependencies: ["LifecycleGhosttyHost"],
-      path: "Sources/LifecycleDesktopMac",
+      name: "LifecycleApp",
+      dependencies: [
+        "LifecycleGhosttyHost",
+        "LifecyclePresentation",
+      ],
+      path: "Sources/LifecycleApp",
       resources: [
         .process("Resources"),
       ]
     ),
     .testTarget(
-      name: "LifecycleDesktopMacTests",
-      dependencies: ["LifecycleDesktopMac"],
-      path: "Tests/LifecycleDesktopMacTests"
+      name: "LifecycleAppTests",
+      dependencies: [
+        "LifecycleApp",
+        "LifecyclePresentation",
+      ],
+      path: "Tests/LifecycleAppTests"
     ),
   ]
 )

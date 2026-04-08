@@ -8,10 +8,11 @@ describe("createStartStackInput", () => {
       id: "workspace_1",
       repository_id: "project_1",
       name: "frost-beacon",
+      slug: "frost-beacon",
       checkout_type: "worktree",
       source_ref: "lifecycle/frost-beacon",
       git_sha: "abc123",
-      worktree_path: "/tmp/frost-beacon",
+      workspace_root: "/tmp/frost-beacon",
       host: "local",
       manifest_fingerprint: "manifest_1",
       created_at: "2026-03-10T10:00:00.000Z",
@@ -50,6 +51,7 @@ describe("createStartStackInput", () => {
     expect(
       createStartStackInput({
         hostLabel: "frost-beacon",
+        repositorySlug: "hello-world",
         serviceNames: ["api"],
         services,
         workspace,
@@ -57,6 +59,10 @@ describe("createStartStackInput", () => {
     ).toEqual({
       stackId: workspace.id,
       hostLabel: "frost-beacon",
+      logScope: {
+        repositorySlug: "hello-world",
+        workspaceSlug: "frost-beacon",
+      },
       name: workspace.name,
       prepared: true,
       readyServiceNames: ["web"],
@@ -67,18 +73,19 @@ describe("createStartStackInput", () => {
     });
   });
 
-  test("fails loudly when the workspace has no worktree path", () => {
+  test("fails loudly when the workspace has no workspace root", () => {
     const workspace = {
       id: "workspace_1",
-      worktree_path: null,
+      workspace_root: null,
     } as WorkspaceRecord;
 
     expect(() =>
       createStartStackInput({
         hostLabel: "frost-beacon",
+        repositorySlug: "hello-world",
         services: [],
         workspace,
       }),
-    ).toThrow('Workspace "workspace_1" has no worktree path.');
+    ).toThrow('Workspace "workspace_1" has no workspace root.');
   });
 });

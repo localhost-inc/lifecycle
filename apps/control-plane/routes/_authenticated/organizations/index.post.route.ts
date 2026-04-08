@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { organization, organizationMembership } from "../../../src/db/schema";
 import { badRequest } from "../../../src/errors";
+import { toSlug } from "../../../src/slug";
 
 export default createRoute({
   schemas: {
@@ -13,10 +14,7 @@ export default createRoute({
     const c = ctx.raw as Context;
     const db = ctx.get("db");
     const userId = ctx.get("userId");
-    const slug = body.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
+    const slug = toSlug(body.name, "organization");
 
     const existing = await db
       .select()

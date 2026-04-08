@@ -8,6 +8,7 @@ export type {
   ResolveWorkspaceShellInput,
   ResolveWorkspaceTerminalRuntimeInput,
   RenameWorkspaceInput,
+  StopWorkspaceStackInput,
   WorkspaceClient,
   WorkspaceArchiveDisposition,
   WorkspaceShellLaunchSpec,

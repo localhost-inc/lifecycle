@@ -1,4 +1,4 @@
-import { eq, and, or } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { workspace, organizationMembership } from "../../../src/db/schema";
 import { notFound, forbidden, badRequest } from "../../../src/errors";
 import { createDaytona } from "../../../src/daytona";
@@ -11,20 +11,20 @@ import type { Db } from "../../../src/db";
 
 export { CLOUD_HOME_PATH, CLOUD_WORKTREE_PATH };
 
-export function toSlug(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
 export async function requireWorkspaceAccess(db: Db, userId: string, idOrSlug: string) {
-  const rows = await db
-    .select()
-    .from(workspace)
-    .where(or(eq(workspace.id, idOrSlug), eq(workspace.slug, idOrSlug)))
-    .limit(1);
-  const ws = rows[0];
+  const exactRows = await db.select().from(workspace).where(eq(workspace.id, idOrSlug)).limit(1);
+  let ws = exactRows[0];
+  if (!ws) {
+    const slugRows = await db.select().from(workspace).where(eq(workspace.slug, idOrSlug)).limit(2);
+    if (slugRows.length > 1) {
+      throw badRequest(
+        "workspace_slug_ambiguous",
+        `Workspace slug "${idOrSlug}" is ambiguous.`,
+        "Use the workspace id until hierarchical org/repo/workspace slug routing lands.",
+      );
+    }
+    ws = slugRows[0];
+  }
   if (!ws) throw notFound("workspace_not_found", `Workspace "${idOrSlug}" not found.`);
 
   const memberships = await db
@@ -93,7 +93,7 @@ export async function executeWorkspaceCommand(
 
 export async function resolveWorkspaceHeadBranch(
   env: { DAYTONA_API_KEY: string },
-  ws: { sandboxId: string | null; status: string; worktreePath: string | null },
+  ws: { sandboxId: string | null; status: string; workspaceRoot: string | null },
 ) {
   const sandbox = await requireActiveWorkspaceSandbox(env, ws);
   const result = await executeWorkspaceCommand(sandbox, {

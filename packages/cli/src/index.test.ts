@@ -368,23 +368,30 @@ describe("lifecycle cli", () => {
       async (request) => {
         expect(request).toMatchObject({
           method: "GET",
-          pathname: "/workspaces/ws_123/services",
+          pathname: "/workspaces/ws_123/stack",
         });
 
         return {
-          services: [
-            {
-              assigned_port: 3000,
-              created_at: "2026-03-21T00:00:00.000Z",
-              id: "svc_123",
-              name: "api",
-              preview_url: "http://control-plane.lifecycle.localhost",
-              status: "ready",
-              status_reason: null,
-              updated_at: "2026-03-21T00:00:00.000Z",
-              workspace_id: "ws_123",
-            },
-          ],
+          stack: {
+            errors: [],
+            nodes: [
+              {
+                assigned_port: 3000,
+                created_at: "2026-03-21T00:00:00.000Z",
+                depends_on: [],
+                kind: "service",
+                name: "api",
+                preview_url: "http://control-plane.lifecycle.localhost",
+                runtime: "process",
+                status: "ready",
+                status_reason: null,
+                updated_at: "2026-03-21T00:00:00.000Z",
+                workspace_id: "ws_123",
+              },
+            ],
+            state: "ready",
+            workspace_id: "ws_123",
+          },
         };
       },
       async () => {
@@ -414,34 +421,43 @@ describe("lifecycle cli", () => {
       async (request) => {
         expect(request).toMatchObject({
           method: "GET",
-          pathname: "/workspaces/ws_123/services",
+          pathname: "/workspaces/ws_123/stack",
         });
 
         return {
-          services: [
-            {
-              assigned_port: 3000,
-              created_at: "2026-03-21T00:00:00.000Z",
-              id: "svc_123",
-              name: "api",
-              preview_url: "http://control-plane.lifecycle.localhost",
-              status: "ready",
-              status_reason: null,
-              updated_at: "2026-03-21T00:00:00.000Z",
-              workspace_id: "ws_123",
-            },
-            {
-              assigned_port: 6379,
-              created_at: "2026-03-21T00:00:00.000Z",
-              id: "svc_456",
-              name: "redis",
-              preview_url: null,
-              status: "starting",
-              status_reason: null,
-              updated_at: "2026-03-21T00:00:00.000Z",
-              workspace_id: "ws_123",
-            },
-          ],
+          stack: {
+            errors: [],
+            nodes: [
+              {
+                assigned_port: 3000,
+                created_at: "2026-03-21T00:00:00.000Z",
+                depends_on: [],
+                kind: "service",
+                name: "api",
+                preview_url: "http://control-plane.lifecycle.localhost",
+                runtime: "process",
+                status: "ready",
+                status_reason: null,
+                updated_at: "2026-03-21T00:00:00.000Z",
+                workspace_id: "ws_123",
+              },
+              {
+                assigned_port: 6379,
+                created_at: "2026-03-21T00:00:00.000Z",
+                depends_on: [],
+                kind: "service",
+                name: "redis",
+                preview_url: null,
+                runtime: "image",
+                status: "starting",
+                status_reason: null,
+                updated_at: "2026-03-21T00:00:00.000Z",
+                workspace_id: "ws_123",
+              },
+            ],
+            state: "ready",
+            workspace_id: "ws_123",
+          },
         };
       },
       async () => {
@@ -477,19 +493,26 @@ describe("lifecycle cli", () => {
       async (request) => {
         receivedRequest = request;
         return {
-          services: [
-            {
-              assigned_port: 3000,
-              created_at: "2026-03-21T00:00:00.000Z",
-              id: "svc_123",
-              name: "api",
-              preview_url: "http://control-plane.lifecycle.localhost",
-              status: "ready",
-              status_reason: null,
-              updated_at: "2026-03-21T00:00:00.000Z",
-              workspace_id: "ws_123",
-            },
-          ],
+          stack: {
+            errors: [],
+            nodes: [
+              {
+                assigned_port: 3000,
+                created_at: "2026-03-21T00:00:00.000Z",
+                depends_on: [],
+                kind: "service",
+                name: "api",
+                preview_url: "http://control-plane.lifecycle.localhost",
+                runtime: "process",
+                status: "ready",
+                status_reason: null,
+                updated_at: "2026-03-21T00:00:00.000Z",
+                workspace_id: "ws_123",
+              },
+            ],
+            state: "ready",
+            workspace_id: "ws_123",
+          },
           startedServices: ["api"],
           workspaceId: "ws_123",
         };
@@ -508,7 +531,7 @@ describe("lifecycle cli", () => {
 
     expect(receivedRequest).toMatchObject({
       method: "POST",
-      pathname: "/workspaces/ws_123/services/start",
+      pathname: "/workspaces/ws_123/stack/start",
       body: {
         serviceNames: ["api"],
       },
@@ -519,6 +542,275 @@ describe("lifecycle cli", () => {
       "status: ready",
       "port: 3000",
       "preview: http://control-plane.lifecycle.localhost",
+    ]);
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("starts stack services through the bridge", async () => {
+    const sink = createIo();
+    let receivedRequest: unknown = null;
+
+    await withHttpBridge(
+      async (request) => {
+        receivedRequest = request;
+        return {
+          stack: {
+            errors: [],
+            nodes: [
+              {
+                assigned_port: 3000,
+                created_at: "2026-03-21T00:00:00.000Z",
+                depends_on: [],
+                kind: "service",
+                name: "api",
+                preview_url: "http://control-plane.lifecycle.localhost",
+                runtime: "process",
+                status: "ready",
+                status_reason: null,
+                updated_at: "2026-03-21T00:00:00.000Z",
+                workspace_id: "ws_123",
+              },
+            ],
+            state: "ready",
+            workspace_id: "ws_123",
+          },
+          startedServices: ["api"],
+          workspaceId: "ws_123",
+        };
+      },
+      async () => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () => await main(["stack", "run", "api"], sink.io),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(receivedRequest).toMatchObject({
+      method: "POST",
+      pathname: "/workspaces/ws_123/stack/start",
+      body: {
+        serviceNames: ["api"],
+      },
+    });
+    expect(sink.stdout).toEqual([
+      "Started services: api",
+      "api",
+      "status: ready",
+      "port: 3000",
+      "preview: http://control-plane.lifecycle.localhost",
+    ]);
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("prints stack status through the bridge", async () => {
+    const sink = createIo();
+
+    await withHttpBridge(
+      async (request) => {
+        expect(request).toMatchObject({
+          method: "GET",
+          pathname: "/workspaces/ws_123/stack",
+        });
+
+        return {
+          stack: {
+            errors: [],
+            nodes: [
+              {
+                assigned_port: 3000,
+                created_at: "2026-03-21T00:00:00.000Z",
+                depends_on: [],
+                kind: "service",
+                name: "api",
+                preview_url: "http://control-plane.lifecycle.localhost",
+                runtime: "process",
+                status: "ready",
+                status_reason: null,
+                updated_at: "2026-03-21T00:00:00.000Z",
+                workspace_id: "ws_123",
+              },
+              {
+                assigned_port: null,
+                created_at: "2026-03-21T00:00:00.000Z",
+                depends_on: [],
+                kind: "service",
+                name: "redis",
+                preview_url: null,
+                runtime: "image",
+                status: "stopped",
+                status_reason: null,
+                updated_at: "2026-03-21T00:00:00.000Z",
+                workspace_id: "ws_123",
+              },
+            ],
+            state: "ready",
+            workspace_id: "ws_123",
+          },
+        };
+      },
+      async () => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () => await main(["stack", "status"], sink.io),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(sink.stdout).toEqual(["● api              ready  :3000", "○ redis            stopped"]);
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("stops stack services through the bridge", async () => {
+    const sink = createIo();
+    let receivedRequest: unknown = null;
+
+    await withHttpBridge(
+      async (request) => {
+        receivedRequest = request;
+        return {
+          stack: {
+            errors: [],
+            nodes: [
+              {
+                assigned_port: null,
+                created_at: "2026-03-21T00:00:00.000Z",
+                depends_on: [],
+                kind: "service",
+                name: "api",
+                preview_url: null,
+                runtime: "process",
+                status: "stopped",
+                status_reason: null,
+                updated_at: "2026-03-21T00:00:00.000Z",
+                workspace_id: "ws_123",
+              },
+            ],
+            state: "ready",
+            workspace_id: "ws_123",
+          },
+          stoppedServices: ["api"],
+          workspaceId: "ws_123",
+        };
+      },
+      async () => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () => await main(["stack", "stop", "api"], sink.io),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(receivedRequest).toMatchObject({
+      method: "POST",
+      pathname: "/workspaces/ws_123/stack/stop",
+      body: {
+        serviceNames: ["api"],
+      },
+    });
+    expect(sink.stdout).toEqual(["Stopped: api", "api", "status: stopped"]);
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("prints stack logs through the bridge", async () => {
+    const sink = createIo();
+
+    await withHttpBridge(
+      async (request) => {
+        expect(request).toMatchObject({
+          method: "GET",
+          pathname: "/workspaces/ws_123/logs",
+        });
+        expect(request.search.get("tail")).toBe("10");
+
+        return {
+          cursor: "cursor_1",
+          lines: [
+            {
+              service: "api",
+              stream: "stdout",
+              text: "listening on 3000",
+              timestamp: "",
+            },
+            {
+              service: "worker",
+              stream: "stderr",
+              text: "retrying job",
+              timestamp: "",
+            },
+          ],
+        };
+      },
+      async () => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () => await main(["stack", "logs", "--tail", "10"], sink.io),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(sink.stdout).toEqual([" api listening on 3000", " worker ERR retrying job"]);
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("prints service logs through the bridge", async () => {
+    const sink = createIo();
+
+    await withHttpBridge(
+      async (request) => {
+        expect(request).toMatchObject({
+          method: "GET",
+          pathname: "/workspaces/ws_123/logs",
+        });
+        expect(request.search.get("service")).toBe("api");
+
+        return {
+          cursor: "cursor_1",
+          lines: [
+            {
+              service: "api",
+              stream: "stdout",
+              text: "ready",
+              timestamp: "",
+            },
+          ],
+        };
+      },
+      async () => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () => await main(["service", "logs", "api", "--json"], sink.io),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(JSON.parse(sink.stdout[0] ?? "null")).toEqual([
+      {
+        service: "api",
+        stream: "stdout",
+        text: "ready",
+        timestamp: "",
+      },
     ]);
     expect(sink.stderr).toEqual([]);
   });
@@ -623,15 +915,16 @@ describe("lifecycle cli", () => {
               git_sha: "abc123",
               id: "ws_123",
               last_active_at: "2026-03-21T00:00:00.000Z",
-              manifest_fingerprint: "manifest_123",
-              name: "Feature Workspace",
-              prepared_at: "2026-03-21T00:00:00.000Z",
+	              manifest_fingerprint: "manifest_123",
+	              name: "Feature Workspace",
+	              slug: "feature-workspace",
+	              prepared_at: "2026-03-21T00:00:00.000Z",
               repository_id: "project_123",
               source_ref: "feat/cli",
               status: "active",
               host: "local",
               updated_at: "2026-03-21T00:00:00.000Z",
-              worktree_path: "/repo/.worktrees/ws_123",
+              workspace_root: "/repo/.worktrees/ws_123",
             },
           },
         };
@@ -684,62 +977,58 @@ describe("lifecycle cli", () => {
 
   test("prints workspace status as json", async () => {
     const sink = createIo();
-    await withDesktopRpc(
-      (request) => {
+    await withHttpBridge(
+      async (request) => {
         expect(request).toMatchObject({
-          method: "workspace.get",
-          params: {
-            workspaceId: "ws_123",
-          },
-          session: {
-            token: "session-token",
-          },
+          method: "GET",
+          pathname: "/workspaces/ws_123",
         });
 
         return {
-          id: (request as { id: string }).id,
-          method: "workspace.get",
-          ok: true,
-          result: {
-            services: [
+          stack: {
+            errors: [],
+            nodes: [
               {
                 assigned_port: null,
                 created_at: "2026-03-21T00:00:00.000Z",
-                id: "svc_123",
+                depends_on: [],
+                kind: "service",
                 name: "api",
                 preview_url: null,
+                runtime: "process",
                 status: "stopped",
                 status_reason: null,
                 updated_at: "2026-03-21T00:00:00.000Z",
                 workspace_id: "ws_123",
               },
             ],
-            workspace: {
-              checkout_type: "worktree",
-              created_at: "2026-03-21T00:00:00.000Z",
-              failed_at: null,
-              failure_reason: null,
-              git_sha: "abc123",
-              id: "ws_123",
-              last_active_at: "2026-03-21T00:00:00.000Z",
-              manifest_fingerprint: "manifest_123",
-              name: "Feature Workspace",
-              prepared_at: "2026-03-21T00:00:00.000Z",
-              repository_id: "project_123",
-              source_ref: "feat/cli",
-              status: "idle",
-              host: "local",
-              updated_at: "2026-03-21T00:00:00.000Z",
-              worktree_path: "/repo/.worktrees/ws_123",
-            },
+            state: "ready",
+            workspace_id: "ws_123",
+          },
+          workspace: {
+            checkout_type: "worktree",
+            created_at: "2026-03-21T00:00:00.000Z",
+            failed_at: null,
+            failure_reason: null,
+            git_sha: "abc123",
+            id: "ws_123",
+            last_active_at: "2026-03-21T00:00:00.000Z",
+	            manifest_fingerprint: "manifest_123",
+	            name: "Feature Workspace",
+	            slug: "feature-workspace",
+	            prepared_at: "2026-03-21T00:00:00.000Z",
+            repository_id: "project_123",
+            source_ref: "feat/cli",
+            status: "idle",
+            host: "local",
+            updated_at: "2026-03-21T00:00:00.000Z",
+            workspace_root: "/repo/.worktrees/ws_123",
           },
         };
       },
-      async (bridgePath) => {
+      async () => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_DESKTOP_SOCKET: bridgePath,
-            LIFECYCLE_DESKTOP_SESSION_TOKEN: "session-token",
             LIFECYCLE_WORKSPACE_ID: "ws_123",
           },
           async () => await main(["workspace", "status", "--json"], sink.io),
@@ -750,12 +1039,9 @@ describe("lifecycle cli", () => {
     );
 
     expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
-      services: [
-        {
-          name: "api",
-          status: "stopped",
-        },
-      ],
+      stack: {
+        state: "ready",
+      },
       workspace: {
         id: "ws_123",
         status: "idle",
@@ -819,7 +1105,7 @@ describe("lifecycle cli", () => {
             rootWorkspace: {
               name: expect.any(String),
               sourceRef: expect.any(String),
-              worktreePath: repoPath,
+              workspaceRoot: repoPath,
             },
           });
 
@@ -1098,7 +1384,7 @@ describe("lifecycle cli", () => {
               plan_id: "plan_001",
               repository_id: "project_123",
               workspace_id: null,
-              agent_session_id: null,
+              agent_id: null,
               name: "Write migration",
               description: "",
               status: "pending",

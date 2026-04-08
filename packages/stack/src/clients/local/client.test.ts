@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { LocalStackClient } from "./client";
 import { ProcessSupervisor } from "../../supervisor";
-import type { LifecycleConfig } from "@lifecycle/contracts";
 
 describe("LocalStackClient", () => {
   test("constructs with default supervisor when none provided", () => {

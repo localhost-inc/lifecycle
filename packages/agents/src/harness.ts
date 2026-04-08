@@ -1,5 +1,5 @@
 import type { ClaudeLoginMethod } from "./providers/claude/env";
-import type { CodexReasoningEffort as CodexModelReasoningEffort } from "./providers/codex/worker";
+import type { CodexReasoningEffort as CodexModelReasoningEffort } from "./providers/codex/provider";
 
 export type HarnessPreset = "guarded" | "trusted_host";
 

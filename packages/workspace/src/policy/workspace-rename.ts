@@ -31,7 +31,7 @@ export function computeRenameDispositionSync(
   if (workspace.source_ref === nextSourceRef) {
     return { action: "skip", reason: "branch already matches identity" };
   }
-  if (!workspace.worktree_path) {
+  if (!workspace.workspace_root) {
     return { action: "skip", reason: "workspace has no worktree path" };
   }
   if (!isLifecycleWorktreeBranch(workspace.source_ref, workspace.id)) {
@@ -59,7 +59,7 @@ export function computeRenameInput(
 
   const isRoot = workspace.checkout_type === "root";
   const nameChanged = workspace.name !== name;
-  const moveWorktree = !isRoot && nameChanged && workspace.worktree_path != null;
+  const moveWorktree = !isRoot && nameChanged && workspace.workspace_root != null;
 
   let renameBranch = false;
   const syncDisposition = computeRenameDispositionSync(workspace, nextSourceRef);

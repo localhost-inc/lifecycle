@@ -13,7 +13,7 @@ It does not describe the TUI VT parser path. The TUI's `libghostty-vt` usage is 
 The renewal app owns Ghostty directly:
 
 1. `apps/desktop-mac` is the authoritative `libghostty` consumer.
-2. `apps/desktop` is legacy reference material only and must not remain a dependency of the renewal app.
+2. `apps/desktop-legacy-do-not-touch` is legacy reference material only and must not remain a dependency of the renewal app.
 3. Native Ghostty hosting code lives in [apps/desktop-mac/Sources/LifecycleGhosttyHost](/Users/kyle/dev/lifecycle/apps/desktop-mac/Sources/LifecycleGhosttyHost).
 
 ## Pinning

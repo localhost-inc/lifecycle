@@ -87,6 +87,15 @@ function statusToResultEvent(status: AgentAuthStatus): AgentAuthEvent {
   }
 }
 
+function authenticatingStatus(
+  output: string[],
+): Extract<AgentAuthStatus, { state: "authenticating" }> {
+  return {
+    state: "authenticating",
+    output,
+  };
+}
+
 function openUrl(url: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const platform = process.platform;
@@ -126,53 +135,50 @@ async function readAccountStatus(
   return mapAccountReadResultToStatus(result);
 }
 
-export async function checkCodexAuth(): Promise<void> {
+export async function checkCodexAuthStatus(): Promise<AgentAuthStatus> {
   const client = new CodexAppServerClient();
 
   try {
     await client.initialize();
-    emit(statusToResultEvent(await readAccountStatus(client, false)));
+    return await readAccountStatus(client, false);
   } catch (error) {
-    emit({
-      kind: "auth.result",
-      provider: "codex",
+    return {
       state: "error",
       message: error instanceof Error ? error.message : "Failed to check Codex auth status.",
-    });
+    };
   } finally {
     await client.close();
   }
 }
 
-export async function loginCodexAuth(): Promise<void> {
+export async function checkCodexAuth(): Promise<void> {
+  const status = await checkCodexAuthStatus();
+  if (status.state === "authenticating") {
+    throw new Error("Codex auth status should not enter the authenticating state.");
+  }
+  emit(statusToResultEvent(status));
+}
+
+export async function loginCodexAuthStatus(
+  onStatus?: (status: Extract<AgentAuthStatus, { state: "authenticating" }>) => void,
+): Promise<AgentAuthStatus> {
   const client = new CodexAppServerClient();
 
-  emit({
-    kind: "auth.status",
-    provider: "codex",
-    isAuthenticating: true,
-    output: ["Starting Codex ChatGPT authentication..."],
-  });
+  onStatus?.(authenticatingStatus(["Starting Codex ChatGPT authentication..."]));
 
   try {
     await client.initialize();
 
     const currentStatus = await readAccountStatus(client, false);
     if (currentStatus.state === "authenticated") {
-      emit(statusToResultEvent(currentStatus));
-      return;
+      return currentStatus;
     }
 
     const loginStart = (await client.request("account/login/start", {
       type: "chatgpt",
     })) as CodexChatGptLoginStartResult;
 
-    emit({
-      kind: "auth.status",
-      provider: "codex",
-      isAuthenticating: true,
-      output: ["Opening browser for Codex ChatGPT authentication..."],
-    });
+    onStatus?.(authenticatingStatus(["Opening browser for Codex ChatGPT authentication..."]));
     await openUrl(loginStart.authUrl);
 
     const completion = await new Promise<CodexLoginCompletedNotification>((resolve, reject) => {
@@ -202,24 +208,35 @@ export async function loginCodexAuth(): Promise<void> {
     });
 
     if (!completion.success) {
-      emit({
-        kind: "auth.result",
-        provider: "codex",
+      return {
         state: "error",
         message: completion.error ?? "Codex login failed.",
-      });
-      return;
+      };
     }
 
-    emit(statusToResultEvent(await readAccountStatus(client, true)));
+    return await readAccountStatus(client, true);
   } catch (error) {
-    emit({
-      kind: "auth.result",
-      provider: "codex",
+    return {
       state: "error",
       message: error instanceof Error ? error.message : "Failed to run Codex login.",
-    });
+    };
   } finally {
     await client.close();
   }
+}
+
+export async function loginCodexAuth(): Promise<void> {
+  const status = await loginCodexAuthStatus((nextStatus) => {
+    emit({
+      kind: "auth.status",
+      provider: "codex",
+      isAuthenticating: true,
+      output: nextStatus.output,
+    });
+  });
+
+  if (status.state === "authenticating") {
+    throw new Error("Codex login should not settle in the authenticating state.");
+  }
+  emit(statusToResultEvent(status));
 }

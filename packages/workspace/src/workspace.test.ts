@@ -3,7 +3,10 @@ import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { createWorkspaceClientRegistry, type WorkspaceClient } from "./client";
 import { CloudWorkspaceClient } from "./clients/cloud";
 import { type LocalClientDeps, LocalWorkspaceClient } from "./clients/local";
-import { MANAGED_TMUX_SOCKET_NAME } from "./clients/shared/tmux-terminal-runtime";
+import {
+  MANAGED_TMUX_SOCKET_NAME,
+  normalizeTmuxTerminalId,
+} from "./clients/shared/tmux-terminal-runtime";
 
 describe("workspace contract", () => {
   function workspace(overrides: Partial<WorkspaceRecord> = {}): WorkspaceRecord {
@@ -11,10 +14,11 @@ describe("workspace contract", () => {
       id: "ws_1",
       repository_id: "project_1",
       name: "Workspace 1",
+      slug: "workspace-1",
       checkout_type: "worktree",
       source_ref: "lifecycle/workspace-1",
       git_sha: null,
-      worktree_path: "/tmp/project_1/.worktrees/ws_1",
+      workspace_root: "/tmp/project_1/.worktrees/ws_1",
       host: "local",
       manifest_fingerprint: "manifest_1",
       created_at: "2026-03-12T00:00:00.000Z",
@@ -40,6 +44,8 @@ describe("workspace contract", () => {
       "closeTerminal",
       "connectTerminal",
       "disconnectTerminal",
+      "startStack",
+      "stopStack",
       "readManifest",
       "getGitCurrentBranch",
       "ensureWorkspace",
@@ -73,7 +79,7 @@ describe("workspace contract", () => {
       "mergeGitPullRequest",
     ];
 
-    expect(requiredMethods).toHaveLength(39);
+    expect(requiredMethods).toHaveLength(41);
   });
 
   test("host client exposes the full contract surface", () => {
@@ -88,6 +94,8 @@ describe("workspace contract", () => {
     expect(typeof client.closeTerminal).toBe("function");
     expect(typeof client.connectTerminal).toBe("function");
     expect(typeof client.disconnectTerminal).toBe("function");
+    expect(typeof client.startStack).toBe("function");
+    expect(typeof client.stopStack).toBe("function");
     expect(typeof client.readManifest).toBe("function");
     expect(typeof client.getGitCurrentBranch).toBe("function");
     expect(typeof client.ensureWorkspace).toBe("function");
@@ -122,6 +130,51 @@ describe("workspace contract", () => {
     expect(typeof client.mergeGitPullRequest).toBe("function");
   });
 
+  test("local host client delegates stack execution through the injected stack controller", async () => {
+    const startCalls: unknown[] = [];
+    const stopCalls: unknown[] = [];
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      stackController: {
+        start: async (config, input) => {
+          startCalls.push({ config, input });
+          return {
+            preparedAt: null,
+            startedServices: [{ assignedPort: 3000, name: "web", processId: 12345 }],
+          };
+        },
+        stop: async (stackId, names) => {
+          stopCalls.push({ stackId, names });
+        },
+      },
+    });
+    const targetWorkspace = workspace();
+    const config = {
+      workspace: { prepare: [], teardown: [] },
+      stack: {},
+    };
+    const input = {
+      hostLabel: "workspace-1",
+      logScope: { repositorySlug: "project-1", workspaceSlug: "workspace-1" },
+      name: targetWorkspace.name,
+      prepared: false,
+      readyServiceNames: [],
+      rootPath: REPO_PATH,
+      services: [],
+      sourceRef: targetWorkspace.source_ref,
+      stackId: targetWorkspace.id,
+    };
+
+    const startResult = await client.startStack(targetWorkspace, config, input);
+    await client.stopStack(targetWorkspace, { names: ["web"] });
+
+    expect(startCalls).toEqual([{ config, input }]);
+    expect(stopCalls).toEqual([{ names: ["web"], stackId: targetWorkspace.id }]);
+    expect(startResult.startedServices).toEqual([
+      { assignedPort: 3000, name: "web", processId: 12345 },
+    ]);
+  });
+
   test("local runtime sets up file watching via watchPath", async () => {
     let watchedPath = "";
     const client = new LocalWorkspaceClient({
@@ -135,7 +188,7 @@ describe("workspace contract", () => {
     const cleanup = await client.subscribeFileEvents(
       {
         workspaceId: "ws_1",
-        worktreePath: "/tmp/project_1/.worktrees/ws_1",
+        workspaceRoot: "/tmp/project_1/.worktrees/ws_1",
       },
       () => {},
     );
@@ -247,6 +300,40 @@ describe("workspace contract", () => {
     await expect(client.execCommand(workspace({ host: "cloud", id: "" }), ["pwd"])).rejects.toThrow(
       "Cloud workspace commands require a workspace id.",
     );
+  });
+
+  test("cloud host client rejects stack execution through the workspace boundary", async () => {
+    const client = new CloudWorkspaceClient({
+      execWorkspaceCommand: async () => ({
+        exitCode: 0,
+        stderr: "",
+        stdout: "",
+      }),
+      getShellConnection: async () => ({
+        cwd: "/workspace",
+        home: "/home/lifecycle",
+        host: "ssh.app.lifecycle.test",
+        token: "tok_123",
+      }),
+    });
+
+    await expect(
+      client.startStack(
+        workspace({ host: "cloud" }),
+        { workspace: { prepare: [], teardown: [] }, stack: {} },
+        {
+          hostLabel: "workspace-1",
+          logScope: { repositorySlug: "project-1", workspaceSlug: "workspace-1" },
+          name: "Workspace 1",
+          prepared: false,
+          readyServiceNames: [],
+          rootPath: "/workspace",
+          services: [],
+          sourceRef: "lifecycle/workspace-1",
+          stackId: "ws_1",
+        },
+      ),
+    ).rejects.toThrow("CloudWorkspaceClient.startStack is not implemented");
   });
 
   test("local host client resolves a direct shell runtime without tmux", async () => {
@@ -465,14 +552,12 @@ describe("workspace contract", () => {
         title: "shell",
         kind: "shell",
         busy: false,
-        closable: true,
       },
       {
         id: "@2",
         title: "codex",
         kind: "codex",
         busy: true,
-        closable: true,
       },
     ]);
     expect(calls.some((call) => call.program === "tmux" && call.args[0] === "list-windows")).toBe(
@@ -514,6 +599,51 @@ describe("workspace contract", () => {
       spec: {
         program: "tmux",
         args: ["attach-session", "-t", "lc-local-session--conn--surface-A--_2"],
+        cwd: REPO_PATH,
+        env: [["TERM", "xterm-256color"]],
+      },
+    });
+  });
+
+  test("local host client canonicalizes polluted terminal ids before connecting", async () => {
+    const spawnSyncMock = ((program: string, args?: readonly string[]) => {
+      if (program === "sh" && args?.[0] === "-lc" && args[1]?.includes("command -v 'tmux'")) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      return { error: undefined, status: 0, stderr: "", stdout: "" };
+    }) as unknown as NonNullable<LocalClientDeps["spawnSync"]>;
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      spawnSync: spawnSyncMock,
+    });
+
+    const connection = await client.connectTerminal(workspace(), {
+      sessionName: "lc-local-session",
+      terminalId: "@8_Tab_4_0_0",
+      clientId: "surface-A",
+      access: "interactive",
+      preferredTransport: "spawn",
+    });
+
+    expect(connection.terminalId).toBe("@8");
+    expect(connection.connectionId).toBe("lc-local-session--conn--surface-A--_8");
+    expect(connection.transport).toEqual({
+      kind: "spawn",
+      prepare: {
+        program: "sh",
+        args: [
+          "-lc",
+          expect.stringContaining(
+            "'select-window' '-t' 'lc-local-session--conn--surface-A--_8:@8'",
+          ),
+        ],
+        cwd: REPO_PATH,
+        env: [["TERM", "xterm-256color"]],
+      },
+      spec: {
+        program: "tmux",
+        args: ["attach-session", "-t", "lc-local-session--conn--surface-A--_8"],
         cwd: REPO_PATH,
         env: [["TERM", "xterm-256color"]],
       },
@@ -632,13 +762,343 @@ describe("workspace contract", () => {
         title: "shell",
         kind: "shell",
         busy: false,
-        closable: false,
       },
     ]);
     expect(
       calls.some(
         (call) =>
           call.program === "/opt/lifecycle/bin/tmux" &&
+          call.args.slice(0, 5).join(" ") ===
+            `-L ${MANAGED_TMUX_SOCKET_NAME} -f /dev/null list-windows`,
+      ),
+    ).toBe(true);
+  });
+
+  test("local host client resolves a created terminal from a fresh listing", async () => {
+    const spawnSyncMock = ((program: string, args?: readonly string[]) => {
+      const commandArgs = [...(args ?? [])];
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("command -v 'tmux'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("'tmux' 'has-session'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (program === "tmux" && commandArgs[0] === "new-window") {
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout: "@8 Tab 4 0 0\n",
+        };
+      }
+
+      if (program === "tmux" && commandArgs[0] === "list-windows") {
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout: "@0\tshell\t0\t1\n@8\tTab 4\t0\t0\n",
+        };
+      }
+
+      return { error: undefined, status: 0, stderr: "", stdout: "" };
+    }) as unknown as NonNullable<LocalClientDeps["spawnSync"]>;
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      spawnSync: spawnSyncMock,
+    });
+
+    const terminal = await client.createTerminal(workspace(), {
+      sessionName: "lc-local-session",
+      title: "Tab 4",
+    });
+
+    expect(terminal).toEqual({
+      id: "@8",
+      title: "Tab 4",
+      kind: "custom",
+      busy: false,
+    });
+  });
+
+  test("local host client canonicalizes bare numeric created terminal ids", async () => {
+    let listCalls = 0;
+    const spawnSyncMock = ((program: string, args?: readonly string[]) => {
+      const commandArgs = [...(args ?? [])];
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("command -v 'tmux'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("'tmux' 'has-session'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (program === "tmux" && commandArgs[0] === "new-window") {
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout: "0104\n",
+        };
+      }
+
+      if (program === "tmux" && commandArgs[0] === "list-windows") {
+        listCalls += 1;
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout: listCalls === 1 ? "@0\tshell\t0\t1\n" : "@0\tshell\t0\t1\n@104\tTab 4\t0\t0\n",
+        };
+      }
+
+      return { error: undefined, status: 0, stderr: "", stdout: "" };
+    }) as unknown as NonNullable<LocalClientDeps["spawnSync"]>;
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      spawnSync: spawnSyncMock,
+    });
+
+    const terminal = await client.createTerminal(workspace(), {
+      sessionName: "lc-local-session",
+      title: "Tab 4",
+    });
+
+    expect(normalizeTmuxTerminalId("0104")).toBe("@104");
+    expect(terminal).toEqual({
+      id: "@104",
+      title: "Tab 4",
+      kind: "custom",
+      busy: false,
+    });
+  });
+
+  test("local host client falls back to the terminal listing when create output is not parseable", async () => {
+    let listCalls = 0;
+    const spawnSyncMock = ((program: string, args?: readonly string[]) => {
+      const commandArgs = [...(args ?? [])];
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("command -v 'tmux'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("'tmux' 'has-session'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (program === "tmux" && commandArgs[0] === "new-window") {
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout: "created\n",
+        };
+      }
+
+      if (program === "tmux" && commandArgs[0] === "list-windows") {
+        listCalls += 1;
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout: listCalls === 1 ? "@0\tshell\t0\t1\n" : "@0\tshell\t0\t1\n@8\tTab 4\t0\t0\n",
+        };
+      }
+
+      return { error: undefined, status: 0, stderr: "", stdout: "" };
+    }) as unknown as NonNullable<LocalClientDeps["spawnSync"]>;
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      spawnSync: spawnSyncMock,
+    });
+
+    const terminal = await client.createTerminal(workspace(), {
+      sessionName: "lc-local-session",
+      title: "Tab 4",
+    });
+
+    expect(terminal).toEqual({
+      id: "@8",
+      title: "Tab 4",
+      kind: "custom",
+      busy: false,
+    });
+  });
+
+  test("local host client retries resolving a freshly created terminal when tmux lags", async () => {
+    let listCalls = 0;
+    const spawnSyncMock = ((program: string, args?: readonly string[]) => {
+      const commandArgs = [...(args ?? [])];
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("command -v 'tmux'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("'tmux' 'has-session'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (program === "tmux" && commandArgs[0] === "new-window") {
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout: "@8\n",
+        };
+      }
+
+      if (program === "tmux" && commandArgs[0] === "list-windows") {
+        listCalls += 1;
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout: listCalls === 1 ? "@0\tshell\t0\t1\n" : "@0\tshell\t0\t1\n@8\tTab 4\t0\t0\n",
+        };
+      }
+
+      return { error: undefined, status: 0, stderr: "", stdout: "" };
+    }) as unknown as NonNullable<LocalClientDeps["spawnSync"]>;
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      spawnSync: spawnSyncMock,
+    });
+
+    const terminal = await client.createTerminal(workspace(), {
+      sessionName: "lc-local-session",
+      title: "Tab 4",
+    });
+
+    expect(listCalls).toBeGreaterThan(1);
+    expect(terminal).toEqual({
+      id: "@8",
+      title: "Tab 4",
+      kind: "custom",
+      busy: false,
+    });
+  });
+
+  test("local host client preserves the managed tmux profile while resolving a created terminal", async () => {
+    const calls: Array<{ program: string; args: string[] }> = [];
+    const spawnSyncMock = ((program: string, args?: readonly string[]) => {
+      const commandArgs = [...(args ?? [])];
+      calls.push({ program, args: commandArgs });
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("command -v '/usr/local/bin/tmux'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (
+        program === "/usr/local/bin/tmux" &&
+        commandArgs.slice(0, 5).join(" ") ===
+          `-L ${MANAGED_TMUX_SOCKET_NAME} -f /dev/null has-session`
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (
+        program === "/usr/local/bin/tmux" &&
+        commandArgs.slice(0, 5).join(" ") ===
+          `-L ${MANAGED_TMUX_SOCKET_NAME} -f /dev/null list-windows`
+      ) {
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout:
+            calls.filter(
+              (call) => call.program === "/usr/local/bin/tmux" && call.args[5] === "list-windows",
+            ).length === 1
+              ? "@0\tshell\t0\t1\n"
+              : "@0\tshell\t0\t1\n@8\tTab 4\t0\t0\n",
+        };
+      }
+
+      if (
+        program === "/usr/local/bin/tmux" &&
+        commandArgs.slice(0, 5).join(" ") ===
+          `-L ${MANAGED_TMUX_SOCKET_NAME} -f /dev/null new-window`
+      ) {
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout: "@8\n",
+        };
+      }
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes(`'/usr/local/bin/tmux' '-L' '${MANAGED_TMUX_SOCKET_NAME}'`)
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      return { error: undefined, status: 0, stderr: "", stdout: "" };
+    }) as unknown as NonNullable<LocalClientDeps["spawnSync"]>;
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      spawnSync: spawnSyncMock,
+    });
+
+    const terminal = await client.createTerminal(workspace(), {
+      sessionName: "lc-local-session",
+      title: "Tab 4",
+      persistenceMode: "managed",
+      persistenceExecutablePath: "/usr/local/bin/tmux",
+    });
+
+    expect(terminal).toEqual({
+      id: "@8",
+      title: "Tab 4",
+      kind: "custom",
+      busy: false,
+    });
+    expect(
+      calls.some(
+        (call) =>
+          call.program === "/usr/local/bin/tmux" &&
           call.args.slice(0, 5).join(" ") ===
             `-L ${MANAGED_TMUX_SOCKET_NAME} -f /dev/null list-windows`,
       ),
@@ -681,17 +1141,15 @@ describe("workspace contract", () => {
         title: "shell",
         kind: "shell",
         busy: false,
-        closable: true,
       },
       {
         id: "@3",
         title: "claude",
         kind: "claude",
         busy: true,
-        closable: true,
       },
     ]);
-    expect(calls[0]?.[0]).toBe("sh");
+    expect(calls[0]?.slice(0, 2)).toEqual(["tmux", "has-session"]);
     expect(calls[1]?.slice(0, 2)).toEqual(["tmux", "list-windows"]);
   });
 
@@ -773,7 +1231,6 @@ describe("workspace contract", () => {
         title: "shell",
         kind: "shell",
         busy: false,
-        closable: false,
       },
     ]);
     expect(calls[1]?.slice(0, 5)).toEqual([
@@ -822,7 +1279,7 @@ describe("workspace contract", () => {
     const target = workspace({
       checkout_type: "worktree",
       source_ref: "lifecycle/blaze-beacon",
-      worktree_path: null,
+      workspace_root: null,
     });
     const client = new LocalWorkspaceClient({
       invoke: async (cmd: string, args?: Record<string, unknown>) => {
@@ -869,7 +1326,7 @@ describe("workspace contract", () => {
       },
     ]);
 
-    expect(result.worktree_path).toBe("/tmp/project_1/.worktrees/ws_1");
+    expect(result.workspace_root).toBe("/tmp/project_1/.worktrees/ws_1");
     expect(result.git_sha).toBe("abc123");
     expect(result.manifest_fingerprint).toBe("manifest_next");
     expect(result.status).toBe("active");

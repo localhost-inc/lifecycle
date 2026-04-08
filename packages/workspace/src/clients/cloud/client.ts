@@ -1,4 +1,5 @@
 import type {
+  LifecycleConfig,
   GitBranchPullRequestResult,
   GitCommitDiffResult,
   GitCommitResult,
@@ -31,12 +32,14 @@ import type {
   WorkspaceFileTreeEntry,
   WorkspaceOpenInAppInfo,
   WorkspaceShellRuntime,
+  StopWorkspaceStackInput,
   WorkspaceTerminalConnection,
   WorkspaceTerminalConnectionInput,
   WorkspaceTerminalRecord,
   WorkspaceTerminalRuntime,
 } from "../../workspace";
 import type { ManifestStatus } from "../../manifest";
+import type { StartStackInput, StartStackResult } from "@lifecycle/stack";
 import { buildCloudShellSshArgs, type CloudShellConnection } from "./shell";
 import {
   buildTmuxCommand,
@@ -48,8 +51,11 @@ import {
   buildTmuxConnectionId,
   buildTmuxCreateTerminalArgs,
   buildTmuxListTerminalArgs,
+  normalizeTmuxTerminalId,
   normalizeTerminalTitle,
+  parseCreatedTmuxTerminalId,
   parseTmuxTerminalRecords,
+  resolveCreatedTmuxTerminal,
   resolveTmuxRuntimeProfile,
 } from "../shared/tmux-terminal-runtime";
 
@@ -212,7 +218,15 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     input: ResolveWorkspaceTerminalRuntimeInput = {},
   ): Promise<WorkspaceTerminalRecord[]> {
     const context = await this.requireTerminalContext(workspace, input);
-    await this.ensureTmuxSession(workspace, context);
+
+    // Check if the session exists without creating it.
+    const hasSession = await this.execWorkspaceCommand(
+      requireWorkspaceId(workspace),
+      buildTmuxCommand(context.profile, ["has-session", "-t", context.sessionName]),
+    );
+    if (hasSession.exitCode !== 0) {
+      return [];
+    }
 
     const result = await this.execWorkspaceCommand(
       requireWorkspaceId(workspace),
@@ -231,6 +245,9 @@ export class CloudWorkspaceClient implements WorkspaceClient {
   ): Promise<WorkspaceTerminalRecord> {
     const context = await this.requireTerminalContext(workspace, input);
     await this.ensureTmuxSession(workspace, context);
+    const previousTerminalIds = new Set(
+      (await this.listTerminals(workspace, input)).map((terminal) => terminal.id),
+    );
 
     const title = normalizeTerminalTitle(input.title, input.kind);
     const result = await this.execWorkspaceCommand(
@@ -245,13 +262,26 @@ export class CloudWorkspaceClient implements WorkspaceClient {
       "Lifecycle could not create a cloud terminal for this workspace.",
     );
 
-    const created = parseTmuxTerminalRecords(result.stdout).at(0);
+    const createdId = parseCreatedTmuxTerminalId(result.stdout);
+    const created = await resolveCreatedTmuxTerminal(
+      () => this.listTerminals(workspace, input),
+      (terminal) => terminal.id,
+      {
+        createdId,
+        previousTerminalIds,
+      },
+    );
     if (!created) {
-      throw new Error("Lifecycle could not parse the created cloud terminal record.");
+      if (!createdId) {
+        throw new Error(
+          "Lifecycle could not resolve the created cloud terminal from the runtime listing.",
+        );
+      }
+
+      throw new Error(`Lifecycle could not resolve the created cloud terminal "${createdId}".`);
     }
 
-    const terminals = await this.listTerminals(workspace, context);
-    return terminals.find((terminal) => terminal.id === created.id) ?? created;
+    return created;
   }
 
   async closeTerminal(
@@ -260,10 +290,6 @@ export class CloudWorkspaceClient implements WorkspaceClient {
     input: ResolveWorkspaceTerminalRuntimeInput = {},
   ): Promise<void> {
     const context = await this.requireTerminalContext(workspace, input);
-    const terminals = await this.listTerminals(workspace, context);
-    if (terminals.length <= 1) {
-      throw new Error("Lifecycle will not close the last terminal in a workspace runtime.");
-    }
 
     const result = await this.execWorkspaceCommand(
       requireWorkspaceId(workspace),
@@ -281,16 +307,13 @@ export class CloudWorkspaceClient implements WorkspaceClient {
   ): Promise<WorkspaceTerminalConnection> {
     const context = await this.requireTerminalContext(workspace, input);
     const connection = await this.getShellConnection(requireWorkspaceId(workspace));
-    const connectionId = buildTmuxConnectionId(
-      context.sessionName,
-      input.clientId,
-      input.terminalId,
-    );
+    const terminalId = normalizeTmuxTerminalId(input.terminalId);
+    const connectionId = buildTmuxConnectionId(context.sessionName, input.clientId, terminalId);
 
     if (input.preferredTransport === "stream") {
       return {
         connectionId,
-        terminalId: input.terminalId,
+        terminalId,
         transport: null,
         launchError: "Lifecycle does not support streamed cloud terminal connections yet.",
       };
@@ -305,7 +328,7 @@ export class CloudWorkspaceClient implements WorkspaceClient {
         context.profile,
         context.sessionName,
         connectionId,
-        input.terminalId,
+        terminalId,
         context.cwd,
       ),
       "exit",
@@ -313,7 +336,7 @@ export class CloudWorkspaceClient implements WorkspaceClient {
 
     return {
       connectionId,
-      terminalId: input.terminalId,
+      terminalId,
       transport: {
         kind: "spawn",
         prepare: {
@@ -357,6 +380,18 @@ export class CloudWorkspaceClient implements WorkspaceClient {
       `Lifecycle could not disconnect cloud terminal connection "${connectionId}".`,
       true,
     );
+  }
+
+  async startStack(
+    _workspace: WorkspaceRecord,
+    _config: LifecycleConfig,
+    _input: StartStackInput,
+  ): Promise<StartStackResult> {
+    throw unsupported("startStack");
+  }
+
+  async stopStack(_workspace: WorkspaceRecord, _input: StopWorkspaceStackInput): Promise<void> {
+    throw unsupported("stopStack");
   }
 
   async readManifest(_dirPath: string): Promise<ManifestStatus> {

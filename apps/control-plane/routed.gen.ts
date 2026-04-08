@@ -6,161 +6,168 @@ import { routeHandler, wrapMiddleware } from "routedjs/hono";
 import middleware0 from "./routes/_middleware.ts";
 import middleware1 from "./routes/_authenticated/_middleware.ts";
 
-import route0 from "./routes/auth/device-code.post.route.ts";
-import route1 from "./routes/auth/me.get.route.ts";
-import route2 from "./routes/auth/token.post.route.ts";
-import route3 from "./routes/health.get.route.ts";
-import route4 from "./routes/_authenticated/organizations/index.get.route.ts";
-import route5 from "./routes/_authenticated/organizations/index.post.route.ts";
-import route6 from "./routes/_authenticated/organizations/$orgId.get.route.ts";
-import route7 from "./routes/_authenticated/organizations/$orgId/cloud-accounts.get.route.ts";
-import route8 from "./routes/_authenticated/organizations/$orgId/cloud-accounts.post.route.ts";
-import route9 from "./routes/_authenticated/repos/index.get.route.ts";
-import route10 from "./routes/_authenticated/repos/index.post.route.ts";
-import route11 from "./routes/_authenticated/repos/$repoId.get.route.ts";
-import route12 from "./routes/_authenticated/users/me/environment.get.route.ts";
-import route13 from "./routes/_authenticated/users/me/environment.put.route.ts";
-import route14 from "./routes/_authenticated/workspaces/index.get.route.ts";
-import route15 from "./routes/_authenticated/workspaces/index.post.route.ts";
-import route16 from "./routes/_authenticated/workspaces/$workspaceId.delete.route.ts";
-import route17 from "./routes/_authenticated/workspaces/$workspaceId.get.route.ts";
-import route18 from "./routes/_authenticated/workspaces/$workspaceId/exec.post.route.ts";
-import route19 from "./routes/_authenticated/workspaces/$workspaceId/pr.post.route.ts";
-import route20 from "./routes/_authenticated/workspaces/$workspaceId/pr/merge.post.route.ts";
-import route21 from "./routes/_authenticated/workspaces/$workspaceId/shell.get.route.ts";
+import route0 from "./routes/_authenticated/organizations/$orgId/cloud-accounts.get.route.ts";
+import route1 from "./routes/_authenticated/organizations/$orgId/cloud-accounts.post.route.ts";
+import route2 from "./routes/_authenticated/organizations/$orgId.get.route.ts";
+import route3 from "./routes/_authenticated/organizations/index.get.route.ts";
+import route4 from "./routes/_authenticated/organizations/index.post.route.ts";
+import route5 from "./routes/_authenticated/workspaces/$workspaceId/shell.get.route.ts";
+import route6 from "./routes/_authenticated/workspaces/$workspaceId/exec.post.route.ts";
+import route7 from "./routes/_authenticated/workspaces/$workspaceId/pr/merge.post.route.ts";
+import route8 from "./routes/_authenticated/workspaces/$workspaceId/pr.post.route.ts";
+import route9 from "./routes/_authenticated/workspaces/$workspaceId.delete.route.ts";
+import route10 from "./routes/_authenticated/workspaces/$workspaceId.get.route.ts";
+import route11 from "./routes/_authenticated/workspaces/index.get.route.ts";
+import route12 from "./routes/_authenticated/workspaces/index.post.route.ts";
+import route13 from "./routes/health.get.route.ts";
+import route14 from "./routes/_authenticated/users/me/environment.get.route.ts";
+import route15 from "./routes/_authenticated/users/me/environment.put.route.ts";
+import route16 from "./routes/_authenticated/repos/$repoId.get.route.ts";
+import route17 from "./routes/_authenticated/repos/index.get.route.ts";
+import route18 from "./routes/_authenticated/repos/index.post.route.ts";
+import route19 from "./routes/auth/device-code.post.route.ts";
+import route20 from "./routes/auth/refresh.post.route.ts";
+import route21 from "./routes/auth/token.post.route.ts";
+import route22 from "./routes/auth/me.get.route.ts";
 
 export const routeTree = defineRouteTree([
   {
-    path: "/auth/device-code",
-    method: "post",
+    path: "/organizations/:orgId/cloud-accounts",
+    method: "get",
     route: route0,
-    middleware: [middleware0],
-  },
-  {
-    path: "/auth/me",
-    method: "get",
-    route: route1,
-    middleware: [middleware0],
-  },
-  {
-    path: "/auth/token",
-    method: "post",
-    route: route2,
-    middleware: [middleware0],
-  },
-  {
-    path: "/health",
-    method: "get",
-    route: route3,
-    middleware: [middleware0],
-  },
-  {
-    path: "/organizations",
-    method: "get",
-    route: route4,
     middleware: [middleware0, middleware1],
   },
   {
-    path: "/organizations",
+    path: "/organizations/:orgId/cloud-accounts",
     method: "post",
-    route: route5,
+    route: route1,
     middleware: [middleware0, middleware1],
   },
   {
     path: "/organizations/:orgId",
     method: "get",
-    route: route6,
+    route: route2,
     middleware: [middleware0, middleware1],
   },
   {
-    path: "/organizations/:orgId/cloud-accounts",
+    path: "/organizations",
     method: "get",
-    route: route7,
+    route: route3,
     middleware: [middleware0, middleware1],
   },
   {
-    path: "/organizations/:orgId/cloud-accounts",
+    path: "/organizations",
     method: "post",
-    route: route8,
-    middleware: [middleware0, middleware1],
-  },
-  {
-    path: "/repos",
-    method: "get",
-    route: route9,
-    middleware: [middleware0, middleware1],
-  },
-  {
-    path: "/repos",
-    method: "post",
-    route: route10,
-    middleware: [middleware0, middleware1],
-  },
-  {
-    path: "/repos/:repoId",
-    method: "get",
-    route: route11,
-    middleware: [middleware0, middleware1],
-  },
-  {
-    path: "/users/me/environment",
-    method: "get",
-    route: route12,
-    middleware: [middleware0, middleware1],
-  },
-  {
-    path: "/users/me/environment",
-    method: "put",
-    route: route13,
-    middleware: [middleware0, middleware1],
-  },
-  {
-    path: "/workspaces",
-    method: "get",
-    route: route14,
-    middleware: [middleware0, middleware1],
-  },
-  {
-    path: "/workspaces",
-    method: "post",
-    route: route15,
-    middleware: [middleware0, middleware1],
-  },
-  {
-    path: "/workspaces/:workspaceId",
-    method: "delete",
-    route: route16,
-    middleware: [middleware0, middleware1],
-  },
-  {
-    path: "/workspaces/:workspaceId",
-    method: "get",
-    route: route17,
-    middleware: [middleware0, middleware1],
-  },
-  {
-    path: "/workspaces/:workspaceId/exec",
-    method: "post",
-    route: route18,
-    middleware: [middleware0, middleware1],
-  },
-  {
-    path: "/workspaces/:workspaceId/pr",
-    method: "post",
-    route: route19,
-    middleware: [middleware0, middleware1],
-  },
-  {
-    path: "/workspaces/:workspaceId/pr/merge",
-    method: "post",
-    route: route20,
+    route: route4,
     middleware: [middleware0, middleware1],
   },
   {
     path: "/workspaces/:workspaceId/shell",
     method: "get",
-    route: route21,
+    route: route5,
     middleware: [middleware0, middleware1],
+  },
+  {
+    path: "/workspaces/:workspaceId/exec",
+    method: "post",
+    route: route6,
+    middleware: [middleware0, middleware1],
+  },
+  {
+    path: "/workspaces/:workspaceId/pr/merge",
+    method: "post",
+    route: route7,
+    middleware: [middleware0, middleware1],
+  },
+  {
+    path: "/workspaces/:workspaceId/pr",
+    method: "post",
+    route: route8,
+    middleware: [middleware0, middleware1],
+  },
+  {
+    path: "/workspaces/:workspaceId",
+    method: "delete",
+    route: route9,
+    middleware: [middleware0, middleware1],
+  },
+  {
+    path: "/workspaces/:workspaceId",
+    method: "get",
+    route: route10,
+    middleware: [middleware0, middleware1],
+  },
+  {
+    path: "/workspaces",
+    method: "get",
+    route: route11,
+    middleware: [middleware0, middleware1],
+  },
+  {
+    path: "/workspaces",
+    method: "post",
+    route: route12,
+    middleware: [middleware0, middleware1],
+  },
+  {
+    path: "/health",
+    method: "get",
+    route: route13,
+    middleware: [middleware0],
+  },
+  {
+    path: "/users/me/environment",
+    method: "get",
+    route: route14,
+    middleware: [middleware0, middleware1],
+  },
+  {
+    path: "/users/me/environment",
+    method: "put",
+    route: route15,
+    middleware: [middleware0, middleware1],
+  },
+  {
+    path: "/repos/:repoId",
+    method: "get",
+    route: route16,
+    middleware: [middleware0, middleware1],
+  },
+  {
+    path: "/repos",
+    method: "get",
+    route: route17,
+    middleware: [middleware0, middleware1],
+  },
+  {
+    path: "/repos",
+    method: "post",
+    route: route18,
+    middleware: [middleware0, middleware1],
+  },
+  {
+    path: "/auth/device-code",
+    method: "post",
+    route: route19,
+    middleware: [middleware0],
+  },
+  {
+    path: "/auth/refresh",
+    method: "post",
+    route: route20,
+    middleware: [middleware0],
+  },
+  {
+    path: "/auth/token",
+    method: "post",
+    route: route21,
+    middleware: [middleware0],
+  },
+  {
+    path: "/auth/me",
+    method: "get",
+    route: route22,
+    middleware: [middleware0],
   },
 ]);
 
@@ -170,36 +177,29 @@ export const app = new Hono()
   .use("/repos/*", wrapMiddleware(middleware1))
   .use("/users/*", wrapMiddleware(middleware1))
   .use("/workspaces/*", wrapMiddleware(middleware1))
-  .post("/auth/device-code", routeHandler(route0, "/auth/device-code"))
-  .get("/auth/me", routeHandler(route1, "/auth/me"))
-  .post("/auth/token", routeHandler(route2, "/auth/token"))
-  .get("/health", routeHandler(route3, "/health"))
-  .get("/organizations", routeHandler(route4, "/organizations"))
-  .post("/organizations", routeHandler(route5, "/organizations"))
-  .get("/organizations/:orgId", routeHandler(route6, "/organizations/:orgId"))
-  .get(
-    "/organizations/:orgId/cloud-accounts",
-    routeHandler(route7, "/organizations/:orgId/cloud-accounts"),
-  )
-  .post(
-    "/organizations/:orgId/cloud-accounts",
-    routeHandler(route8, "/organizations/:orgId/cloud-accounts"),
-  )
-  .get("/repos", routeHandler(route9, "/repos"))
-  .post("/repos", routeHandler(route10, "/repos"))
-  .get("/repos/:repoId", routeHandler(route11, "/repos/:repoId"))
-  .get("/users/me/environment", routeHandler(route12, "/users/me/environment"))
-  .put("/users/me/environment", routeHandler(route13, "/users/me/environment"))
-  .get("/workspaces", routeHandler(route14, "/workspaces"))
-  .post("/workspaces", routeHandler(route15, "/workspaces"))
-  .delete("/workspaces/:workspaceId", routeHandler(route16, "/workspaces/:workspaceId"))
-  .get("/workspaces/:workspaceId", routeHandler(route17, "/workspaces/:workspaceId"))
-  .post("/workspaces/:workspaceId/exec", routeHandler(route18, "/workspaces/:workspaceId/exec"))
-  .post("/workspaces/:workspaceId/pr", routeHandler(route19, "/workspaces/:workspaceId/pr"))
-  .post(
-    "/workspaces/:workspaceId/pr/merge",
-    routeHandler(route20, "/workspaces/:workspaceId/pr/merge"),
-  )
-  .get("/workspaces/:workspaceId/shell", routeHandler(route21, "/workspaces/:workspaceId/shell"));
+  .get("/organizations/:orgId/cloud-accounts", routeHandler(route0, "/organizations/:orgId/cloud-accounts"))
+  .post("/organizations/:orgId/cloud-accounts", routeHandler(route1, "/organizations/:orgId/cloud-accounts"))
+  .get("/organizations/:orgId", routeHandler(route2, "/organizations/:orgId"))
+  .get("/organizations", routeHandler(route3, "/organizations"))
+  .post("/organizations", routeHandler(route4, "/organizations"))
+  .get("/workspaces/:workspaceId/shell", routeHandler(route5, "/workspaces/:workspaceId/shell"))
+  .post("/workspaces/:workspaceId/exec", routeHandler(route6, "/workspaces/:workspaceId/exec"))
+  .post("/workspaces/:workspaceId/pr/merge", routeHandler(route7, "/workspaces/:workspaceId/pr/merge"))
+  .post("/workspaces/:workspaceId/pr", routeHandler(route8, "/workspaces/:workspaceId/pr"))
+  .delete("/workspaces/:workspaceId", routeHandler(route9, "/workspaces/:workspaceId"))
+  .get("/workspaces/:workspaceId", routeHandler(route10, "/workspaces/:workspaceId"))
+  .get("/workspaces", routeHandler(route11, "/workspaces"))
+  .post("/workspaces", routeHandler(route12, "/workspaces"))
+  .get("/health", routeHandler(route13, "/health"))
+  .get("/users/me/environment", routeHandler(route14, "/users/me/environment"))
+  .put("/users/me/environment", routeHandler(route15, "/users/me/environment"))
+  .get("/repos/:repoId", routeHandler(route16, "/repos/:repoId"))
+  .get("/repos", routeHandler(route17, "/repos"))
+  .post("/repos", routeHandler(route18, "/repos"))
+  .post("/auth/device-code", routeHandler(route19, "/auth/device-code"))
+  .post("/auth/refresh", routeHandler(route20, "/auth/refresh"))
+  .post("/auth/token", routeHandler(route21, "/auth/token"))
+  .get("/auth/me", routeHandler(route22, "/auth/me"))
+;
 
 export type AppType = typeof app;

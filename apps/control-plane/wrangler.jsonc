@@ -15,6 +15,14 @@
       "migrations_dir": "drizzle",
     },
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "WORKSPACE_DO",
+        "class_name": "WorkspaceDO",
+      },
+    ],
+  },
   "migrations": [
     {
       "tag": "v1",
@@ -23,6 +31,10 @@
     {
       "tag": "v2",
       "deleted_classes": ["Sandbox"],
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["WorkspaceDO"],
     },
   ],
 }

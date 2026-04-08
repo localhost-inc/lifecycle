@@ -1,12 +1,7 @@
 import { defineCommand, defineFlag } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import {
-  createServiceLogsRequest,
-  requestDesktopRpc,
-  resolveWorkspaceId,
-  streamDesktopRpc,
-} from "../../desktop/rpc";
+import { readBridgeLogs, streamBridgeLogs } from "../logs/bridge";
 import { failCommand, failValidation, jsonFlag, printLogLine, workspaceIdFlag } from "../_shared";
 
 function validateServiceLogsInput(input: { args: string[] }): string | null {
@@ -42,16 +37,7 @@ export default defineCommand({
     }
 
     try {
-      const workspaceId = resolveWorkspaceId(input.workspaceId);
       const service = input.args[0]!;
-      const grepPattern = input.grep ? new RegExp(input.grep) : null;
-
-      const matchesGrep = (text: string): boolean => {
-        if (!grepPattern) {
-          return true;
-        }
-        return grepPattern.test(text);
-      };
 
       if (input.follow) {
         const ac = new AbortController();
@@ -63,30 +49,23 @@ export default defineCommand({
         process.once("SIGTERM", onSignal);
 
         try {
-          await streamDesktopRpc(
-            createServiceLogsRequest({
-              follow: true,
+          await streamBridgeLogs(
+            {
               ...(input.grep ? { grep: input.grep } : {}),
-              service,
-              ...(input.since ? { since: input.since } : {}),
+              json: input.json,
+              serviceNames: [service],
               ...(input.tail ? { tail: input.tail } : {}),
-              workspaceId,
-            }),
-            (line) => {
-              const logLine = line as {
-                service: string;
-                stream: string;
-                text: string;
-                timestamp: string;
-              };
-              if (!matchesGrep(logLine.text)) {
-                return;
-              }
-              if (input.json) {
-                context.stdout(JSON.stringify(logLine));
-              } else {
-                printLogLine(logLine, context.stdout);
-              }
+              ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+            },
+            {
+              onLine: (line) => {
+                if (input.json) {
+                  context.stdout(JSON.stringify(line));
+                } else {
+                  printLogLine(line, context.stdout);
+                }
+              },
+              onSleep: async (ms) => await new Promise((resolve) => setTimeout(resolve, ms)),
             },
             ac.signal,
           );
@@ -98,18 +77,15 @@ export default defineCommand({
         return 0;
       }
 
-      const response = await requestDesktopRpc(
-        createServiceLogsRequest({
-          follow: false,
-          ...(input.grep ? { grep: input.grep } : {}),
-          service,
-          ...(input.since ? { since: input.since } : {}),
-          ...(input.tail ? { tail: input.tail } : {}),
-          workspaceId,
-        }),
+      const response = await readBridgeLogs({
+        service,
+        ...(input.tail ? { tail: input.tail } : {}),
+        ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+      });
+      const grepPattern = input.grep ? new RegExp(input.grep) : null;
+      const lines = response.lines.filter((line) =>
+        grepPattern ? grepPattern.test(line.text) : true,
       );
-
-      const lines = response.result.lines.filter((line) => matchesGrep(line.text));
 
       if (input.json) {
         context.stdout(JSON.stringify(lines, null, 2));

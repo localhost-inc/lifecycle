@@ -1,13 +1,18 @@
 export type {
-  StackClient,
-  StackClientRegistry,
-  StackClientRegistryClients,
   StartedService,
   StartStackCallbacks,
   StartStackInput,
   StartStackResult,
 } from "./client";
-export { createStackClientRegistry, createStartStackInput } from "./client";
+export { createStartStackInput } from "./client";
+export {
+  stackLogDir,
+  stackLogFileName,
+  stackLogFilePath,
+  stackLogPathSegments,
+  type StackLogScope,
+  type StackLogStream,
+} from "./logs/path";
 export type { StackNode, StackNodeKind, LoweredGraph, LowerOptions } from "./graph";
 export {
   declaredServiceNames,
@@ -25,6 +30,15 @@ export {
   slugify,
   uppercaseEnvKey,
 } from "./runtime";
+export { stackServiceContainerName, stackServiceProcessID } from "./runtime-ids";
+export type { StackRuntimeServiceRecord, StackRuntimeState } from "./runtime-state";
+export {
+  clearStackRuntimeServices,
+  readStackRuntimeState,
+  stackRuntimeStatePath,
+  upsertStackRuntimeService,
+  writeStackRuntimeState,
+} from "./runtime-state";
 export type { ServiceLogLine, ServiceLogSnapshot } from "./logs";
 export { recordWorkspaceServiceLogLine, selectWorkspaceServiceLogs } from "./logs";
 export { ProcessSupervisor, isPidAlive, killPid, type SpawnOptions } from "./supervisor";

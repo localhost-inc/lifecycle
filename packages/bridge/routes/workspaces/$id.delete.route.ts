@@ -29,6 +29,6 @@ export default createRoute({
     }
 
     await archiveWorkspace(db, repo.id, ws.name);
-    return { archived: true, name: ws.name, worktreePath: ws.worktree_path };
+    return { archived: true, name: ws.name, workspaceRoot: ws.workspace_root };
   },
 });

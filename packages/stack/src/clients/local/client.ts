@@ -1,24 +1,21 @@
-import type { LifecycleConfig, ServiceRecord } from "@lifecycle/contracts";
+import type { LifecycleConfig } from "@lifecycle/contracts";
 import { execSync, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import type { StackClient, StartStackInput, StartStackResult } from "../../client";
+import type { StartStackInput, StartStackResult } from "../../client";
 import { resolveStartOrder } from "../../graph";
 import type { HealthCheck } from "../../health";
 import { waitForHealth } from "../../health";
+import { stackLogDir } from "../../logs/path";
 import { assignPorts } from "../../ports";
 import {
   buildStackEnv,
   expandRuntimeTemplates,
   injectAssignedPortsIntoManifest,
   resolveServiceEnv,
-  slugify,
 } from "../../runtime";
+import { stackServiceContainerName, stackServiceProcessID } from "../../runtime-ids";
 import { ProcessSupervisor } from "../../supervisor";
-
-function processId(stackId: string, name: string): string {
-  return `${stackId}:${name}`;
-}
 
 function lifecycleRootPath(): string {
   if (process.env.LIFECYCLE_ROOT) {
@@ -26,10 +23,6 @@ function lifecycleRootPath(): string {
   }
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
   return resolve(home, ".lifecycle");
-}
-
-function stackLogDir(stackId: string): string {
-  return resolve(lifecycleRootPath(), "logs", "stacks", encodeURIComponent(stackId));
 }
 
 function resolvePath(rootPath: string, relative: string): string {
@@ -45,7 +38,7 @@ function sanitize(value: string): string {
     .replace(/^-|-$/g, "");
 }
 
-export class LocalStackClient implements StackClient {
+export class LocalStackClient {
   private supervisor: ProcessSupervisor;
 
   constructor(supervisor?: ProcessSupervisor) {
@@ -85,7 +78,7 @@ export class LocalStackClient implements StackClient {
       assigned_port: assignedPorts[s.name] ?? s.assigned_port,
     }));
 
-    const logDir = stackLogDir(input.stackId);
+    const logDir = stackLogDir(lifecycleRootPath(), input.logScope);
     const runtimeConfig = injectAssignedPortsIntoManifest(config, assignedPorts);
     const configByName = new Map(Object.entries(runtimeConfig.stack));
 
@@ -122,7 +115,7 @@ export class LocalStackClient implements StackClient {
       } else {
         input.callbacks?.onServiceStarting?.(node.name);
         try {
-          await this.startService(
+          const processId = await this.startService(
             input.stackId,
             node.name,
             configByName,
@@ -131,7 +124,11 @@ export class LocalStackClient implements StackClient {
             runtimeEnv,
             logDir,
           );
-          const started = { assignedPort: assignedPorts[node.name] ?? null, name: node.name };
+          const started = {
+            assignedPort: assignedPorts[node.name] ?? null,
+            name: node.name,
+            processId,
+          };
           startedServiceNames.push(node.name);
           input.callbacks?.onServiceReady?.(started);
         } catch (err) {
@@ -146,21 +143,23 @@ export class LocalStackClient implements StackClient {
       startedServices: startedServiceNames.map((name) => ({
         assignedPort: assignedPorts[name] ?? null,
         name,
+        processId: this.supervisor.pid(stackServiceProcessID(input.stackId, name)),
       })),
     };
   }
 
   async stop(stackId: string, names: string[]): Promise<void> {
     for (const name of names) {
-      const id = processId(stackId, name);
+      const id = stackServiceProcessID(stackId, name);
       this.supervisor.kill(id);
       // Also try stopping a docker container with this id.
       try {
-        spawnSync("docker", ["stop", `lifecycle-${stackId}-${name}`], {
+        const containerName = stackServiceContainerName(stackId, name);
+        spawnSync("docker", ["stop", containerName], {
           stdio: "ignore",
           timeout: 10_000,
         });
-        spawnSync("docker", ["rm", "-f", `lifecycle-${stackId}-${name}`], {
+        spawnSync("docker", ["rm", "-f", containerName], {
           stdio: "ignore",
           timeout: 5_000,
         });
@@ -225,13 +224,13 @@ export class LocalStackClient implements StackClient {
     input: StartStackInput,
     runtimeEnv: Record<string, string>,
     logDir: string,
-  ): Promise<void> {
+  ): Promise<number | null> {
     const serviceConfig = configByName.get(serviceName);
     if (!serviceConfig || serviceConfig.kind !== "service") {
       throw new Error(`"${serviceName}" is not a service in the manifest.`);
     }
 
-    const id = processId(stackId, serviceName);
+    const id = stackServiceProcessID(stackId, serviceName);
 
     if (serviceConfig.runtime === "process") {
       const cwd = serviceConfig.cwd
@@ -239,13 +238,18 @@ export class LocalStackClient implements StackClient {
         : input.rootPath;
       const env = resolveServiceEnv(serviceConfig.env, runtimeEnv, `stack.${serviceName}.env`);
 
-      this.supervisor.spawn(id, {
+      const pid = this.supervisor.spawn(id, {
         binary: "sh",
         args: ["-c", serviceConfig.command],
         cwd,
         env,
         logDir,
       });
+      if (serviceConfig.health_check) {
+        const check = this.buildHealthCheck(serviceConfig.health_check, runtimeEnv);
+        await waitForHealth(check, serviceConfig.startup_timeout_seconds ?? 60, null);
+      }
+      return pid;
     } else if (serviceConfig.runtime === "image") {
       await this.startImageService(
         id,
@@ -256,14 +260,15 @@ export class LocalStackClient implements StackClient {
         runtimeEnv,
         assignedPorts,
       );
+      if (serviceConfig.health_check) {
+        const check = this.buildHealthCheck(serviceConfig.health_check, runtimeEnv);
+        const containerRef = `lifecycle-${stackId}-${serviceName}`;
+        await waitForHealth(check, serviceConfig.startup_timeout_seconds ?? 60, containerRef);
+      }
+      return null;
     }
 
-    if (serviceConfig.health_check) {
-      const check = this.buildHealthCheck(serviceConfig.health_check, runtimeEnv);
-      const containerRef =
-        serviceConfig.runtime === "image" ? `lifecycle-${stackId}-${serviceName}` : null;
-      await waitForHealth(check, serviceConfig.startup_timeout_seconds ?? 60, containerRef);
-    }
+    return null;
   }
 
   private async startImageService(
@@ -307,7 +312,7 @@ export class LocalStackClient implements StackClient {
     }
 
     const envEntries = resolveServiceEnv(serviceConfig.env, runtimeEnv, `stack.${serviceName}.env`);
-    const containerName = `lifecycle-${stackId}-${serviceName}`;
+    const containerName = stackServiceContainerName(stackId, serviceName);
 
     // Remove existing container.
     spawnSync("docker", ["rm", "-f", containerName], { stdio: "ignore" });

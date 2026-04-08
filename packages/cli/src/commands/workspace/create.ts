@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { defineCommand, defineFlag } from "@lifecycle/cmd";
+import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
 import { ensureBridge } from "@lifecycle/bridge";
@@ -37,16 +37,16 @@ export default defineCommand({
         return 0;
       }
 
-      const worktreePath =
+      const workspaceRoot =
         typeof payload === "object" &&
         payload !== null &&
-        "worktreePath" in payload &&
-        typeof payload.worktreePath === "string"
-          ? payload.worktreePath
+        "workspaceRoot" in payload &&
+        typeof payload.workspaceRoot === "string"
+          ? payload.workspaceRoot
           : null;
 
-      if (worktreePath) {
-        context.stdout(`Workspace "${name}" created at ${worktreePath}`);
+      if (workspaceRoot) {
+        context.stdout(`Workspace "${name}" created at ${workspaceRoot}`);
       } else {
         context.stdout(`Workspace "${name}" created.`);
       }

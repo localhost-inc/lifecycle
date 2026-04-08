@@ -15,6 +15,20 @@
       "when": 1774936394447,
       "tag": "0001_clever_union_jack",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1775107200000,
+      "tag": "0002_rename_worktree_path",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1775200000000,
+      "tag": "0003_named_slugs",
+      "breakpoints": true
     }
   ]
 }

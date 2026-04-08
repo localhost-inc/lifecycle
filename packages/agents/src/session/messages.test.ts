@@ -11,9 +11,9 @@ const S = "session-1";
 
 function event<K extends AgentEvent["kind"]>(
   kind: K,
-  data: Omit<Extract<AgentEvent, { kind: K }>, "kind" | "workspaceId" | "sessionId">,
+  data: Omit<Extract<AgentEvent, { kind: K }>, "kind" | "workspaceId" | "agentId">,
 ): Extract<AgentEvent, { kind: K }> {
-  return { kind, workspaceId: W, sessionId: S, ...data } as Extract<AgentEvent, { kind: K }>;
+  return { kind, workspaceId: W, agentId: S, ...data } as Extract<AgentEvent, { kind: K }>;
 }
 
 async function run(
@@ -84,7 +84,7 @@ describe("simple text response", () => {
   test("resumes an in-progress persisted message before appending new deltas", async () => {
     const persistedMessage = {
       id: "t1:assistant",
-      session_id: S,
+      agent_id: S,
       role: "assistant" as const,
       text: "Hello ",
       turn_id: "t1",
@@ -93,7 +93,7 @@ describe("simple text response", () => {
         {
           id: "t1:assistant:text:0",
           message_id: "t1:assistant",
-          session_id: S,
+          agent_id: S,
           part_index: 0,
           part_type: "text" as const,
           text: "Hello ",
@@ -536,7 +536,7 @@ describe("approval workflow", () => {
       event("agent.approval.requested", {
         approval: {
           id: "apl-1",
-          sessionId: S,
+          agentId: S,
           kind: "tool",
           scopeKey: "Read",
           status: "pending",
@@ -560,7 +560,7 @@ describe("approval workflow", () => {
       event("agent.approval.requested", {
         approval: {
           id: "apl-1",
-          sessionId: S,
+          agentId: S,
           kind: "tool",
           scopeKey: "Read",
           status: "pending",
@@ -570,7 +570,7 @@ describe("approval workflow", () => {
       event("agent.approval.resolved", {
         resolution: {
           approvalId: "apl-1",
-          sessionId: S,
+          agentId: S,
           decision: "approve_once",
         },
       }),
@@ -588,7 +588,7 @@ describe("approval workflow", () => {
       event("agent.approval.requested", {
         approval: {
           id: "apl-1",
-          sessionId: S,
+          agentId: S,
           kind: "shell",
           scopeKey: "Bash",
           status: "pending",
@@ -598,7 +598,7 @@ describe("approval workflow", () => {
       event("agent.approval.resolved", {
         resolution: {
           approvalId: "apl-1",
-          sessionId: S,
+          agentId: S,
           decision: "reject",
         },
       }),
@@ -621,7 +621,7 @@ describe("tool call updates", () => {
       event("agent.tool_call.updated", {
         toolCall: {
           id: "tc-1",
-          sessionId: S,
+          agentId: S,
           toolName: "Bash",
           status: "running",
           inputJson: { command: "ls" },
@@ -641,7 +641,7 @@ describe("tool call updates", () => {
       event("agent.tool_call.updated", {
         toolCall: {
           id: "tc-1",
-          sessionId: S,
+          agentId: S,
           toolName: "Bash",
           status: "completed",
           inputJson: { command: "ls" },
@@ -669,7 +669,7 @@ describe("artifacts", () => {
       event("agent.artifact.published", {
         artifact: {
           id: "art-1",
-          sessionId: S,
+          agentId: S,
           artifactType: "file",
           title: "Solution",
           uri: "file:///tmp/solution.ts",

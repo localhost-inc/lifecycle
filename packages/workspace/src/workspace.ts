@@ -10,10 +10,12 @@ import type {
   GitPullRequestSummary,
   GitPushResult,
   GitStatusResult,
+  LifecycleConfig,
   LifecycleTerminalPersistenceBackend,
   LifecycleTerminalPersistenceMode,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
+import type { StartStackInput, StartStackResult } from "@lifecycle/stack";
 import type { ManifestStatus } from "./manifest";
 
 export interface GitDiffInput {
@@ -47,7 +49,7 @@ export type WorkspaceFileEventSubscription = () => void;
 
 export interface SubscribeWorkspaceFileEventsInput {
   workspaceId: string;
-  worktreePath?: string | null;
+  workspaceRoot?: string | null;
 }
 
 export interface EnsureWorkspaceInput {
@@ -148,7 +150,6 @@ export interface WorkspaceTerminalRecord {
   title: string;
   kind: WorkspaceTerminalKind;
   busy: boolean;
-  closable: boolean;
 }
 
 export interface CreateWorkspaceTerminalInput extends ResolveWorkspaceTerminalRuntimeInput {
@@ -184,6 +185,11 @@ export interface WorkspaceTerminalConnection {
   launchError: string | null;
 }
 
+export interface StopWorkspaceStackInput {
+  names: string[];
+  processIds?: number[];
+}
+
 export interface WorkspaceClient {
   execCommand(workspace: WorkspaceRecord, command: string[]): Promise<ExecCommandResult>;
   resolveShellRuntime(
@@ -216,6 +222,12 @@ export interface WorkspaceClient {
     connectionId: string,
     input?: ResolveWorkspaceTerminalRuntimeInput,
   ): Promise<void>;
+  startStack(
+    workspace: WorkspaceRecord,
+    config: LifecycleConfig,
+    input: StartStackInput,
+  ): Promise<StartStackResult>;
+  stopStack(workspace: WorkspaceRecord, input: StopWorkspaceStackInput): Promise<void>;
   readManifest(dirPath: string): Promise<ManifestStatus>;
   getGitCurrentBranch(repoPath: string): Promise<string>;
   ensureWorkspace(input: EnsureWorkspaceInput): Promise<WorkspaceRecord>;

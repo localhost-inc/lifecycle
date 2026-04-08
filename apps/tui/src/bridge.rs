@@ -12,6 +12,8 @@ use std::time::Duration;
 const LIFECYCLE_BRIDGE_URL_ENV: &str = "LIFECYCLE_BRIDGE_URL";
 const LIFECYCLE_BRIDGE_CLI_RUNTIME_ENV: &str = "LIFECYCLE_BRIDGE_CLI_RUNTIME";
 const LIFECYCLE_BRIDGE_CLI_ENTRYPOINT_ENV: &str = "LIFECYCLE_BRIDGE_CLI_ENTRYPOINT";
+const LIFECYCLE_BRIDGE_REGISTRATION_ENV: &str = "LIFECYCLE_BRIDGE_REGISTRATION";
+const LIFECYCLE_RUNTIME_ROOT_ENV: &str = "LIFECYCLE_RUNTIME_ROOT";
 
 #[derive(Debug, Clone)]
 pub struct LifecycleBridgeClient {
@@ -61,23 +63,6 @@ pub struct RepoWorkspacePayload {
     pub path: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct ActivityPayload {
-    pub workspaces: Vec<ActivityEntry>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ActivityEntry {
-    pub repo: String,
-    pub name: String,
-    pub busy: bool,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ServiceListPayload {
-    pub services: Vec<ServicePayload>,
-}
-
 #[derive(Debug, Deserialize)]
 struct BridgeErrorEnvelope {
     error: BridgeErrorPayload,
@@ -121,20 +106,32 @@ enum BridgeValidationPathSegment {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkspaceServiceActionPayload {
-    pub workspace_id: String,
-    pub services: Vec<ServicePayload>,
-    pub started_services: Option<Vec<String>>,
-    pub stopped_services: Option<Vec<String>>,
+pub struct StackNodePayload {
+    pub kind: String,
+    pub name: String,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub assigned_port: Option<u16>,
+    #[serde(default)]
+    pub preview_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct ServicePayload {
-    pub name: String,
-    pub status: String,
-    pub assigned_port: Option<u16>,
-    pub preview_url: Option<String>,
+pub struct StackSummaryPayload {
+    pub state: String,
+    pub nodes: Vec<StackNodePayload>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct WorkspaceStackPayload {
+    pub stack: StackSummaryPayload,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceStackActionPayload {
+    pub stack: StackSummaryPayload,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -145,7 +142,6 @@ pub struct WorkspaceGitPayload {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct WorkspaceGitCommitPayload {
-    pub commit: GitCommitPayload,
     pub push: Option<GitPushPayload>,
 }
 
@@ -153,8 +149,6 @@ pub struct WorkspaceGitCommitPayload {
 #[serde(rename_all = "camelCase")]
 pub struct GitStatusPayload {
     pub branch: Option<String>,
-    pub head_sha: Option<String>,
-    pub upstream: Option<String>,
     pub ahead: u32,
     pub behind: u32,
     pub files: Vec<GitFileStatusPayload>,
@@ -181,30 +175,15 @@ pub struct GitFileStatsPayload {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitLogEntryPayload {
-    pub sha: String,
     pub short_sha: String,
     pub message: String,
     pub author: String,
-    pub email: String,
     pub timestamp: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GitCommitPayload {
-    pub sha: String,
-    pub short_sha: String,
-    pub message: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GitPushPayload {
-    pub branch: Option<String>,
-    pub remote: Option<String>,
-    pub ahead: u32,
-    pub behind: u32,
-}
+pub struct GitPushPayload {}
 
 impl LifecycleBridgeClient {
     pub fn from_env() -> Option<Self> {
@@ -247,19 +226,15 @@ impl LifecycleBridgeClient {
         self.get("/repos")
     }
 
-    pub fn workspace_activity(&self) -> Result<ActivityPayload, String> {
-        self.get("/workspaces/activity")
+    pub fn stack_summary(&self, workspace_id: &str) -> Result<WorkspaceStackPayload, String> {
+        self.get(&format!("/workspaces/{}/stack", workspace_id))
     }
 
-    pub fn service_list(&self, workspace_id: &str) -> Result<ServiceListPayload, String> {
-        self.get(&format!("/workspaces/{}/services", workspace_id))
-    }
-
-    pub fn service_start(
+    pub fn stack_start(
         &self,
         workspace_id: &str,
         service_names: &[String],
-    ) -> Result<WorkspaceServiceActionPayload, String> {
+    ) -> Result<WorkspaceStackActionPayload, String> {
         let body = if service_names.is_empty() {
             serde_json::json!({})
         } else {
@@ -267,17 +242,17 @@ impl LifecycleBridgeClient {
                 "serviceNames": serde_json::to_value(service_names).map_err(|error| error.to_string())?,
             })
         };
-        self.send_json::<WorkspaceServiceActionPayload>(
-            &format!("/workspaces/{}/services/start", workspace_id),
+        self.send_json::<WorkspaceStackActionPayload>(
+            &format!("/workspaces/{}/stack/start", workspace_id),
             body,
         )
     }
 
-    pub fn service_stop(
+    pub fn stack_stop(
         &self,
         workspace_id: &str,
         service_names: &[String],
-    ) -> Result<WorkspaceServiceActionPayload, String> {
+    ) -> Result<WorkspaceStackActionPayload, String> {
         let body = if service_names.is_empty() {
             serde_json::json!({})
         } else {
@@ -285,8 +260,8 @@ impl LifecycleBridgeClient {
                 "serviceNames": serde_json::to_value(service_names).map_err(|error| error.to_string())?,
             })
         };
-        self.send_json::<WorkspaceServiceActionPayload>(
-            &format!("/workspaces/{}/services/stop", workspace_id),
+        self.send_json::<WorkspaceStackActionPayload>(
+            &format!("/workspaces/{}/stack/stop", workspace_id),
             body,
         )
     }
@@ -498,7 +473,45 @@ fn discover_bridge_url() -> Option<String> {
 }
 
 fn bridge_registration_path() -> Option<PathBuf> {
-    Some(dirs::home_dir()?.join(".lifecycle").join("bridge.json"))
+    bridge_registration_path_from_env(
+        std::env::var(LIFECYCLE_BRIDGE_REGISTRATION_ENV).ok(),
+        std::env::var(LIFECYCLE_RUNTIME_ROOT_ENV).ok(),
+        dirs::home_dir(),
+    )
+}
+
+fn bridge_registration_path_from_env(
+    explicit_registration: Option<String>,
+    runtime_root: Option<String>,
+    home_dir: Option<PathBuf>,
+) -> Option<PathBuf> {
+    if let Some(path) = explicit_registration {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() {
+            return expand_home_path(trimmed, home_dir.clone());
+        }
+    }
+
+    if let Some(root) = runtime_root {
+        let trimmed = root.trim();
+        if !trimmed.is_empty() {
+            return Some(expand_home_path(trimmed, home_dir)?.join("bridge.json"));
+        }
+    }
+
+    Some(home_dir?.join(".lifecycle").join("bridge.json"))
+}
+
+fn expand_home_path(path: &str, home_dir: Option<PathBuf>) -> Option<PathBuf> {
+    if path == "~" {
+        return home_dir;
+    }
+
+    if let Some(stripped) = path.strip_prefix("~/") {
+        return Some(home_dir?.join(stripped));
+    }
+
+    Some(PathBuf::from(path))
 }
 
 pub fn current_bridge_url_from_registration() -> Option<String> {
@@ -634,7 +647,10 @@ fn start_registration_watcher(
 
 #[cfg(test)]
 mod tests {
-    use super::{bridge_url_from_registration_text, format_bridge_error};
+    use super::{
+        bridge_registration_path_from_env, bridge_url_from_registration_text, format_bridge_error,
+    };
+    use std::path::PathBuf;
 
     #[test]
     fn formats_structured_bridge_errors() {
@@ -649,11 +665,11 @@ mod tests {
     fn formats_validation_errors_with_issue_details() {
         let message = format_bridge_error(
             400,
-            r#"{"error":"Validation failed","target":"body","issues":[{"message":"Required","path":["repoPath"]},{"message":"Too small: expected string to have >=1 characters","path":["worktreePath"]}]}"#,
+            r#"{"error":"Validation failed","target":"body","issues":[{"message":"Required","path":["repoPath"]},{"message":"Too small: expected string to have >=1 characters","path":["workspaceRoot"]}]}"#,
         );
         assert_eq!(
             message,
-            "Bridge body validation failed: repoPath: Required; worktreePath: Too small: expected string to have >=1 characters",
+            "Bridge body validation failed: repoPath: Required; workspaceRoot: Too small: expected string to have >=1 characters",
         );
     }
 
@@ -667,5 +683,29 @@ mod tests {
     fn parses_bridge_url_from_registration_text() {
         let url = bridge_url_from_registration_text(r#"{"pid":42,"port":52036}"#);
         assert_eq!(url.as_deref(), Some("http://127.0.0.1:52036"));
+    }
+
+    #[test]
+    fn registration_path_prefers_explicit_override() {
+        let path = bridge_registration_path_from_env(
+            Some("/tmp/custom-bridge.json".to_string()),
+            Some("/tmp/runtime-root".to_string()),
+            Some(PathBuf::from("/Users/kyle")),
+        )
+        .expect("registration path");
+
+        assert_eq!(path, PathBuf::from("/tmp/custom-bridge.json"));
+    }
+
+    #[test]
+    fn registration_path_uses_runtime_root() {
+        let path = bridge_registration_path_from_env(
+            None,
+            Some("/tmp/runtime-root".to_string()),
+            Some(PathBuf::from("/Users/kyle")),
+        )
+        .expect("registration path");
+
+        assert_eq!(path, PathBuf::from("/tmp/runtime-root/bridge.json"));
     }
 }

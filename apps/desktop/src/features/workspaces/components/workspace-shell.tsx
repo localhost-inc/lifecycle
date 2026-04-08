@@ -1,9 +1,9 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { type GitPullRequestSummary, type WorkspaceRecord } from "@lifecycle/contracts";
 import { createStartStackInput, previewUrlForService } from "@lifecycle/stack";
-import { useStackClient } from "@lifecycle/stack/react";
 import type { ManifestStatus } from "@lifecycle/workspace";
 import { workspaceHostLabel } from "@lifecycle/workspace";
+import { useWorkspaceClient } from "@lifecycle/workspace/react";
 import { EmptyState } from "@lifecycle/ui";
 import {
   useCallback,
@@ -60,7 +60,7 @@ interface WorkspaceShellProps {
 }
 
 export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: WorkspaceShellProps) {
-  const environmentClient = useStackClient();
+  const workspaceClient = useWorkspaceClient();
   const { collections } = useStoreContext();
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const [workspaceLayoutWidth, setWorkspaceLayoutWidth] = useState(0);
@@ -85,10 +85,8 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
   const gitStatusQuery = useGitStatus(supportsTerminalInteraction ? workspace.id : null);
   const { registerToolbarSlot, unregisterToolbarSlot } = useWorkspaceToolbar();
 
-  // Reset stale service statuses on mount. After an app restart the process
-  // manager is empty, but service records may still show "ready"/"starting"
-  // from the previous session. Kill orphaned processes before resetting state
-  // so a subsequent Start doesn't conflict with the old instances.
+  // Reset stale service statuses on mount. After an app restart, service rows
+  // may still show "ready"/"starting" from the previous session.
   //
   // We include `services` in the dep array so the effect re-runs once the
   // collection hydrates from SQLite (the first render often has an empty array).
@@ -108,7 +106,7 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
       .map((s) => s.name);
     if (staleNames.length === 0) return;
 
-    void environmentClient.stop(workspace.id, staleNames, workspaceHostLabel(workspace)).finally(() => {
+    void workspaceClient.stopStack(workspace, { names: staleNames }).finally(() => {
       const now = new Date().toISOString();
       for (const service of services) {
         if (service.status === "ready" || service.status === "starting") {
@@ -192,14 +190,14 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
 
       try {
         proxyPort = await invokeTauri<number>("get_preview_proxy_port");
-        const result = await environmentClient.start(config, input);
+        const result = await workspaceClient.startStack(workspace, config, input);
         await persistPreparedAt(result.preparedAt);
       } catch (err) {
         console.error("Failed to start services:", err);
         throw err;
       }
     },
-    [collections.services, config, environmentClient, persistPreparedAt, services, workspace],
+    [collections.services, config, persistPreparedAt, services, workspace, workspaceClient],
   );
 
   const handleRestart = useCallback(async () => {
@@ -208,12 +206,11 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
     }
 
     try {
-      await environmentClient.stop(
-        workspace.id,
-        services.map((service) => service.name),
-        workspaceHostLabel(workspace),
-      );
-      const result = await environmentClient.start(
+      await workspaceClient.stopStack(workspace, {
+        names: services.map((service) => service.name),
+      });
+      const result = await workspaceClient.startStack(
+        workspace,
         config,
         createStartStackInput({
           hostLabel: workspaceHostLabel(workspace),
@@ -226,15 +223,13 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
       console.error("Failed to restart workspace:", err);
       throw err;
     }
-  }, [config, environmentClient, persistPreparedAt, services, workspace]);
+  }, [config, persistPreparedAt, services, workspace, workspaceClient]);
 
   const handleStop = useCallback(async () => {
     try {
-      await environmentClient.stop(
-        workspace.id,
-        services.map((service) => service.name),
-        workspaceHostLabel(workspace),
-      );
+      await workspaceClient.stopStack(workspace, {
+        names: services.map((service) => service.name),
+      });
 
       const now = new Date().toISOString();
       for (const service of services) {
@@ -252,7 +247,7 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
       console.error("Failed to stop workspace:", err);
       throw err;
     }
-  }, [collections.services, environmentClient, services, workspace.id]);
+  }, [collections.services, services, workspace, workspaceClient]);
 
   // ---------------------------------------------------------------------------
   // Toolbar slot — surfaces run + git actions in the workspace nav bar

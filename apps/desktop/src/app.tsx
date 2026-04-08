@@ -8,8 +8,6 @@ import type {
   AgentSessionCollectionRegistry,
 } from "@lifecycle/store";
 import { AgentClientRegistryProvider } from "@lifecycle/agents/react";
-import type { StackClientRegistry } from "@lifecycle/stack";
-import { StackClientRegistryProvider } from "@lifecycle/stack/react";
 import type { WorkspaceClientRegistry } from "@lifecycle/workspace";
 import { WorkspaceClientRegistryProvider } from "@lifecycle/workspace/react";
 import { RootErrorBoundary } from "@/app/root-error-boundary";
@@ -58,7 +56,6 @@ interface AppProps {
   agentClientRegistry: AgentClientRegistry;
   agentMessageRegistry: AgentMessageCollectionRegistry;
   agentSessionRegistry: AgentSessionCollectionRegistry;
-  stackClientRegistry: StackClientRegistry;
   workspaceClientRegistry: WorkspaceClientRegistry;
 }
 
@@ -66,7 +63,6 @@ export function App({
   agentClientRegistry,
   agentMessageRegistry,
   agentSessionRegistry,
-  stackClientRegistry,
   workspaceClientRegistry,
 }: AppProps) {
   return (
@@ -76,30 +72,28 @@ export function App({
           <BootstrapPerfMarker />
           <ContextMenuBlocker />
           <WorkspaceClientRegistryProvider workspaceClientRegistry={workspaceClientRegistry}>
-            <StackClientRegistryProvider stackClientRegistry={stackClientRegistry}>
-              <AgentClientRegistryProvider agentClientRegistry={agentClientRegistry}>
-                <StoreProvider
-                  agentMessageRegistry={agentMessageRegistry}
-                  agentSessionRegistry={agentSessionRegistry}
-                  driver={db}
-                >
-                  <ReactQueryProvider>
-                    <AuthSessionProvider
-                      client={authClient}
-                      getErrorMessage={getLifecycleErrorMessage}
-                      refreshIntervalMs={import.meta.env.DEV ? 5_000 : 60_000}
-                    >
-                      <ProcessEventBridge />
-                      <RepositoryManifestWatcher />
-                      <AppNotifier />
-                      <ShortcutRouterProvider>
-                        <RouterProvider router={router} />
-                      </ShortcutRouterProvider>
-                    </AuthSessionProvider>
-                  </ReactQueryProvider>
-                </StoreProvider>
-              </AgentClientRegistryProvider>
-            </StackClientRegistryProvider>
+            <AgentClientRegistryProvider agentClientRegistry={agentClientRegistry}>
+              <StoreProvider
+                agentMessageRegistry={agentMessageRegistry}
+                agentSessionRegistry={agentSessionRegistry}
+                driver={db}
+              >
+                <ReactQueryProvider>
+                  <AuthSessionProvider
+                    client={authClient}
+                    getErrorMessage={getLifecycleErrorMessage}
+                    refreshIntervalMs={import.meta.env.DEV ? 5_000 : 60_000}
+                  >
+                    <ProcessEventBridge />
+                    <RepositoryManifestWatcher />
+                    <AppNotifier />
+                    <ShortcutRouterProvider>
+                      <RouterProvider router={router} />
+                    </ShortcutRouterProvider>
+                  </AuthSessionProvider>
+                </ReactQueryProvider>
+              </StoreProvider>
+            </AgentClientRegistryProvider>
           </WorkspaceClientRegistryProvider>
         </SettingsProvider>
       </RootErrorBoundary>

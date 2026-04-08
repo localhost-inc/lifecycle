@@ -7,14 +7,15 @@ const CREDENTIALS_DIR = path.join(homedir(), ".lifecycle");
 const CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, "credentials.json");
 
 export interface StoredCredentials {
+  /** WorkOS access token (JWT). This is the auth token sent to the control plane. */
   token: string;
+  /** WorkOS refresh token for obtaining new access tokens. */
+  refreshToken: string | null;
   userId: string;
   email: string;
   displayName: string;
   activeOrgId: string | null;
   activeOrgSlug: string | null;
-  accessToken: string | null;
-  refreshToken: string | null;
 }
 
 export async function readCredentials(): Promise<StoredCredentials | null> {

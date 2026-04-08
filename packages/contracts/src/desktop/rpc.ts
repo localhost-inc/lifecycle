@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import {
-  AGENT_SESSION_INSPECT_OPERATION,
+  AGENT_INSPECT_OPERATION,
   CONTEXT_READ_OPERATION,
   PLAN_CREATE_OPERATION,
   PLAN_DELETE_OPERATION,
@@ -33,7 +33,7 @@ export const DESKTOP_RPC_VERSION = 1;
 export const LIFECYCLE_DESKTOP_SOCKET_ENV = "LIFECYCLE_DESKTOP_SOCKET";
 export const LIFECYCLE_DESKTOP_SESSION_TOKEN_ENV = "LIFECYCLE_DESKTOP_SESSION_TOKEN";
 export const LIFECYCLE_CLI_PATH_ENV = "LIFECYCLE_CLI_PATH";
-export const LIFECYCLE_AGENT_SESSION_ID_ENV = "LIFECYCLE_AGENT_SESSION_ID";
+export const LIFECYCLE_AGENT_ID_ENV = "LIFECYCLE_AGENT_ID";
 export const LIFECYCLE_WORKSPACE_ID_ENV = "LIFECYCLE_WORKSPACE_ID";
 export const LIFECYCLE_WORKSPACE_PATH_ENV = "LIFECYCLE_WORKSPACE_PATH";
 
@@ -55,13 +55,14 @@ const WorkspaceRecordSchema = z.object({
   last_active_at: z.string(),
   manifest_fingerprint: z.string().nullable(),
   name: z.string(),
+  slug: z.string(),
   prepared_at: z.string().nullable(),
   repository_id: z.string(),
   source_ref: z.string(),
   status: z.string(),
   host: z.string(),
   updated_at: z.string(),
-  worktree_path: z.string().nullable(),
+  workspace_root: z.string().nullable(),
 });
 
 const ServiceRecordSchema = z.object({
@@ -291,11 +292,11 @@ export const WorkspaceHealthRequestSchema = z.object({
   version: z.literal(DESKTOP_RPC_VERSION),
 });
 
-const AgentSessionRecordSchema = z.object({
+const AgentRecordSchema = z.object({
   id: z.string(),
   workspace_id: z.string(),
   provider: z.string(),
-  provider_session_id: z.string().nullable(),
+  provider_id: z.string().nullable(),
   title: z.string(),
   status: z.string(),
   last_message_at: z.string().nullable(),
@@ -306,7 +307,7 @@ const AgentSessionRecordSchema = z.object({
 const AgentMessagePartRecordSchema = z.object({
   id: z.string(),
   message_id: z.string(),
-  session_id: z.string(),
+  agent_id: z.string(),
   part_index: z.number().int(),
   part_type: z.string(),
   text: z.string().nullable(),
@@ -316,7 +317,7 @@ const AgentMessagePartRecordSchema = z.object({
 
 const AgentMessageWithPartsSchema = z.object({
   id: z.string(),
-  session_id: z.string(),
+  agent_id: z.string(),
   role: z.string(),
   text: z.string(),
   turn_id: z.string().nullable(),
@@ -324,11 +325,11 @@ const AgentMessageWithPartsSchema = z.object({
   created_at: z.string(),
 });
 
-export const AgentSessionInspectRequestSchema = z.object({
+export const AgentInspectRequestSchema = z.object({
   id: z.string(),
-  method: z.literal(AGENT_SESSION_INSPECT_OPERATION),
+  method: z.literal(AGENT_INSPECT_OPERATION),
   params: z.object({
-    sessionId: z.string(),
+    agentId: z.string(),
     workspaceId: z.string().optional(),
   }),
   session: DesktopRpcSessionSchema,
@@ -355,7 +356,7 @@ const TaskRecordSchema = z.object({
   plan_id: z.string(),
   repository_id: z.string(),
   workspace_id: z.string().nullable(),
-  agent_session_id: z.string().nullable(),
+  agent_id: z.string().nullable(),
   name: z.string(),
   description: z.string(),
   status: z.string(),
@@ -429,7 +430,7 @@ export const TaskCreateRequestSchema = z.object({
     planId: z.string(),
     repositoryId: z.string(),
     workspaceId: z.string().optional(),
-    agentSessionId: z.string().optional(),
+    agentId: z.string().optional(),
     name: z.string(),
     description: z.string().optional(),
     status: z.string().optional(),
@@ -503,7 +504,7 @@ export const DesktopRpcRequestSchema = z.discriminatedUnion("method", [
   WorkspaceLogsRequestSchema,
   WorkspaceResetRequestSchema,
   WorkspaceHealthRequestSchema,
-  AgentSessionInspectRequestSchema,
+  AgentInspectRequestSchema,
   PlanListRequestSchema,
   PlanCreateRequestSchema,
   PlanUpdateRequestSchema,
@@ -632,8 +633,8 @@ const WorkspaceHealthResultSchema = z.object({
   workspace: WorkspaceRecordSchema,
 });
 
-const AgentSessionInspectResultSchema = z.object({
-  session: AgentSessionRecordSchema,
+const AgentInspectResultSchema = z.object({
+  agent: AgentRecordSchema,
   messages: z.array(AgentMessageWithPartsSchema),
 });
 
@@ -735,11 +736,11 @@ const WorkspaceHealthSuccessSchema = z.object({
   result: WorkspaceHealthResultSchema,
 });
 
-const AgentSessionInspectSuccessSchema = z.object({
+const AgentInspectSuccessSchema = z.object({
   id: z.string(),
-  method: z.literal(AGENT_SESSION_INSPECT_OPERATION),
+  method: z.literal(AGENT_INSPECT_OPERATION),
   ok: z.literal(true),
-  result: AgentSessionInspectResultSchema,
+  result: AgentInspectResultSchema,
 });
 
 const ServiceGetFailureSchema = z.object({
@@ -840,10 +841,10 @@ const WorkspaceHealthFailureSchema = z.object({
   ok: z.literal(false),
 });
 
-const AgentSessionInspectFailureSchema = z.object({
+const AgentInspectFailureSchema = z.object({
   error: DesktopRpcErrorSchema,
   id: z.string(),
-  method: z.literal(AGENT_SESSION_INSPECT_OPERATION),
+  method: z.literal(AGENT_INSPECT_OPERATION),
   ok: z.literal(false),
 });
 
@@ -986,7 +987,7 @@ export const DesktopRpcResponseSchema = z.union([
   WorkspaceLogsSuccessSchema,
   WorkspaceResetSuccessSchema,
   WorkspaceHealthSuccessSchema,
-  AgentSessionInspectSuccessSchema,
+  AgentInspectSuccessSchema,
   PlanListSuccessSchema,
   PlanCreateSuccessSchema,
   PlanUpdateSuccessSchema,
@@ -1011,7 +1012,7 @@ export const DesktopRpcResponseSchema = z.union([
   WorkspaceLogsFailureSchema,
   WorkspaceResetFailureSchema,
   WorkspaceHealthFailureSchema,
-  AgentSessionInspectFailureSchema,
+  AgentInspectFailureSchema,
   PlanListFailureSchema,
   PlanCreateFailureSchema,
   PlanUpdateFailureSchema,
@@ -1065,7 +1066,7 @@ export type WorkspaceHealthRequest = z.infer<typeof WorkspaceHealthRequestSchema
 export type WorkspaceLogsRequest = z.infer<typeof WorkspaceLogsRequestSchema>;
 export type WorkspaceResetRequest = z.infer<typeof WorkspaceResetRequestSchema>;
 export type WorkspaceRunRequest = z.infer<typeof WorkspaceRunRequestSchema>;
-export type AgentSessionInspectRequest = z.infer<typeof AgentSessionInspectRequestSchema>;
+export type AgentInspectRequest = z.infer<typeof AgentInspectRequestSchema>;
 export type WorkspaceGetRequest = z.infer<typeof WorkspaceGetRequestSchema>;
 export type PlanListRequest = z.infer<typeof PlanListRequestSchema>;
 export type PlanCreateRequest = z.infer<typeof PlanCreateRequestSchema>;

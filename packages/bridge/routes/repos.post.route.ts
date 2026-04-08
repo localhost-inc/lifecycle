@@ -16,7 +16,7 @@ export default createRoute({
         .object({
           name: z.string().min(1),
           sourceRef: z.string().min(1),
-          worktreePath: z.string().min(1),
+          workspaceRoot: z.string().min(1),
         })
         .optional(),
     }),
@@ -35,7 +35,7 @@ export default createRoute({
           repositoryId,
           name: body.rootWorkspace.name,
           sourceRef: body.rootWorkspace.sourceRef,
-          worktreePath: body.rootWorkspace.worktreePath,
+          workspaceRoot: body.rootWorkspace.workspaceRoot,
           host: "local",
           checkoutType: "root",
         });

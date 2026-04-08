@@ -9,7 +9,8 @@
     "emitDeclarationOnly": true,
     "allowImportingTsExtensions": true,
     "exactOptionalPropertyTypes": false,
-    "noEmit": false
+    "noEmit": false,
+    "types": ["@cloudflare/workers-types/experimental"]
   },
   "include": ["src/**/*.ts", "routes/**/*.ts", "routed.gen.ts", "routed.d.ts"],
   "exclude": ["src/**/*.test.ts"]

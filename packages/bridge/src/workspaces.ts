@@ -5,6 +5,7 @@ import {
   getWorkspaceRecordById,
   insertRepository,
   insertWorkspaceStatement,
+  resolveUniqueWorkspaceSlug,
 } from "@lifecycle/db/queries";
 import type {
   ResolveWorkspaceTerminalRuntimeInput,
@@ -25,8 +26,7 @@ export interface BridgeWorkspaceScope {
   status: string | null;
   source_ref: string | null;
   cwd: string | null;
-  worktree_path: string | null;
-  services: Array<{ name: string; preview_url: string | null; status: string }>;
+  workspace_root: string | null;
   resolution_note: string | null;
   resolution_error: string | null;
 }
@@ -79,6 +79,7 @@ export async function createBridgeWorkspace(
       id: repositoryId,
       path: repoPath,
       name: repoName,
+      slug: "",
       manifest_path: "lifecycle.json",
       manifest_valid: 0,
       created_at: "",
@@ -87,14 +88,16 @@ export async function createBridgeWorkspace(
   }
 
   const now = new Date().toISOString();
+  const slug = await resolveUniqueWorkspaceSlug(db, repository.id, name);
   const draftWorkspace: WorkspaceRecord = {
     id: crypto.randomUUID(),
     repository_id: repository.id,
     name,
+    slug,
     checkout_type: "worktree",
     source_ref: sourceRef,
     git_sha: null,
-    worktree_path: null,
+    workspace_root: null,
     host,
     manifest_fingerprint: null,
     prepared_at: null,
@@ -120,7 +123,7 @@ export async function createBridgeWorkspace(
     host: ensuredWorkspace.host,
     name: ensuredWorkspace.name,
     sourceRef: ensuredWorkspace.source_ref,
-    worktreePath: ensuredWorkspace.worktree_path,
+    workspaceRoot: ensuredWorkspace.workspace_root,
   };
 }
 
@@ -139,9 +142,8 @@ export async function resolveBridgeWorkspaceScope(
       host: normalizeHost(workspace.host),
       status: workspace.status,
       source_ref: workspace.source_ref,
-      cwd: workspace.worktree_path,
-      worktree_path: workspace.worktree_path,
-      services: [],
+      cwd: workspace.workspace_root,
+      workspace_root: workspace.workspace_root,
       resolution_note: "Resolved from local database.",
       resolution_error: null,
     };
@@ -156,8 +158,7 @@ export async function resolveBridgeWorkspaceScope(
     status: null,
     source_ref: null,
     cwd: null,
-    worktree_path: null,
-    services: [],
+    workspace_root: null,
     resolution_note: null,
     resolution_error: `Could not resolve workspace "${workspaceId}".`,
   };
@@ -199,7 +200,7 @@ export async function resolveBridgeShell(
   try {
     const persistenceRuntimeInput = await resolveBridgeTerminalPersistenceRuntimeInput();
     const runtime = await workspaceRegistry.resolve(record.host).resolveShellRuntime(record, {
-      cwd: workspace.cwd ?? workspace.worktree_path,
+      cwd: workspace.cwd ?? workspace.workspace_root,
       sessionName: buildTmuxSessionName(workspace),
       ...persistenceRuntimeInput,
     });
@@ -414,7 +415,7 @@ async function resolveBridgeTerminalContext(
     client: workspaceRegistry.resolve(normalizeHost(record?.host ?? workspace.host)),
     record,
     runtimeInput: {
-      cwd: workspace.cwd ?? workspace.worktree_path,
+      cwd: workspace.cwd ?? workspace.workspace_root,
       sessionName: buildTmuxSessionName(workspace),
       ...persistenceRuntimeInput,
     },
@@ -479,7 +480,6 @@ function serializeBridgeTerminalRuntime(runtime: {
 
 function serializeBridgeTerminalRecord(terminal: {
   busy: boolean;
-  closable: boolean;
   id: string;
   kind: string;
   title: string;
@@ -489,7 +489,6 @@ function serializeBridgeTerminalRecord(terminal: {
     title: terminal.title,
     kind: terminal.kind,
     busy: terminal.busy,
-    closable: terminal.closable,
   };
 }
 

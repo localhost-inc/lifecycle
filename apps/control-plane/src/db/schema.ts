@@ -76,6 +76,7 @@ export const repository = sqliteTable("repository", {
   installationId: text("installation_id").notNull(),
   owner: text("owner").notNull(),
   name: text("name").notNull(),
+  slug: text("slug").notNull(),
   defaultBranch: text("default_branch").notNull().default("main"),
   path: text("path").notNull(),
   status: text("status").notNull().default("connected"),
@@ -119,7 +120,7 @@ export const workspace = sqliteTable("workspace", {
   status: text("status").notNull().default("provisioning"),
   environmentStatus: text("environment_status").notNull().default("idle"),
   sandboxId: text("sandbox_id"),
-  worktreePath: text("worktree_path"),
+  workspaceRoot: text("workspace_root"),
   preparedAt: text("prepared_at"),
   createdBy: text("created_by")
     .notNull()

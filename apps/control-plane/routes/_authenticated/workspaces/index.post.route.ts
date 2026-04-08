@@ -1,6 +1,6 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
-import { eq, and } from "drizzle-orm";
+import { eq, and, like, or } from "drizzle-orm";
 import type { Context } from "hono";
 import {
   workspace,
@@ -12,7 +12,9 @@ import {
 import { notFound, forbidden, badRequest } from "../../../src/errors";
 import { getInstallationToken, cloneUrl } from "../../../src/github";
 import { createDaytona } from "../../../src/daytona";
-import { CLOUD_HOME_PATH, CLOUD_WORKTREE_PATH, toSlug } from "./_helpers";
+import type { Db } from "../../../src/db";
+import { slugWithSuffix, toSlug } from "../../../src/slug";
+import { CLOUD_HOME_PATH, CLOUD_WORKTREE_PATH } from "./_helpers";
 
 export default createRoute({
   schemas: {
@@ -79,7 +81,7 @@ export default createRoute({
 
     const sourceRef = body.sourceRef ?? repo.defaultBranch;
     const id = crypto.randomUUID();
-    const slug = toSlug(body.sourceRef ?? body.name);
+    const slug = await resolveWorkspaceSlug(db, repo.id, body.name);
 
     await db.insert(workspace).values({
       id,
@@ -150,7 +152,7 @@ export default createRoute({
               status: "active",
               environmentStatus: "running",
               sandboxId: sandbox.id,
-              worktreePath: CLOUD_WORKTREE_PATH,
+              workspaceRoot: CLOUD_WORKTREE_PATH,
               updatedAt: new Date().toISOString(),
             })
             .where(eq(workspace.id, id));
@@ -182,3 +184,26 @@ export default createRoute({
     };
   },
 });
+
+async function resolveWorkspaceSlug(db: Db, repositoryId: string, name: string) {
+  const baseSlug = toSlug(name, "workspace");
+  const rows = await db
+    .select({ slug: workspace.slug })
+    .from(workspace)
+    .where(
+      and(
+        eq(workspace.repositoryId, repositoryId),
+        or(eq(workspace.slug, baseSlug), like(workspace.slug, `${baseSlug}-%`)),
+      ),
+    );
+  const existing = new Set(rows.map((row) => row.slug));
+
+  let index = 1;
+  while (true) {
+    const candidate = slugWithSuffix(baseSlug, index);
+    if (!existing.has(candidate)) {
+      return candidate;
+    }
+    index += 1;
+  }
+}

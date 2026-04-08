@@ -8,10 +8,6 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./react": {
-      "types": "./src/react.ts",
-      "default": "./src/react.ts"
-    },
     "./internal/local": {
       "types": "./src/clients/local/index.ts",
       "default": "./src/clients/local/index.ts"
@@ -26,12 +22,5 @@
   },
   "dependencies": {
     "@lifecycle/contracts": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/react": "^19.2.14",
-    "react": "^19.1.0"
-  },
-  "peerDependencies": {
-    "react": "^19.0.0"
   }
 }

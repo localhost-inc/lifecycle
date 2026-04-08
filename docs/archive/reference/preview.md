@@ -79,6 +79,6 @@ Rules:
 4. Desktop preview launches treat `preview_url` as the workspace preview surface destination; opening in the system browser is an explicit secondary action.
 
 Key files:
-- `apps/desktop/src-tauri/src/platform/preview_proxy.rs` — Axum preview proxy
-- `apps/desktop/src-tauri/src/capabilities/runtime/environment/port_assignment.rs` — port assignment logic
-- `apps/desktop/src-tauri/src/platform/runtime/supervisor.rs` — service and container execution
+- `apps/desktop-legacy-do-not-touch/src-tauri/src/platform/preview_proxy.rs` — Axum preview proxy
+- `apps/desktop-legacy-do-not-touch/src-tauri/src/capabilities/runtime/environment/port_assignment.rs` — port assignment logic
+- `apps/desktop-legacy-do-not-touch/src-tauri/src/platform/runtime/supervisor.rs` — service and container execution

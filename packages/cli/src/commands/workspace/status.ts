@@ -1,12 +1,15 @@
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
 import {
-  createWorkspaceGetRequest,
-  requestDesktopRpc,
+  failCommand,
+  jsonFlag,
+  printWorkspaceSummary,
   resolveWorkspaceId,
-} from "../../desktop/rpc";
-import { failCommand, jsonFlag, printWorkspaceSummary, workspaceIdFlag } from "../_shared";
+  stackServices,
+  workspaceIdFlag,
+} from "../_shared";
 
 export default defineCommand({
   description: "Show workspace metadata, environment state, and services.",
@@ -17,23 +20,24 @@ export default defineCommand({
   run: async (input, context) => {
     try {
       const workspaceId = resolveWorkspaceId(input.workspaceId);
-      const response = await requestDesktopRpc(
-        createWorkspaceGetRequest({
-          workspaceId,
-        }),
-      );
+      const { client } = await ensureBridge();
+      const response = await client.workspaces[":id"].$get({
+        param: { id: workspaceId },
+      });
+      const result = await response.json();
 
       if (input.json) {
-        context.stdout(JSON.stringify(response.result, null, 2));
+        context.stdout(JSON.stringify(result, null, 2));
         return 0;
       }
 
-      printWorkspaceSummary(response.result.workspace, context.stdout);
+      printWorkspaceSummary(result.workspace, context.stdout);
+      const services = stackServices(result.stack);
 
-      if (response.result.services.length > 0) {
+      if (services.length > 0) {
         context.stdout("");
         context.stdout("Services:");
-        response.result.services.forEach((service) => {
+        services.forEach((service) => {
           context.stdout(`  ${service.name}: ${service.status}`);
         });
       }

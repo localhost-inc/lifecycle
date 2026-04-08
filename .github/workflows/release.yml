@@ -36,8 +36,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            apps/desktop/src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+            apps/desktop-legacy-do-not-touch/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('apps/desktop-legacy-do-not-touch/src-tauri/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -45,7 +45,7 @@ jobs:
         id: ghosttykit-cache
         uses: actions/cache@v4
         with:
-          path: apps/desktop/src-tauri/.generated/ghostty
+          path: apps/desktop-legacy-do-not-touch/src-tauri/.generated/ghostty
           key: ${{ runner.os }}-ghosttykit-${{ hashFiles('vendor/ghostty.lock') }}
 
       - name: Build GhosttyKit
@@ -53,7 +53,7 @@ jobs:
         run: scripts/prepare-ghosttykit.sh
 
       - name: Set GhosttyKit path
-        run: echo "LIFECYCLE_GHOSTTYKIT_PATH=${{ github.workspace }}/apps/desktop/src-tauri/.generated/ghostty/GhosttyKit.xcframework" >> "$GITHUB_ENV"
+        run: echo "LIFECYCLE_GHOSTTYKIT_PATH=${{ github.workspace }}/apps/desktop-legacy-do-not-touch/src-tauri/.generated/ghostty/GhosttyKit.xcframework" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -66,7 +66,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           LIFECYCLE_GHOSTTYKIT_PATH: ${{ env.LIFECYCLE_GHOSTTYKIT_PATH }}
         with:
-          projectPath: apps/desktop
+          projectPath: apps/desktop-legacy-do-not-touch
           tauriScript: bunx tauri
           tagName: lifecycle@__VERSION__
           releaseName: lifecycle@__VERSION__

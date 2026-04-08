@@ -1,8 +1,6 @@
-import type { AgentSessionRecord } from "./agent";
+import type { AgentRecord } from "./agent";
 import type { PlanStatus, TaskPriority, TaskStatus } from "./planning";
 import type {
-  ServiceStatus,
-  ServiceStatusReason,
   WorkspaceCheckoutType,
   WorkspaceFailureReason,
   WorkspaceStatus,
@@ -13,10 +11,11 @@ export interface WorkspaceRecord {
   id: string;
   repository_id: string;
   name: string;
+  slug: string;
   checkout_type: WorkspaceCheckoutType;
   source_ref: string;
   git_sha: string | null;
-  worktree_path: string | null;
+  workspace_root: string | null;
   host: WorkspaceHost;
   manifest_fingerprint?: string | null;
   created_at: string;
@@ -28,19 +27,7 @@ export interface WorkspaceRecord {
   failed_at: string | null;
 }
 
-export interface ServiceRecord {
-  id: string;
-  workspace_id: string;
-  name: string;
-  status: ServiceStatus;
-  status_reason: ServiceStatusReason | null;
-  assigned_port: number | null;
-  preview_url: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export type { AgentSessionRecord };
+export type { AgentRecord };
 
 export interface PlanRecord {
   id: string;
@@ -60,7 +47,7 @@ export interface TaskRecord {
   plan_id: string;
   repository_id: string;
   workspace_id: string | null;
-  agent_session_id: string | null;
+  agent_id: string | null;
   name: string;
   description: string;
   status: TaskStatus;

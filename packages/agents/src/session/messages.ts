@@ -1,19 +1,17 @@
 import {
   parseAgentMessagePartData,
+  type AgentApprovalDecision,
+  type AgentApprovalKind,
+  type AgentApprovalStatus,
+  type AgentArtifactType,
+  type AgentImageMediaType,
+  type AgentMessagePart,
   type AgentMessagePartRecord,
+  type AgentMessageRole,
   type AgentMessageWithParts,
+  type AgentToolCallStatus,
 } from "@lifecycle/contracts";
 import type { AgentEvent } from "../events";
-import type {
-  AgentApprovalDecision,
-  AgentApprovalKind,
-  AgentApprovalStatus,
-  AgentArtifactType,
-  AgentImageMediaType,
-  AgentMessagePart,
-  AgentMessageRole,
-  AgentToolCallStatus,
-} from "../turn";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,7 +24,7 @@ interface PartEntry {
 
 export interface AccumulatedMessage {
   id: string;
-  sessionId: string;
+  agentId: string;
   role: AgentMessageRole;
   turnId: string | null;
   parts: PartEntry[];
@@ -98,7 +96,7 @@ export class AgentMessageProjection {
       case "agent.message.created": {
         const msg = await this.getOrCreate(
           event.messageId,
-          event.sessionId,
+          event.agentId,
           event.role,
           event.turnId,
         );
@@ -109,7 +107,7 @@ export class AgentMessageProjection {
       case "agent.message.part.completed": {
         const msg = await this.getOrCreate(
           event.messageId,
-          event.sessionId,
+          event.agentId,
           inferRole(event.messageId),
           inferTurnId(event.messageId),
         );
@@ -119,7 +117,7 @@ export class AgentMessageProjection {
 
       case "agent.tool_call.updated": {
         const msgId = `tool:${event.toolCall.id}`;
-        const msg = await this.getOrCreate(msgId, event.sessionId, "tool", null);
+        const msg = await this.getOrCreate(msgId, event.agentId, "tool", null);
         appendPart(
           msg,
           `tool:${event.toolCall.id}:call`,
@@ -156,7 +154,7 @@ export class AgentMessageProjection {
 
       case "agent.approval.requested": {
         const msgId = `approval:${event.approval.id}`;
-        const msg = await this.getOrCreate(msgId, event.sessionId, "system", null);
+        const msg = await this.getOrCreate(msgId, event.agentId, "system", null);
         appendPart(
           msg,
           `approval:${event.approval.id}:ref`,
@@ -175,7 +173,7 @@ export class AgentMessageProjection {
 
       case "agent.approval.resolved": {
         const msgId = `approval:${event.resolution.approvalId}`;
-        const msg = await this.getOrCreate(msgId, event.sessionId, "system", null);
+        const msg = await this.getOrCreate(msgId, event.agentId, "system", null);
         appendPart(
           msg,
           `approval:${event.resolution.approvalId}:ref`,
@@ -197,7 +195,7 @@ export class AgentMessageProjection {
 
       case "agent.artifact.published": {
         const msgId = `artifact:${event.artifact.id}`;
-        const msg = await this.getOrCreate(msgId, event.sessionId, "system", null);
+        const msg = await this.getOrCreate(msgId, event.agentId, "system", null);
         appendPart(
           msg,
           `artifact:${event.artifact.id}:ref`,
@@ -222,7 +220,7 @@ export class AgentMessageProjection {
         if (!hasContent) {
           const msg = await this.getOrCreate(
             assistantMsgId,
-            event.sessionId,
+            event.agentId,
             "assistant",
             event.turnId,
           );
@@ -286,9 +284,9 @@ export class AgentMessageProjection {
     return [...map.values()];
   }
 
-  clearSession(sessionId: string): void {
+  clearAgent(agentId: string): void {
     for (const [messageId, message] of this.messages) {
-      if (message.sessionId === sessionId) {
+      if (message.agentId === agentId) {
         this.messages.delete(messageId);
       }
     }
@@ -298,7 +296,7 @@ export class AgentMessageProjection {
 
   private async getOrCreate(
     messageId: string,
-    sessionId: string,
+    agentId: string,
     role: AgentMessageRole,
     turnId: string | null,
   ): Promise<AccumulatedMessage> {
@@ -306,16 +304,16 @@ export class AgentMessageProjection {
     if (!msg) {
       msg = (await this.hydratePersistedMessage(messageId)) ?? {
         id: messageId,
-        sessionId,
+        agentId,
         role,
         turnId,
         parts: [],
-        createdAt: this.nextTimestamp(sessionId),
+        createdAt: this.nextTimestamp(agentId),
       };
       this.messages.set(messageId, msg);
     }
     msg.role = role;
-    msg.sessionId = sessionId;
+    msg.agentId = agentId;
     msg.turnId = msg.turnId ?? turnId;
     return msg;
   }
@@ -332,7 +330,7 @@ export class AgentMessageProjection {
 
     return {
       id: persisted.id,
-      sessionId: persisted.session_id,
+      agentId: persisted.agent_id,
       role: persisted.role,
       turnId: persisted.turn_id,
       parts: persisted.parts
@@ -346,9 +344,9 @@ export class AgentMessageProjection {
     };
   }
 
-  private nextTimestamp(sessionId: string): string {
-    const seq = (this.messageSeq.get(sessionId) ?? 0) + 1;
-    this.messageSeq.set(sessionId, seq);
+  private nextTimestamp(agentId: string): string {
+    const seq = (this.messageSeq.get(agentId) ?? 0) + 1;
+    this.messageSeq.set(agentId, seq);
     const base = this.now().replace("Z", "");
     return `${base}${String(seq).padStart(6, "0")}Z`;
   }
@@ -542,7 +540,7 @@ function toPartRecord(
   return {
     id: entry.id,
     message_id: msg.id,
-    session_id: msg.sessionId,
+    agent_id: msg.agentId,
     part_index: index,
     part_type: p.type,
     text: "text" in p && typeof p.text === "string" ? p.text : null,
@@ -554,7 +552,7 @@ function toPartRecord(
 export function toMessageWithParts(msg: AccumulatedMessage): AgentMessageWithParts {
   return {
     id: msg.id,
-    session_id: msg.sessionId,
+    agent_id: msg.agentId,
     role: msg.role,
     text: renderText(msg),
     turn_id: msg.turnId,

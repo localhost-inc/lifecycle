@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createLocalDb } from "./index";
 import { applyDbMigrations } from "./migrations";
-import { getWorkspaceRecordById, insertRepository, insertWorkspace } from "./queries";
+import { resolveLifecycleDbPath, resolveLifecycleRootPath } from "./paths";
+import { getRepositoryById, getWorkspaceRecordById, insertRepository, insertWorkspace } from "./queries";
 import { createTursoDb } from "./turso";
 
 const tempDirs: string[] = [];
@@ -19,6 +20,12 @@ afterEach(async () => {
 });
 
 describe("@lifecycle/db", () => {
+  test("resolves lifecycle root and db paths from LIFECYCLE_ROOT", () => {
+    const root = "/tmp/lifecycle-dev-root";
+    expect(resolveLifecycleRootPath({ LIFECYCLE_ROOT: root })).toBe(root);
+    expect(resolveLifecycleDbPath({ LIFECYCLE_ROOT: root })).toBe(join(root, "lifecycle.db"));
+  });
+
   test("wraps a local driver without changing behavior", async () => {
     const calls: Array<{ sql: string; params: unknown[] | undefined }> = [];
     const db = createLocalDb({
@@ -103,12 +110,15 @@ describe("@lifecycle/db", () => {
     await applyDbMigrations(db);
 
     const workspaceColumns = await db.select<{ name: string }>("PRAGMA table_info('workspace')");
+    const repositoryColumns = await db.select<{ name: string }>("PRAGMA table_info('repository')");
     const migrationVersions = await db.select<{ version: number }>(
       "SELECT version FROM lifecycle_migration ORDER BY version ASC",
     );
 
     expect(workspaceColumns.some((column) => column.name === "host")).toBe(true);
-    expect(migrationVersions.map((row) => row.version)).toEqual([1]);
+    expect(workspaceColumns.some((column) => column.name === "slug")).toBe(true);
+    expect(repositoryColumns.some((column) => column.name === "slug")).toBe(true);
+    expect(migrationVersions.map((row) => row.version)).toEqual([1, 2, 3, 4, 5]);
 
     await db.close();
   });
@@ -132,7 +142,7 @@ describe("@lifecycle/db", () => {
       repositoryId,
       name: "main",
       sourceRef: "main",
-      worktreePath: "/tmp/lifecycle-repo",
+      workspaceRoot: "/tmp/lifecycle-repo",
       host: "local",
       checkoutType: "worktree",
     });
@@ -144,13 +154,71 @@ describe("@lifecycle/db", () => {
         id: workspaceId,
         repository_id: repositoryId,
         name: "main",
+        slug: "main",
         source_ref: "main",
-        worktree_path: "/tmp/lifecycle-repo",
+        workspace_root: "/tmp/lifecycle-repo",
         host: "local",
         checkout_type: "worktree",
         status: "active",
       }),
     );
+
+    await db.close();
+  });
+
+  test("derives stable unique slugs for repositories and workspaces", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "lifecycle-db-"));
+    tempDirs.push(dir);
+
+    const db = await createTursoDb({
+      path: join(dir, "app.db"),
+      clientName: "lifecycle-test",
+    });
+
+    await applyDbMigrations(db);
+
+    const repositoryIdA = await insertRepository(db, {
+      path: "/tmp/hello-a",
+      name: "Hello World",
+    });
+    const repositoryIdB = await insertRepository(db, {
+      path: "/tmp/hello-b",
+      name: "Hello World",
+    });
+    const repositoryA = await getRepositoryById(db, repositoryIdA);
+    const repositoryB = await getRepositoryById(db, repositoryIdB);
+
+    expect(repositoryA?.slug).toBe("hello-world");
+    expect(repositoryB?.slug).toBe("hello-world-2");
+
+    const workspaceIdA = await insertWorkspace(db, {
+      repositoryId: repositoryIdA,
+      name: "Hello World",
+      sourceRef: "main",
+      workspaceRoot: "/tmp/hello-a",
+      host: "local",
+      checkoutType: "worktree",
+    });
+    const workspaceIdB = await insertWorkspace(db, {
+      repositoryId: repositoryIdA,
+      name: "Hello World",
+      sourceRef: "feature",
+      workspaceRoot: "/tmp/hello-a-2",
+      host: "local",
+      checkoutType: "worktree",
+    });
+    const workspaceIdC = await insertWorkspace(db, {
+      repositoryId: repositoryIdB,
+      name: "Hello World",
+      sourceRef: "main",
+      workspaceRoot: "/tmp/hello-b",
+      host: "local",
+      checkoutType: "worktree",
+    });
+
+    expect((await getWorkspaceRecordById(db, workspaceIdA))?.slug).toBe("hello-world");
+    expect((await getWorkspaceRecordById(db, workspaceIdB))?.slug).toBe("hello-world-2");
+    expect((await getWorkspaceRecordById(db, workspaceIdC))?.slug).toBe("hello-world");
 
     await db.close();
   });

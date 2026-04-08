@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build": "tsc -b tsconfig.json",
-    "dev": "wrangler dev --ip 127.0.0.1 --port 8787",
+    "dev": "./scripts/dev.sh",
     "deploy": "wrangler deploy",
     "format": "oxfmt src",
     "lint": "oxlint src",
@@ -27,7 +27,8 @@
     "@workos-inc/node": "^8.10.0",
     "drizzle-orm": "^0.44.0",
     "hono": "^4.7.10",
-    "routedjs": "0.1.4",
+    "jose": "^6.0.11",
+    "routedjs": "0.1.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {

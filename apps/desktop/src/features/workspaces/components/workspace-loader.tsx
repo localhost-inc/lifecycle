@@ -1,7 +1,5 @@
 import { useAgentClientRegistry } from "@lifecycle/agents/react";
 import type { AgentClient } from "@lifecycle/agents";
-import type { StackClient } from "@lifecycle/stack";
-import { useStackClientRegistry } from "@lifecycle/stack/react";
 import {
   getManifestFingerprint,
   type RepositoryRecord,
@@ -30,14 +28,12 @@ interface WorkspaceLoaderProps {
 
 interface LoadedWorkspaceRouteProps extends WorkspaceLoaderProps {
   agentClient: AgentClient;
-  stackClient: StackClient;
   workspace: WorkspaceRecord;
   workspaceClient: WorkspaceClient;
 }
 
 function LoadedWorkspaceRoute({
   agentClient,
-  stackClient,
   onCloseTab,
   repository,
   workspace,
@@ -171,11 +167,7 @@ function LoadedWorkspaceRoute({
   }
 
   return (
-    <WorkspaceScope
-      agentClient={agentClient}
-      stackClient={stackClient}
-      workspaceClient={workspaceClient}
-    >
+    <WorkspaceScope agentClient={agentClient} workspaceClient={workspaceClient}>
       <div className="flex h-full min-h-0 flex-1 flex-col" data-slot="workspace-shell">
         <WorkspaceNavBar activeWorkspaceId={workspaceId} repositoryName={repository.name} />
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -193,7 +185,6 @@ function LoadedWorkspaceRoute({
 export function WorkspaceLoader({ onCloseTab, repository, workspaceId }: WorkspaceLoaderProps) {
   const workspace = useWorkspace(workspaceId) ?? null;
   const workspaceClientRegistry = useWorkspaceClientRegistry();
-  const stackClientRegistry = useStackClientRegistry();
   const agentClientRegistry = useAgentClientRegistry();
 
   if (!workspace) {
@@ -205,13 +196,11 @@ export function WorkspaceLoader({ onCloseTab, repository, workspaceId }: Workspa
   }
 
   const workspaceClient = workspaceClientRegistry.resolve(workspace.host);
-  const stackClient = stackClientRegistry.resolve(workspace.host);
   const agentClient = agentClientRegistry.resolve(workspace.host);
 
   return (
     <LoadedWorkspaceRoute
       agentClient={agentClient}
-      stackClient={stackClient}
       onCloseTab={onCloseTab}
       repository={repository}
       workspace={workspace}

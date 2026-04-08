@@ -1,0 +1,2547 @@
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { createInterface } from "node:readline";
+import { Codex } from "@openai/codex-sdk";
+import { resolveCodexCliPath } from "./cli-path";
+import type {
+  AgentApprovalDecision,
+  AgentApprovalKind,
+  AgentItem,
+  AgentItemStatus,
+  AgentProviderRequest,
+  AgentProviderRequestResolution,
+} from "@lifecycle/contracts";
+import { LIFECYCLE_SYSTEM_PROMPT } from "../../system-prompt";
+import type {
+  AgentApprovalRequestPayload,
+  AgentCommand,
+  AgentStreamEvent,
+  AgentInputPart,
+} from "../../stream-protocol";
+
+// ---------------------------------------------------------------------------
+// Lightweight title generation — uses the already-running app-server so it
+// shares the same auth (ChatGPT OAuth / API key) as the main agent.
+// ---------------------------------------------------------------------------
+
+function truncateTitle(text: string, maxLength = 40): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= maxLength) {
+    return clean;
+  }
+  const truncated = clean.slice(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(" ");
+  return lastSpace > 10 ? truncated.slice(0, lastSpace) : truncated;
+}
+
+function extractTextFromInput(parts: AgentInputPart[]): string {
+  return parts
+    .filter((p): p is Extract<AgentInputPart, { type: "text" }> => p.type === "text")
+    .map((p) => p.text)
+    .join(" ")
+    .trim();
+}
+
+async function generateSessionTitle(userText: string): Promise<string | null> {
+  try {
+    const codex = new Codex();
+    const thread = codex.startThread({
+      approvalPolicy: "never",
+      sandboxMode: "danger-full-access",
+    });
+    const prompt =
+      "Generate a concise 3-5 word title for the following conversation prompt. " +
+      "Respond with only the title, no quotes or extra punctuation.\n\n" +
+      userText.slice(0, 500);
+    const turn = await thread.run(prompt);
+    const title = turn.finalResponse.trim();
+    return title.length > 0 ? title : truncateTitle(userText);
+  } catch {
+    return truncateTitle(userText);
+  }
+}
+
+export type CodexApprovalPolicy = "never" | "on-failure" | "on-request" | "untrusted";
+export type CodexReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type CodexSandboxMode = "read-only" | "workspace-write" | "danger-full-access";
+
+export interface CodexProviderInput {
+  approvalPolicy: CodexApprovalPolicy;
+  dangerousBypass: boolean;
+  model?: string | undefined;
+  modelReasoningEffort?: CodexReasoningEffort | undefined;
+  providerId?: string | undefined;
+  sandboxMode: CodexSandboxMode;
+  workspacePath: string;
+}
+
+interface CodexJsonRpcError {
+  code?: number;
+  data?: unknown;
+  message?: string;
+}
+
+interface CodexJsonRpcRequest {
+  id: number | string;
+  jsonrpc: "2.0";
+  method: string;
+  params?: unknown;
+}
+
+interface CodexJsonRpcResponse {
+  error?: CodexJsonRpcError;
+  id: number | string;
+  jsonrpc?: "2.0";
+  result?: unknown;
+}
+
+interface PendingRpcRequest {
+  reject: (error: Error) => void;
+  resolve: (value: unknown) => void;
+}
+
+interface PendingCodexApproval {
+  approval: AgentApprovalRequestPayload;
+  lifecycleTurnId: string;
+  method: string;
+  params: Record<string, unknown>;
+  requestId: number | string;
+}
+
+interface PendingCodexProviderRequest {
+  lifecycleTurnId: string | null;
+  method: string;
+  params: Record<string, unknown>;
+  request: AgentProviderRequest;
+  requestId: number | string;
+}
+
+interface CodexThreadBootstrapRequest {
+  method: "thread/resume" | "thread/start";
+  params: Record<string, unknown>;
+}
+
+function emitProviderEvent(event: AgentStreamEvent): void {
+  process.stdout.write(`${JSON.stringify(event)}\n`);
+}
+
+function emitRawProviderEvent(eventType: string, payload: unknown, turnId?: string | null): void {
+  emitProviderEvent({
+    kind: "agent.raw_event",
+    eventType,
+    payload,
+    ...(turnId === undefined ? {} : { turnId }),
+  });
+}
+
+function emitProviderSignal(input: {
+  channel: "account" | "apps" | "config" | "hook" | "item" | "mcp" | "realtime" | "skills" | "system" | "thread" | "turn";
+  name: string;
+  metadata?: Record<string, unknown> | null;
+  itemId?: string | null;
+  requestId?: string | null;
+  turnId?: string | null;
+}): void {
+  emitProviderEvent({
+    kind: "agent.provider.signal",
+    signal: {
+      channel: input.channel,
+      name: input.name,
+      ...(input.itemId === undefined ? {} : { itemId: input.itemId }),
+      ...(input.requestId === undefined ? {} : { requestId: input.requestId }),
+      ...(input.metadata === undefined ? {} : { metadata: input.metadata }),
+    },
+    ...(input.turnId === undefined ? {} : { turnId: input.turnId }),
+  });
+}
+
+function emitProviderRequest(input: {
+  request: AgentProviderRequest;
+  turnId?: string | null;
+}): void {
+  emitProviderEvent({
+    kind: "agent.provider.requested",
+    request: input.request,
+    ...(input.turnId === undefined ? {} : { turnId: input.turnId }),
+  });
+}
+
+function emitProviderRequestResolution(input: {
+  resolution: AgentProviderRequestResolution;
+  turnId?: string | null;
+}): void {
+  emitProviderEvent({
+    kind: "agent.provider.request.resolved",
+    resolution: input.resolution,
+    ...(input.turnId === undefined ? {} : { turnId: input.turnId }),
+  });
+}
+
+function normalizeCommand(raw: string): AgentCommand {
+  return JSON.parse(raw) as AgentCommand;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function readString(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function readOptionalString(
+  record: Record<string, unknown>,
+  key: string,
+): string | null | undefined {
+  const value = record[key];
+  if (value === null) {
+    return null;
+  }
+  return typeof value === "string" ? value : undefined;
+}
+
+function readBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
+  const value = record[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function readNumber(record: Record<string, unknown>, key: string): number | undefined {
+  const value = record[key];
+  return typeof value === "number" ? value : undefined;
+}
+
+function toJsonString(value: unknown): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function mapCodexStatus(status: string | undefined): AgentItemStatus {
+  switch (status) {
+    case "completed":
+      return "completed";
+    case "declined":
+    case "failed":
+      return "failed";
+    case "inProgress":
+    default:
+      return "running";
+  }
+}
+
+function mapCodexThreadItemToProviderItem(item: Record<string, unknown>): AgentItem | null {
+  switch (readString(item, "type")) {
+    case "agentMessage":
+      return {
+        id: readString(item, "id") ?? "",
+        text: readString(item, "text") ?? "",
+        type: "agent_message",
+        sourceType: "agentMessage",
+        metadata: {
+          memoryCitation: item.memoryCitation ?? null,
+          phase: readOptionalString(item, "phase") ?? null,
+        },
+      };
+    case "plan":
+      return {
+        id: readString(item, "id") ?? "",
+        text: readString(item, "text") ?? "",
+        type: "reasoning",
+        reasoningKind: "plan",
+        sourceType: "plan",
+      };
+    case "reasoning": {
+      const summary = Array.isArray(item.summary)
+        ? item.summary.filter((value): value is string => typeof value === "string")
+        : [];
+      const content = Array.isArray(item.content)
+        ? item.content.filter((value): value is string => typeof value === "string")
+        : [];
+      return {
+        id: readString(item, "id") ?? "",
+        text: [...summary, ...content].join("\n\n"),
+        type: "reasoning",
+        reasoningKind: "reasoning",
+        sourceType: "reasoning",
+        metadata: {
+          content,
+          summary,
+        },
+      };
+    }
+    case "commandExecution":
+      return {
+        command: readString(item, "command") ?? "",
+        id: readString(item, "id") ?? "",
+        output: readOptionalString(item, "aggregatedOutput") ?? "",
+        status: mapCodexStatus(readString(item, "status")),
+        type: "command_execution",
+        ...(typeof readNumber(item, "exitCode") === "number"
+          ? { exitCode: readNumber(item, "exitCode") ?? 0 }
+          : {}),
+        sourceType: "commandExecution",
+        metadata: {
+          commandActions: item.commandActions ?? null,
+          cwd: readOptionalString(item, "cwd") ?? null,
+          durationMs: readNumber(item, "durationMs") ?? null,
+          processId: readOptionalString(item, "processId") ?? null,
+        },
+      };
+    case "fileChange":
+      const changes = Array.isArray(item.changes)
+        ? item.changes.flatMap((change) => {
+            if (!isRecord(change)) {
+              return [];
+            }
+            const path = readString(change, "path");
+            const kind = readString(change, "kind");
+            if (!path || (kind !== "add" && kind !== "delete" && kind !== "update")) {
+              return [];
+            }
+            const diff = readString(change, "diff");
+            return [{ ...(diff ? { diff } : {}), kind, path }] as const;
+          })
+        : [];
+      const diff =
+        readString(item, "diff") ??
+        changes
+          .map((change) => change.diff)
+          .filter((value): value is string => typeof value === "string" && value.length > 0)
+          .join("\n");
+      return {
+        changes,
+        ...(diff ? { diff } : {}),
+        id: readString(item, "id") ?? "",
+        status: mapCodexStatus(readString(item, "status")),
+        type: "file_change",
+        sourceType: "fileChange",
+      };
+    case "mcpToolCall": {
+      const result = item.result;
+      const error = item.error;
+      const inputJson = toJsonString(item.arguments);
+      const outputJson = isRecord(result) ? toJsonString(result) : undefined;
+      const errorText = isRecord(error) ? readString(error, "message") : undefined;
+      return {
+        id: readString(item, "id") ?? "",
+        status: mapCodexStatus(readString(item, "status")),
+        toolCallId: readString(item, "id") ?? "",
+        toolName: `${readString(item, "server") ?? "mcp"}/${readString(item, "tool") ?? "tool"}`,
+        type: "tool_call",
+        ...(inputJson !== undefined ? { inputJson } : {}),
+        ...(outputJson !== undefined ? { outputJson } : {}),
+        ...(errorText !== undefined ? { errorText } : {}),
+        sourceType: "mcpToolCall",
+        metadata: {
+          durationMs: readNumber(item, "durationMs") ?? null,
+          server: readString(item, "server") ?? null,
+          tool: readString(item, "tool") ?? null,
+          toolKind: "mcp",
+        },
+      };
+    }
+    case "dynamicToolCall": {
+      const inputJson = toJsonString(item.arguments);
+      const outputJson = toJsonString(item.contentItems);
+      return {
+        id: readString(item, "id") ?? "",
+        status: mapCodexStatus(readString(item, "status")),
+        toolCallId: readString(item, "id") ?? "",
+        toolName: readString(item, "tool") ?? "tool",
+        type: "tool_call",
+        ...(inputJson !== undefined ? { inputJson } : {}),
+        ...(outputJson !== undefined ? { outputJson } : {}),
+        sourceType: "dynamicToolCall",
+        metadata: {
+          durationMs: readNumber(item, "durationMs") ?? null,
+          success: readBoolean(item, "success") ?? null,
+          toolKind: "dynamic",
+        },
+      };
+    }
+    case "webSearch": {
+      const inputJson = toJsonString({
+        action: item.action,
+        query: readString(item, "query") ?? "",
+      });
+      return {
+        id: readString(item, "id") ?? "",
+        status: "completed",
+        toolCallId: readString(item, "id") ?? "",
+        toolName: "web_search",
+        type: "tool_call",
+        ...(inputJson !== undefined ? { inputJson } : {}),
+        sourceType: "webSearch",
+        metadata: {
+          action: item.action ?? null,
+          query: readString(item, "query") ?? null,
+          toolKind: "web_search",
+        },
+      };
+    }
+    case "collabAgentToolCall": {
+      const inputJson = toJsonString({
+        model: readOptionalString(item, "model"),
+        prompt: readOptionalString(item, "prompt"),
+        receiverThreadIds: item.receiverThreadIds,
+        senderThreadId: readString(item, "senderThreadId"),
+      });
+      const outputJson = toJsonString(item.agentsStates);
+      return {
+        id: readString(item, "id") ?? "",
+        status: mapCodexStatus(readString(item, "status")),
+        toolCallId: readString(item, "id") ?? "",
+        toolName: `collab/${readString(item, "tool") ?? "agent"}`,
+        type: "tool_call",
+        ...(inputJson !== undefined ? { inputJson } : {}),
+        ...(outputJson !== undefined ? { outputJson } : {}),
+        sourceType: "collabAgentToolCall",
+        metadata: {
+          model: readOptionalString(item, "model") ?? null,
+          prompt: readOptionalString(item, "prompt") ?? null,
+          reasoningEffort: readOptionalString(item, "reasoningEffort") ?? null,
+          receiverThreadIds: item.receiverThreadIds ?? null,
+          senderThreadId: readString(item, "senderThreadId") ?? null,
+          toolKind: "collab_agent",
+        },
+      };
+    }
+    case "imageView":
+      return {
+        id: readString(item, "id") ?? "",
+        path: readString(item, "path") ?? "",
+        type: "image_view",
+        sourceType: "imageView",
+      };
+    case "imageGeneration":
+      return {
+        id: readString(item, "id") ?? "",
+        result: readString(item, "result") ?? "",
+        revisedPrompt: readOptionalString(item, "revisedPrompt") ?? null,
+        status: readOptionalString(item, "status") ?? null,
+        type: "image_generation",
+        sourceType: "imageGeneration",
+      };
+    case "enteredReviewMode":
+      return {
+        id: readString(item, "id") ?? "",
+        mode: "entered",
+        review: readString(item, "review") ?? "",
+        type: "review_mode",
+        sourceType: "enteredReviewMode",
+      };
+    case "exitedReviewMode":
+      return {
+        id: readString(item, "id") ?? "",
+        mode: "exited",
+        review: readString(item, "review") ?? "",
+        type: "review_mode",
+        sourceType: "exitedReviewMode",
+      };
+    case "contextCompaction":
+      return {
+        id: readString(item, "id") ?? "",
+        type: "context_compaction",
+        sourceType: "contextCompaction",
+      };
+    default:
+      return null;
+  }
+}
+
+export function codexThreadItemToProviderItem(item: Record<string, unknown>): AgentItem | null {
+  return mapCodexThreadItemToProviderItem(item);
+}
+
+export function appendCodexCommandExecutionOutputDelta(
+  item: Record<string, unknown>,
+  delta: string,
+): Record<string, unknown> {
+  return {
+    ...item,
+    aggregatedOutput: `${readOptionalString(item, "aggregatedOutput") ?? ""}${delta}`,
+  };
+}
+
+export function appendCodexFileChangeOutputDelta(
+  item: Record<string, unknown>,
+  delta: string,
+): Record<string, unknown> {
+  return {
+    ...item,
+    diff: `${readOptionalString(item, "diff") ?? ""}${delta}`,
+  };
+}
+
+export function mergeCodexItemSnapshot(
+  previous: Record<string, unknown> | undefined,
+  next: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!previous) {
+    return next;
+  }
+
+  const itemType = readString(next, "type");
+  if (!itemType || readString(previous, "type") !== itemType) {
+    return next;
+  }
+
+  switch (itemType) {
+    case "commandExecution": {
+      const merged = { ...previous, ...next };
+      const previousOutput = readOptionalString(previous, "aggregatedOutput");
+      const nextOutput = readOptionalString(next, "aggregatedOutput");
+      if (
+        typeof previousOutput === "string" &&
+        previousOutput.length > 0 &&
+        !(typeof nextOutput === "string" && nextOutput.length > 0)
+      ) {
+        merged.aggregatedOutput = previousOutput;
+      }
+      return merged;
+    }
+    case "fileChange": {
+      const merged = { ...previous, ...next };
+      const previousDiff = readOptionalString(previous, "diff");
+      const nextDiff = readOptionalString(next, "diff");
+      if (
+        typeof previousDiff === "string" &&
+        previousDiff.length > 0 &&
+        !(typeof nextDiff === "string" && nextDiff.length > 0)
+      ) {
+        merged.diff = previousDiff;
+      }
+      return merged;
+    }
+    default:
+      return next;
+  }
+}
+
+export function buildCodexTurnDiffItem(
+  lifecycleTurnId: string,
+  diff: string,
+  fileChangeItems: Record<string, unknown>[],
+): Record<string, unknown> {
+  const changes = fileChangeItems.flatMap((item) => {
+    if (!Array.isArray(item.changes)) {
+      return [];
+    }
+
+    return item.changes.filter((change): change is Record<string, unknown> => isRecord(change));
+  });
+
+  return {
+    changes,
+    diff,
+    id: `${lifecycleTurnId}:turn-diff`,
+    status: "inProgress",
+    type: "fileChange",
+  };
+}
+
+function buildCodexConfig(input: CodexProviderInput): Record<string, unknown> | null {
+  if (!input.modelReasoningEffort) {
+    return null;
+  }
+
+  return {
+    model_reasoning_effort: input.modelReasoningEffort,
+  };
+}
+
+export function createCodexThreadBootstrapRequest(
+  input: CodexProviderInput,
+): CodexThreadBootstrapRequest {
+  const approvalPolicy = input.dangerousBypass ? "never" : input.approvalPolicy;
+  const config = buildCodexConfig(input);
+  const sandboxMode = input.dangerousBypass ? "danger-full-access" : input.sandboxMode;
+  const shared: Record<string, unknown> = {
+    approvalPolicy,
+    cwd: input.workspacePath,
+    developerInstructions: LIFECYCLE_SYSTEM_PROMPT,
+    persistExtendedHistory: true,
+    sandbox: sandboxMode,
+    ...(input.model ? { model: input.model } : {}),
+    ...(config ? { config } : {}),
+  };
+
+  if (input.providerId?.trim()) {
+    return {
+      method: "thread/resume",
+      params: {
+        threadId: input.providerId.trim(),
+        ...shared,
+      },
+    };
+  }
+
+  return {
+    method: "thread/start",
+    params: {
+      ...shared,
+      ephemeral: false,
+      experimentalRawEvents: false,
+    },
+  };
+}
+
+function buildUserInput(parts: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  return parts.map((part) => {
+    if (
+      part.type === "image" &&
+      typeof part.base64Data === "string" &&
+      typeof part.mediaType === "string"
+    ) {
+      return {
+        type: "image",
+        image_url: `data:${part.mediaType};base64,${part.base64Data}`,
+      };
+    }
+    return {
+      text: typeof part.text === "string" ? part.text : "",
+      text_elements: [],
+      type: "text",
+    };
+  });
+}
+
+function buildTurnStartParams(
+  input: CodexProviderInput,
+  providerThreadId: string,
+  inputParts: Array<Record<string, unknown>>,
+): Record<string, unknown> {
+  return {
+    ...(input.modelReasoningEffort ? { effort: input.modelReasoningEffort } : {}),
+    input: buildUserInput(inputParts),
+    threadId: providerThreadId,
+  };
+}
+
+function isJsonRpcRequest(message: unknown): message is CodexJsonRpcRequest {
+  return isRecord(message) && "method" in message && "id" in message;
+}
+
+function isJsonRpcResponse(message: unknown): message is CodexJsonRpcResponse {
+  return (
+    isRecord(message) &&
+    "id" in message &&
+    ("result" in message || "error" in message) &&
+    !("method" in message)
+  );
+}
+
+function isJsonRpcNotification(message: unknown): message is { method: string; params?: unknown } {
+  return isRecord(message) && typeof message.method === "string" && !("id" in message);
+}
+
+function resolveLifecycleTurnId(
+  providerTurnId: string | null | undefined,
+  currentLifecycleTurnId: string | null,
+  providerTurnToLifecycleTurnId: Map<string, string>,
+): string | null {
+  if (providerTurnId && providerTurnToLifecycleTurnId.has(providerTurnId)) {
+    return providerTurnToLifecycleTurnId.get(providerTurnId) ?? null;
+  }
+
+  return currentLifecycleTurnId;
+}
+
+export function createApprovalId(
+  method: string,
+  requestId: number | string,
+  params: Record<string, unknown>,
+): string {
+  if (method === "item/commandExecution/requestApproval") {
+    const approvalId = readString(params, "approvalId");
+    if (approvalId) {
+      return approvalId;
+    }
+  }
+
+  if (method === "mcpServer/elicitation/request") {
+    const elicitationId = readString(params, "elicitationId");
+    if (elicitationId) {
+      return elicitationId;
+    }
+  }
+
+  const itemId = readString(params, "itemId");
+  return itemId ? `codex:${method}:${itemId}` : `codex:${String(requestId)}`;
+}
+
+function createProviderRequestId(
+  method: string,
+  requestId: number | string,
+  params: Record<string, unknown>,
+): string {
+  if (
+    method === "item/commandExecution/requestApproval" ||
+    method === "item/fileChange/requestApproval" ||
+    method === "item/permissions/requestApproval" ||
+    method === "item/tool/requestUserInput" ||
+    method === "mcpServer/elicitation/request"
+  ) {
+    return createApprovalId(method, requestId, params);
+  }
+
+  const callId = readString(params, "callId");
+  if (callId) {
+    return `codex:${method}:${callId}`;
+  }
+
+  return `codex:${method}:${String(requestId)}`;
+}
+
+function inferFileChangeApprovalKind(item: Record<string, unknown> | undefined): AgentApprovalKind {
+  const changes = item && Array.isArray(item.changes) ? item.changes : [];
+  const normalizedKinds = changes.flatMap((change) => {
+    if (!isRecord(change)) {
+      return [];
+    }
+    const kind = readString(change, "kind");
+    return kind ? [kind] : [];
+  });
+
+  if (normalizedKinds.length > 0 && normalizedKinds.every((kind) => kind === "delete")) {
+    return "file_delete";
+  }
+
+  return "file_write";
+}
+
+function inferPermissionsApprovalKind(params: Record<string, unknown>): AgentApprovalKind {
+  const permissions = isRecord(params.permissions) ? params.permissions : null;
+  if (permissions && permissions.network !== null && permissions.network !== undefined) {
+    return "network";
+  }
+  return "file_write";
+}
+
+function buildCommandApprovalMessage(params: Record<string, unknown>): string {
+  const networkContext = isRecord(params.networkApprovalContext)
+    ? params.networkApprovalContext
+    : null;
+  if (networkContext) {
+    const host = readString(networkContext, "host");
+    const protocol = readString(networkContext, "protocol");
+    if (host && protocol) {
+      return `Codex wants network access to ${host} over ${protocol}.`;
+    }
+    if (host) {
+      return `Codex wants network access to ${host}.`;
+    }
+  }
+
+  const reason = readString(params, "reason");
+  if (reason) {
+    return reason;
+  }
+
+  const command = readString(params, "command");
+  if (command) {
+    return `Codex wants to run: ${command}`;
+  }
+
+  return "Codex needs approval before running a command.";
+}
+
+function buildFileChangeApprovalMessage(
+  params: Record<string, unknown>,
+  item: Record<string, unknown> | undefined,
+): string {
+  const reason = readString(params, "reason");
+  if (reason) {
+    return reason;
+  }
+
+  const changes = item && Array.isArray(item.changes) ? item.changes : [];
+  if (changes.length > 0) {
+    const fileCount = changes.length;
+    return `Codex wants to apply changes to ${fileCount} file${fileCount === 1 ? "" : "s"}.`;
+  }
+
+  return "Codex wants to apply file changes.";
+}
+
+function buildPermissionsApprovalMessage(params: Record<string, unknown>): string {
+  const reason = readOptionalString(params, "reason");
+  if (typeof reason === "string" && reason.trim()) {
+    return reason.trim();
+  }
+
+  const permissions = isRecord(params.permissions) ? params.permissions : null;
+  if (permissions?.network) {
+    return "Codex wants additional network access.";
+  }
+  return "Codex wants additional filesystem permissions.";
+}
+
+function buildQuestionMessage(params: Record<string, unknown>): string {
+  const questions = Array.isArray(params.questions) ? params.questions : [];
+  for (const question of questions) {
+    if (!isRecord(question)) {
+      continue;
+    }
+    const prompt = readString(question, "question");
+    if (prompt) {
+      return prompt;
+    }
+  }
+
+  return "Codex needs more input before it can continue.";
+}
+
+function buildToolUserInputMetadata(params: Record<string, unknown>): Record<string, unknown> {
+  const questions = Array.isArray(params.questions)
+    ? params.questions.flatMap((question) => {
+        if (!isRecord(question)) {
+          return [];
+        }
+        return [
+          {
+            header:
+              readString(question, "header") ?? readString(question, "question") ?? "Question",
+            id: readString(question, "id"),
+            isOther: readBoolean(question, "isOther") ?? false,
+            isSecret: readBoolean(question, "isSecret") ?? false,
+            multiSelect: false,
+            options: Array.isArray(question.options)
+              ? question.options.flatMap((option) => {
+                  if (!isRecord(option)) {
+                    return [];
+                  }
+                  const label = readString(option, "label");
+                  if (!label) {
+                    return [];
+                  }
+                  return [
+                    {
+                      description: readString(option, "description") ?? "",
+                      label,
+                    },
+                  ];
+                })
+              : [],
+            question: readString(question, "question") ?? "",
+          },
+        ];
+      })
+    : [];
+
+  return {
+    itemId: readString(params, "itemId") ?? null,
+    method: "item/tool/requestUserInput",
+    questions,
+  };
+}
+
+export function buildMcpElicitationMetadata(
+  params: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    _meta: params._meta ?? null,
+    elicitationId: readString(params, "elicitationId") ?? null,
+    method: "mcpServer/elicitation/request",
+    mode: readString(params, "mode") ?? "form",
+    requestedSchema: params.requestedSchema ?? null,
+    serverName: readString(params, "serverName") ?? null,
+    url: readString(params, "url") ?? null,
+  };
+}
+
+function createCodexApprovalRequest(
+  lifecycleTurnId: string,
+  method: string,
+  params: Record<string, unknown>,
+  item: Record<string, unknown> | undefined,
+  requestId: number | string,
+): AgentApprovalRequestPayload {
+  switch (method) {
+    case "item/commandExecution/requestApproval":
+      return {
+        id: createApprovalId(method, requestId, params),
+        kind: isRecord(params.networkApprovalContext) ? "network" : "shell",
+        message: buildCommandApprovalMessage(params),
+        metadata: {
+          additionalPermissions: params.additionalPermissions ?? null,
+          availableDecisions: params.availableDecisions ?? null,
+          command: readString(params, "command") ?? null,
+          commandActions: params.commandActions ?? null,
+          cwd: readString(params, "cwd") ?? null,
+          itemId: readString(params, "itemId") ?? null,
+          method,
+          networkApprovalContext: params.networkApprovalContext ?? null,
+          proposedExecpolicyAmendment: params.proposedExecpolicyAmendment ?? null,
+          proposedNetworkPolicyAmendments: params.proposedNetworkPolicyAmendments ?? null,
+          reason: readOptionalString(params, "reason") ?? null,
+          skillMetadata: params.skillMetadata ?? null,
+        },
+        scopeKey: `codex:${lifecycleTurnId}:${readString(params, "itemId") ?? String(requestId)}`,
+        status: "pending",
+      };
+    case "item/fileChange/requestApproval":
+      return {
+        id: createApprovalId(method, requestId, params),
+        kind: inferFileChangeApprovalKind(item),
+        message: buildFileChangeApprovalMessage(params, item),
+        metadata: {
+          changes: item?.changes ?? null,
+          grantRoot: readOptionalString(params, "grantRoot") ?? null,
+          itemId: readString(params, "itemId") ?? null,
+          method,
+          reason: readOptionalString(params, "reason") ?? null,
+        },
+        scopeKey: `codex:${lifecycleTurnId}:${readString(params, "itemId") ?? String(requestId)}`,
+        status: "pending",
+      };
+    case "item/permissions/requestApproval":
+      return {
+        id: createApprovalId(method, requestId, params),
+        kind: inferPermissionsApprovalKind(params),
+        message: buildPermissionsApprovalMessage(params),
+        metadata: {
+          itemId: readString(params, "itemId") ?? null,
+          method,
+          permissions: params.permissions ?? null,
+          reason: readOptionalString(params, "reason") ?? null,
+        },
+        scopeKey: `codex:${lifecycleTurnId}:${readString(params, "itemId") ?? String(requestId)}`,
+        status: "pending",
+      };
+    case "item/tool/requestUserInput":
+      return {
+        id: createApprovalId(method, requestId, params),
+        kind: "question",
+        message: buildQuestionMessage(params),
+        metadata: buildToolUserInputMetadata(params),
+        scopeKey: `codex:${lifecycleTurnId}:${readString(params, "itemId") ?? String(requestId)}`,
+        status: "pending",
+      };
+    case "mcpServer/elicitation/request":
+      return {
+        id: createApprovalId(method, requestId, params),
+        kind: "question",
+        message: readString(params, "message") ?? "Codex needs more input before it can continue.",
+        metadata: buildMcpElicitationMetadata(params),
+        scopeKey: `codex:${lifecycleTurnId}:${readString(params, "serverName") ?? String(requestId)}`,
+        status: "pending",
+      };
+    default:
+      return {
+        id: createApprovalId(method, requestId, params),
+        kind: "tool",
+        message: "Codex requested host intervention.",
+        metadata: {
+          itemId: readString(params, "itemId") ?? null,
+          method,
+          params,
+        },
+        scopeKey: `codex:${lifecycleTurnId}:${String(requestId)}`,
+        status: "pending",
+      };
+  }
+}
+
+function buildCodexProviderRequestTitle(method: string, params: Record<string, unknown>): string {
+  switch (method) {
+    case "item/commandExecution/requestApproval":
+      return buildCommandApprovalMessage(params);
+    case "item/fileChange/requestApproval":
+      return "Codex wants approval to apply a patch.";
+    case "item/permissions/requestApproval":
+      return buildPermissionsApprovalMessage(params);
+    case "item/tool/requestUserInput":
+      return buildQuestionMessage(params);
+    case "mcpServer/elicitation/request":
+      return readString(params, "message") ?? "Codex needs more input before it can continue.";
+    case "item/tool/call":
+      return `Codex is delegating the dynamic tool call "${readString(params, "tool") ?? "tool"}".`;
+    case "account/chatgptAuthTokens/refresh":
+      return "Codex needs refreshed ChatGPT auth tokens.";
+    case "applyPatchApproval":
+      return "Codex wants approval to apply file changes.";
+    case "execCommandApproval":
+      return "Codex wants approval to run a command.";
+    default:
+      return `Codex requested host action: ${method}`;
+  }
+}
+
+function createCodexProviderRequest(
+  method: string,
+  params: Record<string, unknown>,
+  requestId: number | string,
+): AgentProviderRequest {
+  const itemId =
+    readString(params, "itemId") ?? readString(params, "callId") ?? readString(params, "approvalId");
+
+  switch (method) {
+    case "item/commandExecution/requestApproval":
+    case "item/fileChange/requestApproval":
+    case "item/permissions/requestApproval":
+      return {
+        id: createProviderRequestId(method, requestId, params),
+        kind: "approval",
+        title: buildCodexProviderRequestTitle(method, params),
+        ...(itemId ? { itemId } : {}),
+        metadata: { method, params },
+      };
+    case "item/tool/requestUserInput":
+    case "mcpServer/elicitation/request":
+      return {
+        id: createProviderRequestId(method, requestId, params),
+        kind: "user_input",
+        title: buildCodexProviderRequestTitle(method, params),
+        ...(itemId ? { itemId } : {}),
+        metadata: { method, params },
+      };
+    case "item/tool/call":
+      return {
+        id: createProviderRequestId(method, requestId, params),
+        kind: "dynamic_tool_call",
+        title: buildCodexProviderRequestTitle(method, params),
+        ...(itemId ? { itemId } : {}),
+        metadata: { method, params },
+      };
+    case "account/chatgptAuthTokens/refresh":
+      return {
+        id: createProviderRequestId(method, requestId, params),
+        kind: "auth_refresh",
+        title: buildCodexProviderRequestTitle(method, params),
+        metadata: { method, params },
+      };
+    case "applyPatchApproval":
+      return {
+        id: createProviderRequestId(method, requestId, params),
+        kind: "apply_patch_approval",
+        title: buildCodexProviderRequestTitle(method, params),
+        ...(itemId ? { itemId } : {}),
+        metadata: { method, params },
+      };
+    case "execCommandApproval":
+      return {
+        id: createProviderRequestId(method, requestId, params),
+        kind: "command_approval",
+        title: buildCodexProviderRequestTitle(method, params),
+        ...(itemId ? { itemId } : {}),
+        metadata: { method, params },
+      };
+    default:
+      return {
+        id: createProviderRequestId(method, requestId, params),
+        kind: "other",
+        title: buildCodexProviderRequestTitle(method, params),
+        ...(itemId ? { itemId } : {}),
+        metadata: { method, params },
+      };
+  }
+}
+
+function buildCommandExecutionResponse(decision: AgentApprovalDecision): Record<string, unknown> {
+  switch (decision) {
+    case "approve_session":
+      return { decision: "acceptForSession" };
+    case "reject":
+      return { decision: "decline" };
+    case "approve_once":
+    default:
+      return { decision: "accept" };
+  }
+}
+
+function buildFileChangeResponse(decision: AgentApprovalDecision): Record<string, unknown> {
+  switch (decision) {
+    case "approve_session":
+      return { decision: "acceptForSession" };
+    case "reject":
+      return { decision: "decline" };
+    case "approve_once":
+    default:
+      return { decision: "accept" };
+  }
+}
+
+function buildPermissionsResponse(
+  decision: AgentApprovalDecision,
+  pending: PendingCodexApproval,
+  response: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const permissions =
+    response && isRecord(response.permissions)
+      ? response.permissions
+      : pending.params.permissions && isRecord(pending.params.permissions)
+        ? pending.params.permissions
+        : {};
+
+  return {
+    permissions: decision === "reject" ? {} : permissions,
+    scope: decision === "approve_session" ? "session" : "turn",
+  };
+}
+
+function buildToolUserInputResponse(
+  response: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const sourceAnswers = response && isRecord(response.answers) ? response.answers : {};
+  const answers = Object.fromEntries(
+    Object.entries(sourceAnswers).flatMap(([questionId, value]) => {
+      if (typeof value === "string") {
+        return [[questionId, { answers: [value] }]];
+      }
+      if (Array.isArray(value)) {
+        const normalized = value.filter((item): item is string => typeof item === "string");
+        return [[questionId, { answers: normalized }]];
+      }
+      if (isRecord(value) && Array.isArray(value.answers)) {
+        const normalized = value.answers.filter((item): item is string => typeof item === "string");
+        return [[questionId, { answers: normalized }]];
+      }
+      return [];
+    }),
+  );
+
+  return { answers };
+}
+
+function buildMcpElicitationResponse(
+  decision: AgentApprovalDecision,
+  params: Record<string, unknown>,
+  response: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  if (decision === "reject") {
+    return {
+      _meta: null,
+      action: "decline",
+      content: null,
+    };
+  }
+
+  const responseRecord = response && isRecord(response) ? response : null;
+  const { _meta, ...contentRecord } = responseRecord ?? {};
+
+  if (readString(params, "mode") === "url") {
+    const url =
+      typeof contentRecord.url === "string" ? contentRecord.url : readString(params, "url");
+    return {
+      _meta: _meta ?? null,
+      action: "accept",
+      content: url ? { ...contentRecord, url } : contentRecord,
+    };
+  }
+
+  return {
+    _meta: _meta ?? null,
+    action: "accept",
+    content: responseRecord ? contentRecord : null,
+  };
+}
+
+export function buildCodexApprovalResponse(
+  pending: Pick<PendingCodexApproval, "method" | "params">,
+  decision: AgentApprovalDecision,
+  response?: Record<string, unknown> | null,
+): Record<string, unknown> {
+  switch (pending.method) {
+    case "item/commandExecution/requestApproval":
+      return buildCommandExecutionResponse(decision);
+    case "item/fileChange/requestApproval":
+      return buildFileChangeResponse(decision);
+    case "item/permissions/requestApproval":
+      return buildPermissionsResponse(decision, pending as PendingCodexApproval, response);
+    case "item/tool/requestUserInput":
+      return buildToolUserInputResponse(response);
+    case "mcpServer/elicitation/request":
+      return buildMcpElicitationResponse(decision, pending.params, response);
+    default:
+      return {};
+  }
+}
+
+class CodexAppServerClient {
+  private readonly child: ChildProcessWithoutNullStreams;
+  private initialized = false;
+  private nextRequestId = 1;
+  private readonly pendingRequests = new Map<number | string, PendingRpcRequest>();
+
+  constructor(
+    workspacePath: string,
+    private readonly onLineMessage: (message: unknown) => void,
+  ) {
+    this.child = spawn(
+      process.execPath,
+      [
+        resolveCodexCliPath(),
+        "app-server",
+        "--listen",
+        "stdio://",
+        "--session-source",
+        "lifecycle",
+      ],
+      {
+        cwd: workspacePath,
+        env: process.env,
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    );
+  }
+
+  get stdin() {
+    return this.child.stdin;
+  }
+
+  get stdout() {
+    return this.child.stdout;
+  }
+
+  get stderr() {
+    return this.child.stderr;
+  }
+
+  on(event: "close" | "error", listener: (...args: any[]) => void): void {
+    this.child.on(event, listener);
+  }
+
+  async initialize(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+
+    await this.request("initialize", {
+      capabilities: {
+        experimentalApi: true,
+      },
+      clientInfo: {
+        name: "lifecycle",
+        title: "Lifecycle",
+        version: "0.0.0",
+      },
+    });
+    this.notify("initialized");
+    this.initialized = true;
+  }
+
+  handleStdoutLine(line: string): void {
+    const message = JSON.parse(line) as unknown;
+    if (isJsonRpcResponse(message)) {
+      const pending = this.pendingRequests.get(message.id);
+      if (!pending) {
+        return;
+      }
+      this.pendingRequests.delete(message.id);
+      if (message.error) {
+        pending.reject(
+          new Error(
+            message.error.message ?? `Codex app-server request ${String(message.id)} failed.`,
+          ),
+        );
+        return;
+      }
+      pending.resolve(message.result);
+      return;
+    }
+
+    this.onLineMessage(message);
+  }
+
+  request(method: string, params?: unknown): Promise<unknown> {
+    const id = this.nextRequestId++;
+    const request: CodexJsonRpcRequest = {
+      id,
+      jsonrpc: "2.0",
+      method,
+      ...(params === undefined ? {} : { params }),
+    };
+    this.stdin.write(`${JSON.stringify(request)}\n`);
+    return new Promise((resolve, reject) => {
+      this.pendingRequests.set(id, { reject, resolve });
+    });
+  }
+
+  notify(method: string, params?: unknown): void {
+    const payload = {
+      jsonrpc: "2.0" as const,
+      method,
+      ...(params === undefined ? {} : { params }),
+    };
+    this.stdin.write(`${JSON.stringify(payload)}\n`);
+  }
+
+  respond(id: number | string, result: unknown): void {
+    const payload = {
+      id,
+      jsonrpc: "2.0" as const,
+      result,
+    };
+    this.stdin.write(`${JSON.stringify(payload)}\n`);
+  }
+
+  respondError(id: number | string, message: string): void {
+    const payload = {
+      error: {
+        code: -32601,
+        message,
+      },
+      id,
+      jsonrpc: "2.0" as const,
+    };
+    this.stdin.write(`${JSON.stringify(payload)}\n`);
+  }
+
+  failPendingRequests(reason: string): void {
+    for (const pending of this.pendingRequests.values()) {
+      pending.reject(new Error(reason));
+    }
+    this.pendingRequests.clear();
+  }
+}
+
+export async function runCodexProvider(input: CodexProviderInput): Promise<number> {
+  process.chdir(input.workspacePath);
+
+  const pendingApprovals = new Map<string, PendingCodexApproval>();
+  const pendingProviderRequests = new Map<string, PendingCodexProviderRequest>();
+  const providerTurnToLifecycleTurnId = new Map<string, string>();
+  const lifecycleTurnToProviderTurnId = new Map<string, string>();
+  const itemById = new Map<string, Record<string, unknown>>();
+  const itemStartedAt = new Map<string, number>();
+  const itemIdsByLifecycleTurnId = new Map<string, Set<string>>();
+  const fileChangeItemIdsByTurnId = new Map<string, Set<string>>();
+  const turnDiffItemIdByTurnId = new Map<string, string>();
+  const turnUsage = new Map<
+    string,
+    { cacheReadTokens?: number; inputTokens: number; outputTokens: number }
+  >();
+  const pendingTurnCompletions = new Map<string, () => void>();
+
+  let currentLifecycleTurnId: string | null = null;
+  let currentProviderThreadId: string | null = null;
+  let currentProviderTurnId: string | null = null;
+  let pendingInterrupt = false;
+
+  const client = new CodexAppServerClient(input.workspacePath, handleAppServerMessage);
+
+  function bindProviderThread(threadId: string | null | undefined): void {
+    if (!threadId || currentProviderThreadId === threadId) {
+      return;
+    }
+    currentProviderThreadId = threadId;
+    emitProviderEvent({
+      kind: "agent.ready",
+      providerId: threadId,
+    });
+  }
+
+  function bindProviderTurn(
+    providerTurnId: string | null | undefined,
+    lifecycleTurnId: string | null,
+  ): void {
+    if (!providerTurnId || !lifecycleTurnId) {
+      return;
+    }
+
+    currentProviderTurnId = providerTurnId;
+    providerTurnToLifecycleTurnId.set(providerTurnId, lifecycleTurnId);
+    lifecycleTurnToProviderTurnId.set(lifecycleTurnId, providerTurnId);
+  }
+
+  function trackTurnItem(lifecycleTurnId: string, itemId: string, isFileChange = false): void {
+    const turnItemIds = itemIdsByLifecycleTurnId.get(lifecycleTurnId) ?? new Set<string>();
+    turnItemIds.add(itemId);
+    itemIdsByLifecycleTurnId.set(lifecycleTurnId, turnItemIds);
+
+    if (!isFileChange) {
+      return;
+    }
+
+    const fileChangeItemIds = fileChangeItemIdsByTurnId.get(lifecycleTurnId) ?? new Set<string>();
+    fileChangeItemIds.add(itemId);
+    fileChangeItemIdsByTurnId.set(lifecycleTurnId, fileChangeItemIds);
+  }
+
+  function clearTurnState(lifecycleTurnId: string): void {
+    const providerTurnId = lifecycleTurnToProviderTurnId.get(lifecycleTurnId);
+    if (providerTurnId) {
+      lifecycleTurnToProviderTurnId.delete(lifecycleTurnId);
+      providerTurnToLifecycleTurnId.delete(providerTurnId);
+      turnUsage.delete(providerTurnId);
+    }
+
+    const itemIds = itemIdsByLifecycleTurnId.get(lifecycleTurnId);
+    if (itemIds) {
+      for (const itemId of itemIds) {
+        itemById.delete(itemId);
+        itemStartedAt.delete(itemId);
+      }
+      itemIdsByLifecycleTurnId.delete(lifecycleTurnId);
+    }
+
+    fileChangeItemIdsByTurnId.delete(lifecycleTurnId);
+    turnDiffItemIdByTurnId.delete(lifecycleTurnId);
+
+    for (const [requestId, request] of pendingProviderRequests) {
+      if (request.lifecycleTurnId === lifecycleTurnId) {
+        pendingProviderRequests.delete(requestId);
+      }
+    }
+
+    for (const [approvalId, approval] of pendingApprovals) {
+      if (approval.lifecycleTurnId === lifecycleTurnId) {
+        pendingApprovals.delete(approvalId);
+      }
+    }
+  }
+
+  function completeLifecycleTurn(lifecycleTurnId: string): void {
+    clearTurnState(lifecycleTurnId);
+    const resolve = pendingTurnCompletions.get(lifecycleTurnId);
+    pendingTurnCompletions.delete(lifecycleTurnId);
+    if (resolve) {
+      resolve();
+    }
+    if (currentLifecycleTurnId === lifecycleTurnId) {
+      currentLifecycleTurnId = null;
+      currentProviderTurnId = null;
+      pendingInterrupt = false;
+    }
+  }
+
+  function failLifecycleTurn(lifecycleTurnId: string, error: string): void {
+    emitProviderEvent({
+      error,
+      kind: "agent.turn.failed",
+      turnId: lifecycleTurnId,
+    });
+    completeLifecycleTurn(lifecycleTurnId);
+  }
+
+  function handleThreadNotification(method: string, params: Record<string, unknown>): void {
+    switch (method) {
+      case "thread/started": {
+        const thread = isRecord(params.thread) ? params.thread : null;
+        bindProviderThread(thread ? readString(thread, "id") : null);
+        emitProviderSignal({
+          channel: "thread",
+          name: "started",
+          metadata: thread ? { thread } : { params },
+        });
+        return;
+      }
+      case "thread/tokenUsage/updated": {
+        const providerTurnId = readString(params, "turnId");
+        const tokenUsage = isRecord(params.tokenUsage) ? params.tokenUsage : null;
+        const last = tokenUsage && isRecord(tokenUsage.last) ? tokenUsage.last : null;
+        if (!providerTurnId || !last) {
+          return;
+        }
+        turnUsage.set(providerTurnId, {
+          ...(typeof readNumber(last, "cachedInputTokens") === "number"
+            ? { cacheReadTokens: readNumber(last, "cachedInputTokens") ?? 0 }
+            : {}),
+          inputTokens: readNumber(last, "inputTokens") ?? 0,
+          outputTokens: readNumber(last, "outputTokens") ?? 0,
+        });
+        emitProviderSignal({
+          channel: "turn",
+          name: "token_usage_updated",
+          metadata: {
+            tokenUsage,
+          },
+          turnId:
+            resolveLifecycleTurnId(providerTurnId, currentLifecycleTurnId, providerTurnToLifecycleTurnId) ??
+            null,
+        });
+        return;
+      }
+      default:
+        return;
+    }
+  }
+
+  function emitDeltaEvent(
+    kind: "agent.message.delta" | "agent.thinking.delta",
+    providerTurnId: string | undefined,
+    itemId: string | undefined,
+    text: string | undefined,
+    blockId: string,
+  ): void {
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
+    if (!lifecycleTurnId || !itemId || !text) {
+      return;
+    }
+
+    emitProviderEvent({
+      blockId,
+      kind,
+      text,
+      turnId: lifecycleTurnId,
+    });
+
+    emitProviderEvent({
+      delta: {
+        itemId,
+        kind: kind === "agent.message.delta" ? "text" : "thinking",
+        text,
+      },
+      kind: "agent.item.delta",
+      turnId: lifecycleTurnId,
+    });
+  }
+
+  function handleItemNotification(
+    kind: "agent.item.completed" | "agent.item.started",
+    params: Record<string, unknown>,
+  ): void {
+    const rawItem = isRecord(params.item) ? params.item : null;
+    const providerTurnId = readString(params, "turnId");
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
+    if (!rawItem || !lifecycleTurnId) {
+      return;
+    }
+
+    const itemId = readString(rawItem, "id");
+    const item = itemId ? mergeCodexItemSnapshot(itemById.get(itemId), rawItem) : rawItem;
+    if (itemId) {
+      itemById.set(itemId, item);
+      if (kind === "agent.item.started") {
+        itemStartedAt.set(itemId, Date.now());
+      }
+      trackTurnItem(lifecycleTurnId, itemId, readString(item, "type") === "fileChange");
+    }
+
+    const itemType = readString(item, "type");
+    if (itemType === "agentMessage" || itemType === "reasoning") {
+      return;
+    }
+
+    const providerItem = mapCodexThreadItemToProviderItem(item);
+    if (!providerItem) {
+      return;
+    }
+
+    emitProviderEvent({
+      item: providerItem,
+      kind,
+      turnId: lifecycleTurnId,
+    });
+  }
+
+  function handleCommandExecutionOutputDelta(params: Record<string, unknown>): void {
+    const providerTurnId = readString(params, "turnId");
+    const itemId = readString(params, "itemId");
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
+    const delta = readString(params, "delta");
+    if (!lifecycleTurnId || !itemId || !delta) {
+      return;
+    }
+
+    const item = itemById.get(itemId);
+    if (!item || readString(item, "type") !== "commandExecution") {
+      return;
+    }
+
+    const nextItem = appendCodexCommandExecutionOutputDelta(item, delta);
+    itemById.set(itemId, nextItem);
+
+    const providerItem = mapCodexThreadItemToProviderItem(nextItem);
+    if (!providerItem || providerItem.type !== "command_execution") {
+      return;
+    }
+
+    emitProviderEvent({
+      item: providerItem,
+      kind: "agent.item.updated",
+      turnId: lifecycleTurnId,
+    });
+    emitProviderEvent({
+      delta: {
+        itemId,
+        kind: "command_output",
+        text: delta,
+      },
+      kind: "agent.item.delta",
+      turnId: lifecycleTurnId,
+    });
+  }
+
+  function handleFileChangeOutputDelta(params: Record<string, unknown>): void {
+    const providerTurnId = readString(params, "turnId");
+    const itemId = readString(params, "itemId");
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
+    const delta = readString(params, "delta");
+    if (!lifecycleTurnId || !itemId || !delta) {
+      return;
+    }
+
+    const item = itemById.get(itemId);
+    if (!item || readString(item, "type") !== "fileChange") {
+      return;
+    }
+
+    trackTurnItem(lifecycleTurnId, itemId, true);
+    const nextItem = appendCodexFileChangeOutputDelta(item, delta);
+    itemById.set(itemId, nextItem);
+
+    const providerItem = mapCodexThreadItemToProviderItem(nextItem);
+    if (!providerItem || providerItem.type !== "file_change") {
+      return;
+    }
+
+    emitProviderEvent({
+      item: providerItem,
+      kind: "agent.item.updated",
+      turnId: lifecycleTurnId,
+    });
+    emitProviderEvent({
+      delta: {
+        itemId,
+        kind: "file_diff",
+        text: delta,
+      },
+      kind: "agent.item.delta",
+      turnId: lifecycleTurnId,
+    });
+  }
+
+  function buildAggregateTurnDiffItem(
+    lifecycleTurnId: string,
+    diff: string,
+  ): Record<string, unknown> {
+    const fileChangeItems = [...(fileChangeItemIdsByTurnId.get(lifecycleTurnId) ?? new Set())]
+      .map((itemId) => itemById.get(itemId))
+      .filter((item): item is Record<string, unknown> => item !== undefined);
+    const aggregateItemId =
+      turnDiffItemIdByTurnId.get(lifecycleTurnId) ?? `${lifecycleTurnId}:turn-diff`;
+    const nextItem = mergeCodexItemSnapshot(
+      itemById.get(aggregateItemId),
+      buildCodexTurnDiffItem(lifecycleTurnId, diff, fileChangeItems),
+    );
+    turnDiffItemIdByTurnId.set(lifecycleTurnId, aggregateItemId);
+    itemById.set(aggregateItemId, nextItem);
+    trackTurnItem(lifecycleTurnId, aggregateItemId, true);
+    return nextItem;
+  }
+
+  function handleTurnDiffUpdated(params: Record<string, unknown>): void {
+    const providerTurnId = readString(params, "turnId");
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
+    const diff = readString(params, "diff");
+    if (!lifecycleTurnId || !diff) {
+      return;
+    }
+
+    const fileChangeItemIds = [...(fileChangeItemIdsByTurnId.get(lifecycleTurnId) ?? new Set())];
+    const nextItem =
+      fileChangeItemIds.length === 1
+        ? (() => {
+            const itemId = fileChangeItemIds[0]!;
+            const item = itemById.get(itemId);
+            if (!item || readString(item, "type") !== "fileChange") {
+              return null;
+            }
+            const updatedItem = { ...item, diff };
+            itemById.set(itemId, updatedItem);
+            return updatedItem;
+          })()
+        : buildAggregateTurnDiffItem(lifecycleTurnId, diff);
+    if (!nextItem) {
+      return;
+    }
+
+    const providerItem = mapCodexThreadItemToProviderItem(nextItem);
+    if (!providerItem || providerItem.type !== "file_change") {
+      return;
+    }
+
+    emitProviderEvent({
+      item: providerItem,
+      kind: "agent.item.updated",
+      turnId: lifecycleTurnId,
+    });
+    emitProviderEvent({
+      delta: {
+        itemId: providerItem.id,
+        kind: "file_diff",
+        text: diff,
+      },
+      kind: "agent.item.delta",
+      turnId: lifecycleTurnId,
+    });
+  }
+
+  function handleTurnCompleted(params: Record<string, unknown>): void {
+    const turn = isRecord(params.turn) ? params.turn : null;
+    const providerTurnId = turn ? readString(turn, "id") : null;
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
+    if (!turn || !providerTurnId || !lifecycleTurnId) {
+      return;
+    }
+
+    const status = readString(turn, "status");
+    emitProviderSignal({
+      channel: "turn",
+      name: "completed",
+      metadata: {
+        turn,
+      },
+      turnId: lifecycleTurnId,
+    });
+    if (status === "completed") {
+      emitProviderEvent({
+        kind: "agent.turn.completed",
+        turnId: lifecycleTurnId,
+        ...(turnUsage.has(providerTurnId) ? { usage: turnUsage.get(providerTurnId) } : {}),
+      });
+      completeLifecycleTurn(lifecycleTurnId);
+
+      // Fire-and-forget title generation after the first successful turn.
+      if (!titleGenerated && firstTurnText) {
+        titleGenerated = true;
+        void generateSessionTitle(firstTurnText).then((title) => {
+          if (title) {
+            emitProviderEvent({ kind: "agent.title_generated", title });
+          }
+        });
+      }
+      return;
+    }
+
+    const errorRecord = isRecord(turn.error) ? turn.error : null;
+    failLifecycleTurn(
+      lifecycleTurnId,
+      readString(errorRecord ?? {}, "message") ?? `Codex turn ${status ?? "failed"}.`,
+    );
+  }
+
+  function handleServerRequest(message: CodexJsonRpcRequest): void {
+    const params = isRecord(message.params) ? message.params : {};
+    const providerTurnId = readString(params, "turnId");
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
+    const providerRequest = createCodexProviderRequest(message.method, params, message.id);
+    pendingProviderRequests.set(providerRequest.id, {
+      lifecycleTurnId,
+      method: message.method,
+      params,
+      request: providerRequest,
+      requestId: message.id,
+    });
+    emitProviderRequest({
+      request: providerRequest,
+      turnId: lifecycleTurnId,
+    });
+
+    const itemId = readString(params, "itemId");
+    const item = itemId ? itemById.get(itemId) : undefined;
+    if (
+      message.method !== "item/commandExecution/requestApproval" &&
+      message.method !== "item/fileChange/requestApproval" &&
+      message.method !== "item/permissions/requestApproval" &&
+      message.method !== "item/tool/requestUserInput" &&
+      message.method !== "mcpServer/elicitation/request"
+    ) {
+      return;
+    }
+
+    if (!lifecycleTurnId) {
+      client.respondError(message.id, `No Lifecycle turn is bound for ${message.method}.`);
+      emitProviderRequestResolution({
+        resolution: {
+          requestId: providerRequest.id,
+          outcome: "failed",
+          metadata: { error: "no_lifecycle_turn_binding" },
+        },
+        turnId: null,
+      });
+      pendingProviderRequests.delete(providerRequest.id);
+      return;
+    }
+
+    const approval = createCodexApprovalRequest(
+      lifecycleTurnId,
+      message.method,
+      params,
+      item,
+      message.id,
+    );
+    pendingApprovals.set(approval.id, {
+      approval,
+      lifecycleTurnId,
+      method: message.method,
+      params,
+      requestId: message.id,
+    });
+    emitProviderEvent({
+      approval,
+      kind: "agent.approval.requested",
+      turnId: lifecycleTurnId,
+    });
+  }
+
+  function handleAppServerMessage(message: unknown): void {
+    if (isJsonRpcRequest(message)) {
+      const params = isRecord(message.params) ? message.params : {};
+      const lifecycleTurnId = resolveLifecycleTurnId(
+        readString(params, "turnId") ?? null,
+        currentLifecycleTurnId,
+        providerTurnToLifecycleTurnId,
+      );
+      emitRawProviderEvent(`codex.request.${message.method}`, message, lifecycleTurnId);
+      handleServerRequest(message);
+      return;
+    }
+
+    if (!isJsonRpcNotification(message)) {
+      return;
+    }
+
+    const params = isRecord(message.params) ? message.params : {};
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      readString(params, "turnId") ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
+    emitRawProviderEvent(`codex.notification.${message.method}`, message, lifecycleTurnId);
+    switch (message.method) {
+      case "thread/status/changed":
+        emitProviderSignal({
+          channel: "thread",
+          name: "status_changed",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "thread/archived":
+        emitProviderSignal({
+          channel: "thread",
+          name: "archived",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "thread/unarchived":
+        emitProviderSignal({
+          channel: "thread",
+          name: "unarchived",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "thread/closed":
+        emitProviderSignal({
+          channel: "thread",
+          name: "closed",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "skills/changed":
+        emitProviderSignal({
+          channel: "skills",
+          name: "changed",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "thread/name/updated":
+        emitProviderSignal({
+          channel: "thread",
+          name: "name_updated",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "thread/started":
+      case "thread/tokenUsage/updated":
+        handleThreadNotification(message.method, params);
+        return;
+      case "turn/started": {
+        const turn = isRecord(params.turn) ? params.turn : null;
+        bindProviderTurn(turn ? readString(turn, "id") : null, currentLifecycleTurnId);
+        emitProviderSignal({
+          channel: "turn",
+          name: "started",
+          metadata: turn ? { turn } : params,
+          turnId: currentLifecycleTurnId,
+        });
+        if (pendingInterrupt && currentProviderTurnId) {
+          pendingInterrupt = false;
+          void client
+            .request("turn/interrupt", {
+              threadId: currentProviderThreadId,
+              turnId: currentProviderTurnId,
+            })
+            .catch(() => undefined);
+        }
+        return;
+      }
+      case "turn/completed":
+        handleTurnCompleted(params);
+        return;
+      case "hook/started":
+        emitProviderSignal({
+          channel: "hook",
+          name: "started",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "hook/completed":
+        emitProviderSignal({
+          channel: "hook",
+          name: "completed",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "item/started":
+        handleItemNotification("agent.item.started", params);
+        return;
+      case "item/autoApprovalReview/started":
+        emitProviderSignal({
+          channel: "item",
+          name: "auto_approval_review_started",
+          itemId: readString(params, "itemId") ?? null,
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "item/autoApprovalReview/completed":
+        emitProviderSignal({
+          channel: "item",
+          name: "auto_approval_review_completed",
+          itemId: readString(params, "itemId") ?? null,
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "item/completed":
+        handleItemNotification("agent.item.completed", params);
+        return;
+      case "rawResponseItem/completed":
+        emitProviderSignal({
+          channel: "item",
+          name: "raw_response_item_completed",
+          itemId: readString(params, "itemId") ?? null,
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "item/plan/delta": {
+        const itemId = readString(params, "itemId");
+        const delta = readString(params, "delta");
+        if (!lifecycleTurnId || !itemId || !delta) {
+          return;
+        }
+        emitProviderEvent({
+          delta: {
+            itemId,
+            kind: "plan",
+            text: delta,
+          },
+          kind: "agent.item.delta",
+          turnId: lifecycleTurnId,
+        });
+        return;
+      }
+      case "command/exec/outputDelta":
+        emitProviderSignal({
+          channel: "system",
+          name: "command_exec_output_delta",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "item/commandExecution/outputDelta":
+        handleCommandExecutionOutputDelta(params);
+        return;
+      case "item/commandExecution/terminalInteraction": {
+        const itemId = readString(params, "itemId");
+        const stdin = readString(params, "stdin");
+        if (!lifecycleTurnId || !itemId || !stdin) {
+          return;
+        }
+        emitProviderEvent({
+          delta: {
+            itemId,
+            kind: "terminal_input",
+            text: stdin,
+            metadata: {
+              processId: readString(params, "processId") ?? null,
+            },
+          },
+          kind: "agent.item.delta",
+          turnId: lifecycleTurnId,
+        });
+        return;
+      }
+      case "item/fileChange/outputDelta":
+        handleFileChangeOutputDelta(params);
+        return;
+      case "turn/diff/updated":
+        emitProviderSignal({
+          channel: "turn",
+          name: "diff_updated",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        handleTurnDiffUpdated(params);
+        return;
+      case "turn/plan/updated":
+        emitProviderSignal({
+          channel: "turn",
+          name: "plan_updated",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "item/agentMessage/delta": {
+        const itemId = readString(params, "itemId") ?? "";
+        emitDeltaEvent(
+          "agent.message.delta",
+          readString(params, "turnId"),
+          itemId || undefined,
+          readString(params, "delta"),
+          `text:${itemId}`,
+        );
+        return;
+      }
+      case "item/reasoning/summaryTextDelta": {
+        const itemId = readString(params, "itemId");
+        const delta = readString(params, "delta");
+        if (!lifecycleTurnId || !itemId || !delta) {
+          return;
+        }
+        emitProviderEvent({
+          delta: {
+            itemId,
+            kind: "reasoning_summary",
+            text: delta,
+            index: readNumber(params, "summaryIndex") ?? null,
+          },
+          kind: "agent.item.delta",
+          turnId: lifecycleTurnId,
+        });
+        return;
+      }
+      case "item/reasoning/summaryPartAdded":
+        emitProviderSignal({
+          channel: "item",
+          name: "reasoning_summary_part_added",
+          itemId: readString(params, "itemId") ?? null,
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "item/reasoning/textDelta": {
+        const itemId = readString(params, "itemId") ?? "";
+        const contentIndex = readNumber(params, "contentIndex") ?? 0;
+        emitDeltaEvent(
+          "agent.thinking.delta",
+          readString(params, "turnId"),
+          itemId || undefined,
+          readString(params, "delta"),
+          `thinking:${itemId}:${contentIndex}`,
+        );
+        return;
+      }
+      case "item/mcpToolCall/progress": {
+        const providerTurnId = readString(params, "turnId");
+        const itemId = readString(params, "itemId");
+        const lifecycleTurnId = resolveLifecycleTurnId(
+          providerTurnId ?? null,
+          currentLifecycleTurnId,
+          providerTurnToLifecycleTurnId,
+        );
+        const item = itemId ? itemById.get(itemId) : null;
+        if (!lifecycleTurnId || !itemId || !item) {
+          return;
+        }
+        const startedAt = itemStartedAt.get(itemId) ?? Date.now();
+        emitProviderEvent({
+          elapsedTimeSeconds: Math.max(0, Math.round((Date.now() - startedAt) / 1000)),
+          kind: "agent.tool_progress",
+          toolName: `${readString(item, "server") ?? "mcp"}/${readString(item, "tool") ?? "tool"}`,
+          toolUseId: itemId,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      }
+      case "serverRequest/resolved": {
+        const resolvedRequestId = message.params && isRecord(message.params) ? params.requestId : null;
+        const pending = [...pendingProviderRequests.values()].find(
+          (request) => request.requestId === resolvedRequestId,
+        );
+        if (!pending) {
+          emitProviderSignal({
+            channel: "system",
+            name: "server_request_resolved",
+            requestId: typeof resolvedRequestId === "string" || typeof resolvedRequestId === "number"
+              ? String(resolvedRequestId)
+              : null,
+            metadata: params,
+            turnId: lifecycleTurnId,
+          });
+          return;
+        }
+        pendingProviderRequests.delete(pending.request.id);
+        emitProviderRequestResolution({
+          resolution: {
+            requestId: pending.request.id,
+            outcome: "completed",
+            metadata: params,
+          },
+          turnId: pending.lifecycleTurnId,
+        });
+        return;
+      }
+      case "mcpServer/oauthLogin/completed":
+        emitProviderSignal({
+          channel: "mcp",
+          name: "oauth_login_completed",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "account/updated":
+        emitProviderSignal({
+          channel: "account",
+          name: "updated",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "account/rateLimits/updated":
+        emitProviderSignal({
+          channel: "account",
+          name: "rate_limits_updated",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "app/list/updated":
+        emitProviderSignal({
+          channel: "apps",
+          name: "list_updated",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "thread/compacted":
+        emitProviderSignal({
+          channel: "thread",
+          name: "compacted",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "model/rerouted":
+        emitProviderSignal({
+          channel: "turn",
+          name: "model_rerouted",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "deprecationNotice":
+        emitProviderSignal({
+          channel: "system",
+          name: "deprecation_notice",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "configWarning":
+        emitProviderSignal({
+          channel: "config",
+          name: "warning",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "fuzzyFileSearch/sessionUpdated":
+        emitProviderSignal({
+          channel: "system",
+          name: "fuzzy_file_search_session_updated",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "fuzzyFileSearch/sessionCompleted":
+        emitProviderSignal({
+          channel: "system",
+          name: "fuzzy_file_search_session_completed",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "thread/realtime/started":
+        emitProviderSignal({
+          channel: "realtime",
+          name: "started",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "thread/realtime/itemAdded":
+        emitProviderSignal({
+          channel: "realtime",
+          name: "item_added",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "thread/realtime/outputAudio/delta": {
+        if (!lifecycleTurnId) {
+          return;
+        }
+        emitProviderEvent({
+          delta: {
+            itemId: readString(params, "itemId") ?? "realtime-audio",
+            kind: "audio",
+            text: readString(params, "delta") ?? "",
+            metadata: params,
+          },
+          kind: "agent.item.delta",
+          turnId: lifecycleTurnId,
+        });
+        return;
+      }
+      case "thread/realtime/error":
+        emitProviderSignal({
+          channel: "realtime",
+          name: "error",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "thread/realtime/closed":
+        emitProviderSignal({
+          channel: "realtime",
+          name: "closed",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "windows/worldWritableWarning":
+        emitProviderSignal({
+          channel: "system",
+          name: "windows_world_writable_warning",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "windowsSandbox/setupCompleted":
+        emitProviderSignal({
+          channel: "system",
+          name: "windows_sandbox_setup_completed",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "account/login/completed":
+        emitProviderSignal({
+          channel: "account",
+          name: "login_completed",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        return;
+      case "error": {
+        const lifecycleTurnId = currentLifecycleTurnId;
+        const errorMessage = readString(params, "message") ?? "Codex app-server error.";
+        emitProviderSignal({
+          channel: "system",
+          name: "error",
+          metadata: params,
+          turnId: lifecycleTurnId,
+        });
+        if (lifecycleTurnId) {
+          failLifecycleTurn(lifecycleTurnId, errorMessage);
+        }
+        return;
+      }
+      default:
+        return;
+    }
+  }
+
+  const stdoutReader = createInterface({ input: client.stdout });
+  stdoutReader.on("line", (line) => {
+    try {
+      client.handleStdoutLine(line);
+    } catch (error) {
+      console.error("[codex-app-server] failed to parse line:", line, error);
+    }
+  });
+
+  client.stderr.on("data", (chunk) => {
+    const line = chunk.toString().trim();
+    if (line.length > 0) {
+      console.error("[codex-app-server]", line);
+    }
+  });
+
+  client.on("error", (error) => {
+    client.failPendingRequests(
+      error instanceof Error ? error.message : "Codex app-server process error.",
+    );
+    if (currentLifecycleTurnId) {
+      failLifecycleTurn(
+        currentLifecycleTurnId,
+        error instanceof Error ? error.message : "Codex app-server process error.",
+      );
+    }
+  });
+
+  client.on("close", (code, signal) => {
+    const reason = `Codex app-server exited (code=${code ?? "null"} signal=${signal ?? "null"}).`;
+    client.failPendingRequests(reason);
+    if (currentLifecycleTurnId) {
+      failLifecycleTurn(currentLifecycleTurnId, reason);
+    }
+  });
+
+  await client.initialize();
+  const bootstrap = createCodexThreadBootstrapRequest(input);
+  const bootstrapResult = await client.request(bootstrap.method, bootstrap.params);
+  const threadRecord =
+    isRecord(bootstrapResult) && isRecord(bootstrapResult.thread) ? bootstrapResult.thread : null;
+  bindProviderThread(threadRecord ? readString(threadRecord, "id") : null);
+
+  let turnQueue = Promise.resolve();
+  let firstTurnText: string | null = null;
+  let titleGenerated = false;
+
+  async function processTurn(
+    command: Extract<AgentCommand, { kind: "agent.send_turn" }>,
+  ): Promise<void> {
+    const threadId = currentProviderThreadId;
+    if (!threadId) {
+      emitProviderEvent({
+        error: "Codex app-server did not return a thread id.",
+        kind: "agent.turn.failed",
+        turnId: command.turnId,
+      });
+      return;
+    }
+
+    currentLifecycleTurnId = command.turnId;
+    currentProviderTurnId = null;
+    pendingInterrupt = false;
+
+    // Capture the first turn's text for title generation.
+    if (!titleGenerated && firstTurnText === null) {
+      const text = extractTextFromInput(
+        Array.isArray(command.input)
+          ? (command.input as AgentInputPart[])
+          : [{ type: "text" as const, text: command.input as string }],
+      );
+      firstTurnText = text.length > 0 ? text : null;
+    }
+
+    const completion = new Promise<void>((resolve) => {
+      pendingTurnCompletions.set(command.turnId, resolve);
+    });
+
+    try {
+      const response = await client.request(
+        "turn/start",
+        buildTurnStartParams(
+          input,
+          threadId,
+          Array.isArray(command.input)
+            ? (command.input as Array<Record<string, unknown>>)
+            : [{ type: "text", text: command.input as string }],
+        ),
+      );
+      const turnRecord = isRecord(response) && isRecord(response.turn) ? response.turn : null;
+      bindProviderTurn(turnRecord ? readString(turnRecord, "id") : null, command.turnId);
+      if (pendingInterrupt && currentProviderTurnId) {
+        pendingInterrupt = false;
+        await client.request("turn/interrupt", {
+          threadId,
+          turnId: currentProviderTurnId,
+        });
+      }
+      await completion;
+    } catch (error) {
+      failLifecycleTurn(
+        command.turnId,
+        error instanceof Error ? error.message : "Codex turn failed.",
+      );
+    }
+  }
+
+  const reader = Bun.stdin.stream().getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const result = await reader.read();
+    if (result.done) {
+      break;
+    }
+
+    buffer += decoder.decode(result.value, { stream: true });
+
+    while (true) {
+      const newlineIndex = buffer.indexOf("\n");
+      if (newlineIndex < 0) {
+        break;
+      }
+
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+      if (line.length === 0) {
+        continue;
+      }
+
+      const command = normalizeCommand(line);
+      switch (command.kind) {
+        case "agent.send_turn":
+          turnQueue = turnQueue.catch(() => undefined).then(() => processTurn(command));
+          break;
+        case "agent.cancel_turn":
+          if (currentProviderThreadId && currentProviderTurnId) {
+            void client
+              .request("turn/interrupt", {
+                threadId: currentProviderThreadId,
+                turnId: currentProviderTurnId,
+              })
+              .catch((error) => {
+                if (currentLifecycleTurnId) {
+                  failLifecycleTurn(
+                    currentLifecycleTurnId,
+                    error instanceof Error ? error.message : "Failed to interrupt Codex turn.",
+                  );
+                }
+              });
+          } else {
+            pendingInterrupt = true;
+          }
+          break;
+        case "agent.resolve_approval": {
+          const pending = pendingApprovals.get(command.approvalId);
+          if (!pending) {
+            if (currentLifecycleTurnId) {
+              failLifecycleTurn(
+                currentLifecycleTurnId,
+                `Unknown Codex approval ${command.approvalId}.`,
+              );
+            }
+            break;
+          }
+
+          pendingApprovals.delete(command.approvalId);
+          pendingProviderRequests.delete(command.approvalId);
+          try {
+            client.respond(
+              pending.requestId,
+              buildCodexApprovalResponse(pending, command.decision, command.response ?? null),
+            );
+            emitProviderEvent({
+              kind: "agent.approval.resolved",
+              resolution: {
+                approvalId: pending.approval.id,
+                decision: command.decision,
+                response: command.response ?? null,
+              },
+              turnId: pending.lifecycleTurnId,
+            });
+            emitProviderRequestResolution({
+              resolution: {
+                requestId: pending.approval.id,
+                outcome: command.decision === "reject" ? "rejected" : "approved",
+                response: command.response ?? null,
+                metadata: {
+                  decision: command.decision,
+                  method: pending.method,
+                },
+              },
+              turnId: pending.lifecycleTurnId,
+            });
+          } catch (error) {
+            failLifecycleTurn(
+              pending.lifecycleTurnId,
+              error instanceof Error ? error.message : "Failed to resolve Codex approval.",
+            );
+          }
+          break;
+        }
+        case "agent.resolve_request": {
+          const pending = pendingProviderRequests.get(command.requestId);
+          if (!pending) {
+            if (currentLifecycleTurnId) {
+              failLifecycleTurn(
+                currentLifecycleTurnId,
+                `Unknown Codex provider request ${command.requestId}.`,
+              );
+            }
+            break;
+          }
+
+          pendingProviderRequests.delete(command.requestId);
+          try {
+            client.respond(pending.requestId, command.response ?? {});
+            emitProviderRequestResolution({
+              resolution: {
+                requestId: pending.request.id,
+                outcome: command.outcome,
+                response: command.response ?? null,
+                metadata: {
+                  method: pending.method,
+                },
+              },
+              turnId: pending.lifecycleTurnId,
+            });
+          } catch (error) {
+            if (pending.lifecycleTurnId) {
+              failLifecycleTurn(
+                pending.lifecycleTurnId,
+                error instanceof Error ? error.message : "Failed to resolve Codex provider request.",
+              );
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  await turnQueue;
+  return 0;
+}

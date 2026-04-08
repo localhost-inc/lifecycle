@@ -11,11 +11,6 @@ import {
 } from "@lifecycle/db/queries";
 import { createSqlCollection, type SqlCollection } from "../collection";
 
-interface WorkspaceInsertMetadata {
-  nameOrigin?: "manual" | "default";
-  sourceRefOrigin?: "manual" | "default";
-}
-
 export async function selectAllWorkspaces(driver: SqlDriver): Promise<WorkspaceRecord[]> {
   return listAllWorkspaceRows(driver) as Promise<WorkspaceRecord[]>;
 }

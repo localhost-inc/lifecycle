@@ -1,9 +1,11 @@
 export type {
+  AgentRecord,
+  AgentProviderId,
+  AgentStatus,
   AgentApprovalRefPartData,
   AgentArtifactRefPartData,
   AgentAttachmentRefPartData,
   AgentEventRecord,
-  AgentSessionProviderId,
   AgentMessagePartData,
   AgentMessagePartDataByType,
   AgentMessagePartDataOf,
@@ -14,17 +16,23 @@ export type {
   AgentToolResultPartData,
   AgentMessageWithParts,
   AgentMessageRole,
-  AgentSessionRecord,
-  AgentSessionStatus,
 } from "./agent";
 export { parseAgentMessagePartData, stringifyAgentMessagePartData } from "./agent";
+export { slugifyName, slugWithSuffix } from "./slug";
 export type {
   PlanRecord,
-  ServiceRecord,
   TaskDependencyRecord,
   TaskRecord,
   WorkspaceRecord,
 } from "./db";
+export type {
+  ServiceRecord,
+  StackNodeRecord,
+  StackServiceRecord,
+  StackSummaryRecord,
+  StackSummaryState,
+  StackTaskRecord,
+} from "./stack";
 export type { PlanStatus, TaskPriority, TaskStatus } from "./planning";
 export {
   TASK_PRIORITY_LOW,
@@ -44,8 +52,8 @@ export {
   DesktopRpcShellResultSchema,
   ContextRequestSchema,
   HealthCheckResultSchema,
-  AgentSessionInspectRequestSchema,
-  LIFECYCLE_AGENT_SESSION_ID_ENV,
+  AgentInspectRequestSchema,
+  LIFECYCLE_AGENT_ID_ENV,
   LIFECYCLE_CLI_PATH_ENV,
   LIFECYCLE_DESKTOP_SOCKET_ENV,
   LIFECYCLE_DESKTOP_SESSION_TOKEN_ENV,
@@ -77,7 +85,7 @@ export {
   TaskDependencyRemoveRequestSchema,
 } from "./desktop/rpc";
 export {
-  AGENT_SESSION_INSPECT_OPERATION,
+  AGENT_INSPECT_OPERATION,
   BRIDGE_HEALTH_OPERATION,
   CONTEXT_READ_OPERATION,
   PLAN_CREATE_OPERATION,
@@ -111,7 +119,7 @@ export {
   WORKSPACE_SHELL_OPERATION,
 } from "./operations";
 export type {
-  AgentSessionInspectRequest,
+  AgentInspectRequest,
   DesktopRpcError,
   DesktopRpcRequest,
   DesktopRpcResponse,
@@ -147,12 +155,33 @@ export type {
 } from "./desktop/rpc";
 export type { ErrorEnvelope } from "./errors";
 export type {
+  AgentApprovalDecision,
+  AgentApprovalKind,
+  AgentApprovalRequest,
+  AgentApprovalResolution,
+  AgentApprovalStatus,
+  AgentArtifactDescriptor,
+  AgentArtifactType,
+  AgentImageMediaType,
+  AgentInputPart,
+  AgentItem,
+  AgentItemDelta,
+  AgentItemDeltaKind,
+  AgentItemStatus,
+  AgentMessagePart,
+  AgentProviderRequest,
+  AgentProviderRequestKind,
+  AgentProviderRequestOutcome,
+  AgentProviderRequestResolution,
+  AgentProviderSignal,
+  AgentProviderSignalChannel,
+  AgentToolCallStatus,
+  AgentToolCallUpdate,
   LifecycleEvent,
+  LifecycleEventEnvelope,
+  LifecycleEventInput,
   LifecycleEventKind,
   LifecycleEventOf,
-  LifecycleEventInput,
-  LifecycleEventWire,
-  LifecycleEventWireOf,
 } from "./events";
 export type {
   GitBranchPullRequestResult,

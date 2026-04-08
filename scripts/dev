@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DESKTOP_DEV_SCRIPT="$REPO_ROOT/apps/desktop-mac/scripts/dev.sh"
+DESKTOP_SMOKE_SCRIPT="$REPO_ROOT/apps/desktop-mac/scripts/dev-loop-smoke.sh"
+
+usage() {
+  cat <<'EOF'
+usage: scripts/dev [desktop|desktop-services|desktop-app|desktop-smoke]
+
+  desktop           Start the monorepo desktop dev loop.
+  desktop-services  Start bridge and control-plane only.
+  desktop-app       Start the desktop app build/reload loop only.
+  desktop-smoke     Verify the desktop dev loop contract end to end.
+EOF
+}
+
+case "${1:-desktop}" in
+  desktop)
+    exec "$DESKTOP_DEV_SCRIPT" --monorepo
+    ;;
+  desktop-services)
+    exec "$DESKTOP_DEV_SCRIPT" --services-only
+    ;;
+  desktop-app)
+    exec "$DESKTOP_DEV_SCRIPT" --app-only
+    ;;
+  desktop-smoke)
+    exec "$DESKTOP_SMOKE_SCRIPT"
+    ;;
+  --help|-h|help)
+    usage
+    ;;
+  *)
+    echo "unknown dev target: $1" >&2
+    usage >&2
+    exit 1
+    ;;
+esac

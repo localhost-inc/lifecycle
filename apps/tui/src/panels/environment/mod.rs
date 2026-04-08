@@ -101,13 +101,23 @@ pub fn load_services(workspace_id: Option<&str>) -> Vec<ServiceEntry> {
     };
 
     if let Some(bridge) = LifecycleBridgeClient::from_env() {
-        if let Ok(parsed) = bridge.service_list(ws_id) {
-            return parsed.services.into_iter().map(|s| ServiceEntry {
-                name: s.name,
-                status: s.status,
-                port: s.assigned_port,
-                preview_url: s.preview_url,
-            }).collect();
+        if let Ok(parsed) = bridge.stack_summary(ws_id) {
+            if parsed.stack.state != "ready" {
+                return vec![];
+            }
+
+            return parsed
+                .stack
+                .nodes
+                .into_iter()
+                .filter(|node| node.kind == "service")
+                .map(|node| ServiceEntry {
+                    name: node.name,
+                    status: node.status.unwrap_or_else(|| "stopped".to_string()),
+                    port: node.assigned_port,
+                    preview_url: node.preview_url,
+                })
+                .collect();
         }
     }
 

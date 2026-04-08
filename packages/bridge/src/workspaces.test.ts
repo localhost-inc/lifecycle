@@ -44,6 +44,8 @@ describe("createBridgeWorkspace", () => {
       closeTerminal: unsupported,
       connectTerminal: unsupported,
       disconnectTerminal: unsupported,
+      startStack: unsupported,
+      stopStack: unsupported,
       readManifest: unsupported,
       getGitCurrentBranch: unsupported,
       async ensureWorkspace(input) {
@@ -55,7 +57,7 @@ describe("createBridgeWorkspace", () => {
 
         return {
           ...input.workspace,
-          worktree_path: "/tmp/.lifecycle/worktrees/lifecycle/feature-x",
+          workspace_root: "/tmp/.lifecycle/worktrees/lifecycle/feature-x",
           status: "active",
         } satisfies WorkspaceRecord;
       },
@@ -107,7 +109,7 @@ describe("createBridgeWorkspace", () => {
         host: "local",
         name: "feature-x",
         sourceRef: "feature-x",
-        worktreePath: "/tmp/.lifecycle/worktrees/lifecycle/feature-x",
+        workspaceRoot: "/tmp/.lifecycle/worktrees/lifecycle/feature-x",
       }),
     );
 
@@ -119,13 +121,13 @@ describe("createBridgeWorkspace", () => {
     const persisted = await db.select<{
       name: string;
       source_ref: string;
-      worktree_path: string | null;
-    }>("SELECT name, source_ref, worktree_path FROM workspace WHERE id = $1", [created.id]);
+      workspace_root: string | null;
+    }>("SELECT name, source_ref, workspace_root FROM workspace WHERE id = $1", [created.id]);
     expect(persisted).toEqual([
       {
         name: "feature-x",
         source_ref: "feature-x",
-        worktree_path: "/tmp/.lifecycle/worktrees/lifecycle/feature-x",
+        workspace_root: "/tmp/.lifecycle/worktrees/lifecycle/feature-x",
       },
     ]);
 

@@ -30,7 +30,7 @@ pub struct SidebarWorkspace {
     pub status: String,
     pub source_ref: String,
     pub host: String,
-    pub worktree_path: Option<String>,
+    pub workspace_root: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -432,7 +432,7 @@ fn load_repos() -> Vec<SidebarRepo> {
                     status: ws.status.unwrap_or_else(|| "active".to_string()),
                     source_ref: ws.git_ref.unwrap_or_default(),
                     host: ws.host.unwrap_or_else(|| "local".to_string()),
-                    worktree_path: ws.path,
+                    workspace_root: ws.path,
                 })
                 .collect();
 

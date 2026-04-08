@@ -28,13 +28,13 @@ describe("formatBridgeFailure", () => {
             { message: "Required", path: ["repoPath"] },
             {
               message: "Too small: expected string to have >=1 characters",
-              path: ["worktreePath"],
+              path: ["workspaceRoot"],
             },
           ],
         }),
       ),
     ).toBe(
-      "Bridge body validation failed: repoPath: Required; worktreePath: Too small: expected string to have >=1 characters",
+      "Bridge body validation failed: repoPath: Required; workspaceRoot: Too small: expected string to have >=1 characters",
     );
   });
 

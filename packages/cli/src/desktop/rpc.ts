@@ -1,8 +1,8 @@
 import { randomUUID, createHash } from "node:crypto";
 import { createConnection } from "node:net";
 import {
-  type AgentSessionInspectRequest,
-  AGENT_SESSION_INSPECT_OPERATION,
+  type AgentInspectRequest,
+  AGENT_INSPECT_OPERATION,
   CONTEXT_READ_OPERATION,
   type ContextRequest,
   type DesktopRpcError,
@@ -10,7 +10,7 @@ import {
   type DesktopRpcResponse,
   DesktopRpcResponseSchema,
   type DesktopRpcShellResult,
-  LIFECYCLE_AGENT_SESSION_ID_ENV,
+  LIFECYCLE_AGENT_ID_ENV,
   LIFECYCLE_DESKTOP_SESSION_TOKEN_ENV,
   LIFECYCLE_DESKTOP_SOCKET_ENV,
   LIFECYCLE_WORKSPACE_ID_ENV,
@@ -536,28 +536,28 @@ export function createWorkspaceHealthRequest(input: {
   };
 }
 
-export function resolveAgentSessionId(explicitSessionId?: string): string {
-  const sessionId = explicitSessionId ?? process.env[LIFECYCLE_AGENT_SESSION_ID_ENV];
-  if (!sessionId) {
+export function resolveAgentId(explicitAgentId?: string): string {
+  const agentId = explicitAgentId ?? process.env[LIFECYCLE_AGENT_ID_ENV];
+  if (!agentId) {
     throw new LifecycleCliError({
-      code: "agent_session_unresolved",
-      message: "Lifecycle could not resolve an agent session for this command.",
-      suggestedAction: "Pass --session-id or run the command from a Lifecycle agent session.",
+      code: "agent_unresolved",
+      message: "Lifecycle could not resolve an agent for this command.",
+      suggestedAction: "Pass --agent-id or run the command from a Lifecycle agent.",
     });
   }
 
-  return sessionId;
+  return agentId;
 }
 
-export function createAgentSessionInspectRequest(input: {
-  sessionId: string;
+export function createAgentInspectRequest(input: {
+  agentId: string;
   workspaceId?: string;
-}): AgentSessionInspectRequest {
+}): AgentInspectRequest {
   return {
     id: randomUUID(),
-    method: AGENT_SESSION_INSPECT_OPERATION,
+    method: AGENT_INSPECT_OPERATION,
     params: {
-      sessionId: input.sessionId,
+      agentId: input.agentId,
       ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
     },
     session: buildDesktopRpcSession(),
@@ -662,7 +662,7 @@ export function createTaskCreateRequest(input: {
   planId: string;
   repositoryId: string;
   workspaceId?: string;
-  agentSessionId?: string;
+  agentId?: string;
   name: string;
   description?: string;
   status?: string;
@@ -676,7 +676,7 @@ export function createTaskCreateRequest(input: {
       repositoryId: input.repositoryId,
       name: input.name,
       ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
-      ...(input.agentSessionId ? { agentSessionId: input.agentSessionId } : {}),
+      ...(input.agentId ? { agentId: input.agentId } : {}),
       ...(input.description ? { description: input.description } : {}),
       ...(input.status ? { status: input.status } : {}),
       ...(input.priority ? { priority: input.priority } : {}),

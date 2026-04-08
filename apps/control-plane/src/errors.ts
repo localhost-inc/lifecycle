@@ -13,6 +13,7 @@ export type ApiErrorCode =
   | "workspace_provision_failed"
   | "workspace_attach_failed"
   | "workspace_branch_unresolved"
+  | "workspace_slug_ambiguous"
   | "workspace_not_found"
   | "provider_not_installed"
   | "provider_auth_missing"
@@ -20,6 +21,7 @@ export type ApiErrorCode =
   | "pull_request_not_mergeable"
   | "branch_protection_blocked"
   | "project_not_found"
+  | "refresh_failed"
   | "validation_failed"
   | "internal_error";
 
