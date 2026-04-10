@@ -13,15 +13,20 @@ let package = Package(
       targets: ["LifecycleApp"]
     ),
   ],
+  dependencies: [
+    .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.11.1"),
+    .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.11.0"),
+    .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.2.0"),
+  ],
   targets: [
     .binaryTarget(
       name: "GhosttyKit",
       path: ".generated/ghostty/GhosttyKit.xcframework"
     ),
     .target(
-      name: "LifecycleGhosttyHost",
+      name: "LifecycleTerminalHost",
       dependencies: ["GhosttyKit"],
-      path: "Sources/LifecycleGhosttyHost",
+      path: "Sources/LifecycleTerminalHost",
       publicHeadersPath: "include",
       cSettings: [
         .headerSearchPath("include"),
@@ -48,12 +53,17 @@ let package = Package(
     .executableTarget(
       name: "LifecycleApp",
       dependencies: [
-        "LifecycleGhosttyHost",
+        "LifecycleTerminalHost",
         "LifecyclePresentation",
+        .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+        .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
       ],
       path: "Sources/LifecycleApp",
       resources: [
         .process("Resources"),
+      ],
+      plugins: [
+        .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator"),
       ]
     ),
     .testTarget(

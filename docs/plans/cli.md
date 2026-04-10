@@ -35,19 +35,21 @@ The CLI must stay small, scriptable, and bridge-first.
 ## Canonical Noun Model
 
 1. `project` — the durable checked-in contract on disk; owns `lifecycle.json`
-2. `workspace` — a concrete working instance of a project
-3. `terminal` — one interactive terminal inside a workspace runtime
-4. `stack` — the live runnable graph inside a workspace
-5. `service` — one named node inside the stack
-6. `context` — one-shot aggregate machine-readable view
+2. `repo` — repository-scoped setup and repository linkage
+3. `workspace` — a concrete working instance of a project
+4. `terminal` — one interactive terminal inside a workspace runtime
+5. `stack` — the live runnable graph inside a workspace
+6. `service` — one named node inside the stack
+7. `context` — one-shot aggregate machine-readable view
 
 Rules:
 
-1. Namespaces stay singular: `project`, `workspace`, `terminal`, `stack`, `service`.
+1. Namespaces stay singular: `project`, `repo`, `workspace`, `terminal`, `stack`, `service`.
 2. Plurality lives in verbs or arguments: `service list`, `terminal list`, `service start api web`.
 3. Use `environment` for the declarative graph in `lifecycle.json`; use `stack` for the live operational surface.
 4. Use `workspace` for materialization and durable identity; do not overload it with stack or service verbs.
-5. `workspace shell` is a convenience attach path into the workspace's default terminal, not a separate product model.
+5. Use `repo` for repository-scoped setup and VCS/provider linkage, not for runtime reads that belong to the workspace or terminal.
+6. `workspace shell` is a convenience attach path into the workspace's default terminal, not a separate product model.
 
 ## Bridge-First Rule
 
@@ -73,14 +75,16 @@ Required runtime environment for tools running inside a workspace:
 
 1. `LIFECYCLE_WORKSPACE_ID`
 2. `LIFECYCLE_PROJECT_ID`
-3. `LIFECYCLE_WORKSPACE_PATH`
-4. `LIFECYCLE_WORKSPACE_HOST`
+3. `LIFECYCLE_TERMINAL_ID` for tools and hooks running inside a Lifecycle-managed terminal
+4. `LIFECYCLE_WORKSPACE_PATH`
+5. `LIFECYCLE_WORKSPACE_HOST`
 
 Rules:
 
 1. Common flows should not require raw ids when the caller is already inside a workspace.
 2. IDs are escape hatches, not the default path.
-3. When no workspace can be resolved, the CLI fails with a typed error instead of guessing.
+3. Runtime activity signals emitted from inside a terminal should resolve workspace and terminal scope from injected env by default.
+4. When no workspace can be resolved, the CLI fails with a typed error instead of guessing.
 
 ## Command Families
 
@@ -100,6 +104,42 @@ Rules:
 2. `lifecycle project inspect [--json]`
    - read manifest and project-level metadata
 
+### Repo
+
+1. `lifecycle repo install [--check] [--json]`
+   - install merge-only Lifecycle repo integrations for the current repository
+   - current shipped scope: project-scoped MCP config plus project-scoped hook integration for supported harnesses
+   - interactive mode prompts for the providers to configure, then installs the managed surfaces for each selected provider
+2. `lifecycle repo link --project-id <id>`
+   - link the repository to provider-backed collaboration authority when needed
+3. `lifecycle repo status [--json]`
+   - read repository linkage and install status
+
+Rules:
+
+1. `repo install` is the user-facing repo setup path for harness integrations.
+2. `repo install` should be idempotent and safe to rerun.
+3. Repo install writes repo-scoped integration files without deleting unrelated harness config; runtime activity signaling stays under `workspace activity`.
+4. Repo install merges managed hook entries into project config and may add repo-local helper scripts under `.lifecycle/` when a harness needs a stable project-relative adapter.
+5. Repo install should ask which providers to configure in interactive mode rather than exposing raw file targets.
+
+### Proxy
+
+1. `lifecycle proxy install [--dry-run] [--json]`
+   - install machine-scoped clean HTTP routing for `*.lifecycle.localhost`
+   - redirects local port 80 preview traffic into the Lifecycle preview proxy port
+2. `lifecycle proxy status [--json]`
+   - read machine-scoped preview proxy install status
+3. `lifecycle proxy uninstall [--dry-run] [--json]`
+   - remove machine-scoped clean HTTP preview routing
+
+Rules:
+
+1. `proxy install` is machine-scoped runtime setup, not repository setup.
+2. `proxy install` and `proxy uninstall` may require root privileges because they modify local redirect rules.
+3. `proxy status` reports whether clean HTTP is installed; preview routing should still work with an explicit proxy port when clean HTTP is absent.
+4. `repo install` remains the repo-scoped harness integration path; do not overload it with machine-level preview setup.
+
 ### Workspace
 
 1. `lifecycle workspace create [--project <id>] [--ref <branch>] [--host <local|docker|remote|cloud>]`
@@ -108,6 +148,16 @@ Rules:
 4. `lifecycle workspace prepare`
 5. `lifecycle workspace shell [--workspace <id>]`
 6. `lifecycle workspace destroy`
+7. `lifecycle workspace activity emit <event> [--workspace <id>] [--terminal <id>] [--turn-id <id>] [--name <name>] [--kind <kind>] [--metadata <json>] [--json]`
+8. `lifecycle workspace activity status [--json]`
+
+Rules:
+
+1. `workspace activity emit` is the runtime signaling path used by hook scripts and managed terminal wrappers.
+2. `workspace activity emit` resolves `workspace_id` and `terminal_id` from injected env by default and only needs explicit overrides for tests or debugging.
+3. `provider` may be attached as metadata, but it is not required for routing or reducer authority.
+4. Event names stay semantic and dot-scoped, for example `turn.started`, `turn.completed`, `tool.started`, `tool.completed`, `waiting.started`, and `waiting.completed`.
+5. `workspace activity status` is the read path for the bridge-derived terminal and workspace activity view.
 
 ### Terminal
 
@@ -146,8 +196,9 @@ Cloud-specific families are defined in [Cloud](./cloud.md):
 
 1. `auth`
 2. `org`
-3. `repo`
-4. `pr`
+3. `pr`
+
+Cloud-linked repo operations are defined in [Cloud](./cloud.md), but `repo` is still a general CLI namespace because repo-local install/setup is not cloud-only.
 
 Those families must reuse the same noun model rather than introducing a second CLI grammar.
 
@@ -160,6 +211,7 @@ Rules:
 3. `--json` shapes are public contracts and should evolve additively only.
 4. Log commands may use NDJSON when streaming is needed.
 5. `context --json` is the preferred one-shot orientation read for tools and harnesses.
+6. `workspace activity emit` should be quiet by default and return an accepted envelope when `--json` is requested.
 
 ## Error Contract
 
@@ -191,11 +243,12 @@ This plan does not define:
 
 This plan is successful when all of the following are true:
 
-1. `project`, `workspace`, `terminal`, `stack`, `service`, and `context` form one coherent CLI grammar.
+1. `project`, `repo`, `workspace`, `terminal`, `stack`, `service`, and `context` form one coherent CLI grammar.
 2. Common workspace commands resolve context automatically from cwd or injected env.
 3. Runtime operations are bridge-first across local and cloud.
 4. `workspace shell` and `terminal attach` compose cleanly instead of representing different models.
-5. `--json` reads are stable enough for tools and harnesses to consume directly.
+5. Repo-scoped harness setup has one primary entry point in `repo install`.
+6. `--json` reads are stable enough for tools and harnesses to consume directly.
 
 ## Test Scenarios
 
@@ -204,10 +257,14 @@ cd into worktree -> lifecycle workspace status -> resolves workspace without --w
 cd into worktree -> lifecycle stack status --json -> returns structured stack state
 cd into worktree -> lifecycle terminal list --json -> returns terminal records for the workspace
 lifecycle project init -> creates or repairs lifecycle.json
+lifecycle repo install -> installs repo-scoped MCP and hook integration for supported harnesses
+lifecycle proxy install -> installs clean HTTP lifecycle.localhost routing for this machine
 lifecycle workspace prepare -> runs prepare for the current workspace
 lifecycle workspace shell -> attaches the default workspace terminal
 lifecycle terminal open --kind shell -> creates another terminal in the same workspace
 lifecycle terminal attach <terminal> -> attaches the requested terminal without leaking transport details
+lifecycle workspace activity emit turn.started -> resolves workspace and terminal from env and records terminal activity without requiring provider flags
+lifecycle workspace activity status --json -> returns terminal-scoped activity plus the derived workspace aggregate
 lifecycle stack logs --tail 20 -> returns readable aggregate logs
 lifecycle service info api --json -> returns structured service facts
 lifecycle context --json -> returns one-shot orientation payload

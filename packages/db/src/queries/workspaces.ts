@@ -188,6 +188,7 @@ export async function insertWorkspace(
     workspaceRoot?: string | null;
     host?: WorkspaceHost;
     checkoutType?: WorkspaceCheckoutType;
+    preparedAt?: string | null;
   },
 ): Promise<string> {
   const id = crypto.randomUUID();
@@ -204,7 +205,7 @@ export async function insertWorkspace(
     workspace_root: input.workspaceRoot ?? null,
     host: input.host ?? "local",
     manifest_fingerprint: null,
-    prepared_at: null,
+    prepared_at: input.preparedAt ?? null,
     status: "active",
     failure_reason: null,
     failed_at: null,
@@ -214,6 +215,17 @@ export async function insertWorkspace(
   });
   await db.execute(stmt.sql, stmt.params);
   return id;
+}
+
+export async function markWorkspacePrepared(
+  db: SqlDriver,
+  workspaceId: string,
+  preparedAt: string,
+): Promise<void> {
+  await db.execute(
+    "UPDATE workspace SET prepared_at = $2, updated_at = $3 WHERE id = $1",
+    [workspaceId, preparedAt, preparedAt],
+  );
 }
 
 export async function archiveWorkspace(

@@ -70,14 +70,14 @@ Use this section to route work before implementation.
 1. React component filenames must use lowercase hyphen-case (for example, `workspace-panel.tsx`).
 2. Keep React component symbols in PascalCase; filename style and symbol style are intentionally different.
 3. Exception: framework-required entrypoint names may keep ecosystem defaults (for example, `App.tsx`, `main.tsx`).
-4. Prefer feature-oriented grouping as UI scope grows (for example, `apps/desktop-legacy-do-not-touch/src/features/*`).
-5. Keep cross-feature reusable primitives in `apps/desktop-legacy-do-not-touch/src/components`.
+4. Prefer feature-oriented grouping as UI scope grows (for example, `apps/<surface>/src/features/*`).
+5. Keep cross-feature reusable primitives in the app-level `src/components` boundary.
 
 ### Theming and UI Library Rules
 
 1. Theme architecture must support `appearance` (`light|dark|system`) and named `preset` themes independently.
 2. Shared design tokens live in `packages/ui/src/styles/theme.css`; app-level CSS should compose on top of those tokens.
-3. New reusable primitives should be added to `packages/ui` first, then consumed by `apps/desktop-legacy-do-not-touch` (and future web apps).
+3. New reusable primitives should be added to `packages/ui` first, then consumed by app surfaces.
 4. Shadcn usage is allowed, but generated components should be normalized to repository naming/style rules before adoption.
 5. Avoid hardcoding palette-specific Tailwind color classes in new components when a semantic token exists.
 
@@ -127,7 +127,7 @@ Use this section to route work before implementation.
 4. If compatibility is explicitly required, document the scope and planned removal conditions in the same change.
 5. Make failure handling first-class: clear error type, message, and recovery path.
 6. Keep naming consistent with existing contracts and domain language.
-7. Desktop database schema changes must go through numbered SQL migrations in `apps/desktop-legacy-do-not-touch/src-tauri/src/platform/migrations`; do not add startup-time schema guards or ad hoc `ALTER TABLE` helpers.
+7. Desktop database schema changes must go through numbered SQL migrations in the owning app package; do not add startup-time schema guards or ad hoc `ALTER TABLE` helpers.
 8. Prefer clean hierarchical feature directories over adding new sibling helper files at the package root; organize by boundary first, then by domain within that boundary.
 
 ## Testing and Verification

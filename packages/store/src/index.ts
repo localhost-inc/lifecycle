@@ -44,13 +44,4 @@ export {
   type AgentMessageCollectionRegistry,
 } from "./collections/agent-messages";
 
-export { selectPlansByRepository, selectPlanById } from "./collections/plans";
-
-export {
-  selectTasksByRepository,
-  selectTasksByPlan,
-  selectTaskDependencies,
-  selectReadyTasks,
-} from "./collections/tasks";
-
 export { reconcileWorkspaceServices } from "./services/reconcile";

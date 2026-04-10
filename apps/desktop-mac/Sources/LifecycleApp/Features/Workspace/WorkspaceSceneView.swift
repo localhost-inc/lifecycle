@@ -121,6 +121,7 @@ private struct WorkspaceContentCardView: View {
     }
     .frame(width: workspaceExtensionSidebarDividerThickness)
     .contentShape(Rectangle())
+    .lcResizeCursor(horizontal: true)
     .onHover { hovering in
       isHoveringSidebarDivider = hovering
     }

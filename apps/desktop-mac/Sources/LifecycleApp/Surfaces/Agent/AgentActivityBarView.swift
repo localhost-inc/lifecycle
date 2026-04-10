@@ -44,6 +44,7 @@ struct AgentActivityBarView: View {
               .foregroundStyle(theme.mutedColor.opacity(0.78))
           }
           .buttonStyle(.plain)
+          .lcPointerCursor()
         }
       }
       .padding(.horizontal, 16)

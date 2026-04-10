@@ -7,23 +7,88 @@ func stackExtensionUsesCompactLayout(availableWidth: CGFloat) -> Bool {
   availableWidth < stackExtensionMinimumTableWidth
 }
 
+func stackExtensionServiceNodes(from summary: BridgeWorkspaceStackSummary?) -> [BridgeStackNode] {
+  summary?.nodes.filter { $0.kind == "service" } ?? []
+}
+
+func stackExtensionTaskNodes(from summary: BridgeWorkspaceStackSummary?) -> [BridgeStackNode] {
+  summary?.nodes.filter { $0.kind == "task" } ?? []
+}
+
+func stackExtensionSummarySubtitle(summary: BridgeWorkspaceStackSummary?) -> String {
+  guard let summary else {
+    return "Loading stack summary from the bridge..."
+  }
+
+  switch summary.state {
+  case "missing":
+    return "No stack configured for this workspace."
+  case "invalid":
+    return "Invalid lifecycle.json stack."
+  default:
+    let serviceCount = stackExtensionServiceNodes(from: summary).count
+    let taskCount = stackExtensionTaskNodes(from: summary).count
+    var parts: [String] = []
+
+    if serviceCount > 0 {
+      parts.append("\(serviceCount) service\(serviceCount == 1 ? "" : "s")")
+    }
+
+    if taskCount > 0 {
+      parts.append("\(taskCount) task\(taskCount == 1 ? "" : "s")")
+    }
+
+    return parts.isEmpty ? "No services or tasks declared." : parts.joined(separator: ", ")
+  }
+}
+
 struct StackExtensionView: View {
   @Environment(\.appTheme) private var theme
 
   let context: WorkspaceExtensionContext
+  @State private var isServicesExpanded = true
+  @State private var isTasksExpanded = false
 
   var body: some View {
     GeometryReader { geometry in
       let usesCompactLayout = stackExtensionUsesCompactLayout(availableWidth: geometry.size.width)
+      let serviceNodes = stackExtensionServiceNodes(from: context.stackSummary)
+      let taskNodes = stackExtensionTaskNodes(from: context.stackSummary)
 
       ScrollView {
-        VStack(alignment: .leading, spacing: 12) {
-          summaryCard
+        VStack(alignment: .leading, spacing: 18) {
+          summaryHeader
 
-          if usesCompactLayout {
-            compactNodeList
-          } else {
-            nodeTable
+          if context.stackSummary?.state == "invalid", let summary = context.stackSummary, !summary.errors.isEmpty {
+            errorList(summary.errors)
+          }
+
+          if !serviceNodes.isEmpty {
+            accordionSection(
+              title: "Services",
+              count: serviceNodes.count,
+              isExpanded: $isServicesExpanded
+            ) {
+              if usesCompactLayout {
+                compactNodeList(serviceNodes)
+              } else {
+                serviceTable(serviceNodes)
+              }
+            }
+          }
+
+          if !taskNodes.isEmpty {
+            accordionSection(
+              title: "Tasks",
+              count: taskNodes.count,
+              isExpanded: $isTasksExpanded
+            ) {
+              if usesCompactLayout {
+                compactNodeList(taskNodes)
+              } else {
+                taskTable(taskNodes)
+              }
+            }
           }
         }
         .padding(12)
@@ -35,7 +100,7 @@ struct StackExtensionView: View {
   }
 
   @ViewBuilder
-  private var summaryCard: some View {
+  private var summaryHeader: some View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(spacing: 8) {
         Text("STACK")
@@ -50,119 +115,152 @@ struct StackExtensionView: View {
         )
       }
 
-      if let summary = context.stackSummary {
-        Text("\(summary.nodes.count) declared stack nodes in lifecycle.json")
-          .font(.system(size: 12, weight: .medium))
-          .foregroundStyle(theme.primaryTextColor)
-
-        if !summary.errors.isEmpty {
-          VStack(alignment: .leading, spacing: 6) {
-            ForEach(summary.errors, id: \.self) { error in
-              Text(error)
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundStyle(theme.errorColor)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-          }
-        }
-      } else {
-        Text("Loading stack summary from the bridge...")
-          .font(.system(size: 12, weight: .medium))
-          .foregroundStyle(theme.mutedColor)
-      }
+      Text(stackExtensionSummarySubtitle(summary: context.stackSummary))
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(context.stackSummary?.state == "invalid" ? theme.errorColor : theme.primaryTextColor)
     }
-    .padding(12)
-    .background(
-      RoundedRectangle(cornerRadius: 8, style: .continuous)
-        .fill(theme.surfaceRaised.opacity(0.55))
-    )
-    .overlay(
-      RoundedRectangle(cornerRadius: 8, style: .continuous)
-        .strokeBorder(theme.borderColor.opacity(0.5))
-    )
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
   @ViewBuilder
-  private var nodeTable: some View {
-    let nodes = context.stackSummary?.nodes ?? []
-
-    VStack(alignment: .leading, spacing: 0) {
-      HStack(spacing: 12) {
-        tableHeader("Name", width: 110)
-        tableHeader("Kind", width: 70)
-        tableHeader("State", width: 88)
-        tableHeader("Details", width: nil)
-      }
-      .padding(.horizontal, 12)
-      .padding(.vertical, 10)
-
-      if nodes.isEmpty {
-        Text(emptyStateLabel)
-          .font(.system(size: 12, weight: .medium))
-          .foregroundStyle(theme.mutedColor)
-          .padding(.horizontal, 12)
-          .padding(.vertical, 12)
-      } else {
-        ForEach(nodes) { node in
-          VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 12) {
-              Text(node.name)
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .foregroundStyle(theme.primaryTextColor)
-                .frame(width: 110, alignment: .leading)
-
-              LCBadge(
-                label: node.kind,
-                color: node.kind == "service" ? theme.accentColor : theme.warningColor,
-                variant: .outline
-              )
-              .frame(width: 70, alignment: .leading)
-
-              statusBadge(for: node)
-                .frame(width: 88, alignment: .leading)
-
-              nodeDetails(node)
-            }
-
-            if !node.dependsOn.isEmpty {
-              Text("depends_on: \(node.dependsOn.joined(separator: ", "))")
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(theme.mutedColor.opacity(0.8))
-                .padding(.leading, 192)
-            }
-          }
-          .padding(.horizontal, 12)
-          .padding(.vertical, 10)
-
-          if nodes.last?.id != node.id {
-            Divider()
-              .overlay(theme.borderColor.opacity(0.35))
-          }
+  private func accordionSection<Content: View>(
+    title: String,
+    count: Int,
+    isExpanded: Binding<Bool>,
+    @ViewBuilder content: () -> Content
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Button {
+        withAnimation(.spring(response: 0.26, dampingFraction: 0.86)) {
+          isExpanded.wrappedValue.toggle()
         }
+      } label: {
+        HStack(spacing: 10) {
+          Image(systemName: "chevron.right")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(theme.mutedColor.opacity(0.82))
+            .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
+
+          Text(title.uppercased())
+            .font(.system(size: 10, weight: .bold, design: .monospaced))
+            .foregroundStyle(theme.mutedColor.opacity(0.78))
+
+          Spacer(minLength: 0)
+
+          Text("\(count)")
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundStyle(theme.mutedColor.opacity(0.72))
+        }
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .lcPointerCursor()
+
+      if isExpanded.wrappedValue {
+        content()
       }
     }
-    .background(
-      RoundedRectangle(cornerRadius: 8, style: .continuous)
-        .fill(theme.surfaceRaised.opacity(0.4))
-    )
-    .overlay(
-      RoundedRectangle(cornerRadius: 8, style: .continuous)
-        .strokeBorder(theme.borderColor.opacity(0.45))
-    )
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  private var emptyStateLabel: String {
-    switch context.stackSummary?.state {
-    case "missing":
-      "No lifecycle.json stack is configured for this workspace."
-    case "invalid":
-      "The stack manifest is invalid."
-    default:
-      "No stack nodes declared."
+  @ViewBuilder
+  private func errorList(_ errors: [String]) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      ForEach(errors, id: \.self) { error in
+        Text(error)
+          .font(.system(size: 11, weight: .medium, design: .monospaced))
+          .foregroundStyle(theme.errorColor)
+          .textSelection(.enabled)
+          .fixedSize(horizontal: false, vertical: true)
+      }
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  @ViewBuilder
+  private func serviceTable(_ nodes: [BridgeStackNode]) -> some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 12) {
+        tableHeader("Name", width: 116)
+        tableHeader("State", width: 88)
+        tableHeader("Details", width: nil)
+      }
+      .padding(.vertical, 8)
+
+      ForEach(nodes) { node in
+        VStack(alignment: .leading, spacing: 6) {
+          HStack(alignment: .top, spacing: 12) {
+            Text(node.name)
+              .font(.system(size: 12, weight: .semibold, design: .monospaced))
+              .foregroundStyle(theme.primaryTextColor)
+              .frame(width: 116, alignment: .leading)
+
+            statusBadge(for: node)
+              .frame(width: 88, alignment: .leading)
+
+            nodeDetails(node)
+          }
+
+          if !node.dependsOn.isEmpty {
+            Text("depends_on: \(node.dependsOn.joined(separator: ", "))")
+              .font(.system(size: 10, weight: .medium, design: .monospaced))
+              .foregroundStyle(theme.mutedColor.opacity(0.8))
+              .padding(.leading, 128)
+          }
+        }
+        .padding(.vertical, 10)
+
+        if nodes.last?.id != node.id {
+          Divider()
+            .overlay(theme.borderColor.opacity(0.35))
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  @ViewBuilder
+  private func taskTable(_ nodes: [BridgeStackNode]) -> some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 12) {
+        tableHeader("Name", width: 116)
+        tableHeader("Trigger", width: 88)
+        tableHeader("Details", width: nil)
+      }
+      .padding(.vertical, 8)
+
+      ForEach(nodes) { node in
+        VStack(alignment: .leading, spacing: 6) {
+          HStack(alignment: .top, spacing: 12) {
+            Text(node.name)
+              .font(.system(size: 12, weight: .semibold, design: .monospaced))
+              .foregroundStyle(theme.primaryTextColor)
+              .frame(width: 116, alignment: .leading)
+
+            statusBadge(for: node)
+              .frame(width: 88, alignment: .leading)
+
+            nodeDetails(node)
+          }
+
+          if !node.dependsOn.isEmpty {
+            Text("depends_on: \(node.dependsOn.joined(separator: ", "))")
+              .font(.system(size: 10, weight: .medium, design: .monospaced))
+              .foregroundStyle(theme.mutedColor.opacity(0.8))
+              .padding(.leading, 128)
+          }
+        }
+        .padding(.vertical, 10)
+
+        if nodes.last?.id != node.id {
+          Divider()
+            .overlay(theme.borderColor.opacity(0.35))
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 
   private func tableHeader(_ label: String, width: CGFloat?) -> some View {
@@ -173,61 +271,35 @@ struct StackExtensionView: View {
   }
 
   @ViewBuilder
-  private var compactNodeList: some View {
-    let nodes = context.stackSummary?.nodes ?? []
+  private func compactNodeList(_ nodes: [BridgeStackNode]) -> some View {
+    VStack(alignment: .leading, spacing: 0) {
+      ForEach(nodes) { node in
+        VStack(alignment: .leading, spacing: 8) {
+          HStack(alignment: .top, spacing: 8) {
+            Text(node.name)
+              .font(.system(size: 12, weight: .semibold, design: .monospaced))
+              .foregroundStyle(theme.primaryTextColor)
 
-    VStack(alignment: .leading, spacing: 10) {
-      if nodes.isEmpty {
-        Text(emptyStateLabel)
-          .font(.system(size: 12, weight: .medium))
-          .foregroundStyle(theme.mutedColor)
-          .padding(12)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-              .fill(theme.surfaceRaised.opacity(0.4))
-          )
-          .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-              .strokeBorder(theme.borderColor.opacity(0.45))
-          )
-      } else {
-        ForEach(nodes) { node in
-          VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 8) {
-              VStack(alignment: .leading, spacing: 6) {
-                Text(node.name)
-                  .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                  .foregroundStyle(theme.primaryTextColor)
+            Spacer(minLength: 0)
 
-                HStack(spacing: 8) {
-                  kindBadge(for: node)
-                  statusBadge(for: node)
-                }
-              }
-
-              Spacer(minLength: 0)
-            }
-
-            compactNodeDetails(node)
-
-            if !node.dependsOn.isEmpty {
-              Text("depends_on: \(node.dependsOn.joined(separator: ", "))")
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(theme.mutedColor.opacity(0.8))
-                .fixedSize(horizontal: false, vertical: true)
-            }
+            statusBadge(for: node)
           }
-          .padding(12)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-              .fill(theme.surfaceRaised.opacity(0.4))
-          )
-          .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-              .strokeBorder(theme.borderColor.opacity(0.45))
-          )
+
+          compactNodeDetails(node)
+
+          if !node.dependsOn.isEmpty {
+            Text("depends_on: \(node.dependsOn.joined(separator: ", "))")
+              .font(.system(size: 10, weight: .medium, design: .monospaced))
+              .foregroundStyle(theme.mutedColor.opacity(0.8))
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+        if nodes.last?.id != node.id {
+          Divider()
+            .overlay(theme.borderColor.opacity(0.35))
         }
       }
     }
@@ -248,14 +320,6 @@ struct StackExtensionView: View {
         .font(.system(size: 11, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.mutedColor)
     }
-  }
-
-  private func kindBadge(for node: BridgeStackNode) -> some View {
-    LCBadge(
-      label: node.kind,
-      color: node.kind == "service" ? theme.accentColor : theme.warningColor,
-      variant: .outline
-    )
   }
 
   @ViewBuilder

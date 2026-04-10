@@ -1,4 +1,4 @@
-import { startBridgeServer } from "./server";
+import { startBridgeServer } from "./lib/server";
 
 function resolveRequestedPort(argv: string[], env: NodeJS.ProcessEnv): number | undefined {
   const flagIndex = argv.findIndex((value) => value === "--port");

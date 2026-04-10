@@ -1,8 +1,8 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
-import { resolveControlPlaneUrl } from "../../src/control-plane-url";
-import { readCredentials, updateCredentials } from "../../src/credentials";
-import { BridgeError } from "../../src/errors";
+import { resolveControlPlaneUrl } from "../../src/domains/auth/control-plane-url";
+import { readCredentials, updateCredentials } from "../../src/domains/auth/credentials";
+import { BridgeError } from "../../src/lib/errors";
 
 export default createRoute({
   schemas: {

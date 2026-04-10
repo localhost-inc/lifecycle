@@ -17,9 +17,28 @@ export type {
   AgentMessageWithParts,
   AgentMessageRole,
 } from "./agent";
-export { parseAgentMessagePartData, stringifyAgentMessagePartData } from "./agent";
+export {
+  AgentMessagePartRecordSchema,
+  AgentMessagePartTypeSchema,
+  AgentMessageRecordSchema,
+  AgentMessageRoleSchema,
+  AgentMessageWithPartsSchema,
+  AgentProviderIdSchema,
+  AgentRecordSchema,
+  AgentStatusSchema,
+  parseAgentMessagePartData,
+  stringifyAgentMessagePartData,
+} from "./agent";
+export type {
+  TerminalActivityState,
+  WorkspaceActivityEventName,
+  WorkspaceActivitySummary,
+  WorkspaceActivityTerminalRecord,
+} from "./activity";
+export { TERMINAL_ACTIVITY_STATES, WORKSPACE_ACTIVITY_EVENT_NAMES } from "./activity";
 export { slugifyName, slugWithSuffix } from "./slug";
-export type { PlanRecord, TaskDependencyRecord, TaskRecord, WorkspaceRecord } from "./db";
+export { WorkspaceRecordSchema } from "./db";
+export type { WorkspaceRecord } from "./db";
 export type {
   ServiceRecord,
   StackNodeRecord,
@@ -28,23 +47,12 @@ export type {
   StackSummaryState,
   StackTaskRecord,
 } from "./stack";
-export type { PlanStatus, TaskPriority, TaskStatus } from "./planning";
-export {
-  TASK_PRIORITY_LOW,
-  TASK_PRIORITY_NORMAL,
-  TASK_PRIORITY_HIGH,
-  TASK_PRIORITY_URGENT,
-  TASK_PRIORITY_LABELS,
-  parseTaskPriority,
-} from "./planning";
 export {
   DESKTOP_RPC_VERSION,
   DesktopRpcErrorSchema,
   DesktopRpcRequestSchema,
   DesktopRpcResponseSchema,
   DesktopRpcSessionSchema,
-  DesktopRpcShellRequestSchema,
-  DesktopRpcShellResultSchema,
   ContextRequestSchema,
   HealthCheckResultSchema,
   AgentInspectRequestSchema,
@@ -52,6 +60,7 @@ export {
   LIFECYCLE_CLI_PATH_ENV,
   LIFECYCLE_DESKTOP_SOCKET_ENV,
   LIFECYCLE_DESKTOP_SESSION_TOKEN_ENV,
+  LIFECYCLE_TERMINAL_ID_ENV,
   LIFECYCLE_WORKSPACE_PATH_ENV,
   LIFECYCLE_WORKSPACE_ID_ENV,
   LogLineSchema,
@@ -60,7 +69,6 @@ export {
   ServiceLogsRequestSchema,
   ServiceStartRequestSchema,
   ServiceStopRequestSchema,
-  TabOpenRequestSchema,
   WorkspaceCreateRequestSchema,
   WorkspaceArchiveRequestSchema,
   WorkspaceHealthRequestSchema,
@@ -68,25 +76,11 @@ export {
   WorkspaceResetRequestSchema,
   WorkspaceRunRequestSchema,
   WorkspaceGetRequestSchema,
-  PlanListRequestSchema,
-  PlanCreateRequestSchema,
-  PlanUpdateRequestSchema,
-  PlanDeleteRequestSchema,
-  TaskListRequestSchema,
-  TaskCreateRequestSchema,
-  TaskUpdateRequestSchema,
-  TaskDeleteRequestSchema,
-  TaskDependencyAddRequestSchema,
-  TaskDependencyRemoveRequestSchema,
 } from "./desktop/rpc";
 export {
   AGENT_INSPECT_OPERATION,
   BRIDGE_HEALTH_OPERATION,
   CONTEXT_READ_OPERATION,
-  PLAN_CREATE_OPERATION,
-  PLAN_DELETE_OPERATION,
-  PLAN_LIST_OPERATION,
-  PLAN_UPDATE_OPERATION,
   REPO_LIST_OPERATION,
   SETTINGS_GET_OPERATION,
   SETTINGS_UPDATE_OPERATION,
@@ -95,13 +89,6 @@ export {
   SERVICE_LOGS_OPERATION,
   SERVICE_START_OPERATION,
   SERVICE_STOP_OPERATION,
-  TAB_OPEN_OPERATION,
-  TASK_CREATE_OPERATION,
-  TASK_DELETE_OPERATION,
-  TASK_DEPENDENCY_ADD_OPERATION,
-  TASK_DEPENDENCY_REMOVE_OPERATION,
-  TASK_LIST_OPERATION,
-  TASK_UPDATE_OPERATION,
   WORKSPACE_ACTIVITY_OPERATION,
   WORKSPACE_ARCHIVE_OPERATION,
   WORKSPACE_CREATE_OPERATION,
@@ -119,8 +106,6 @@ export type {
   DesktopRpcRequest,
   DesktopRpcResponse,
   DesktopRpcSession,
-  DesktopRpcShellRequest,
-  DesktopRpcShellResult,
   ContextRequest,
   HealthCheckResult,
   LogLine,
@@ -129,7 +114,6 @@ export type {
   ServiceLogsRequest,
   ServiceStartRequest,
   ServiceStopRequest,
-  TabOpenRequest,
   WorkspaceCreateRequest,
   WorkspaceArchiveRequest,
   WorkspaceHealthRequest,
@@ -137,16 +121,6 @@ export type {
   WorkspaceResetRequest,
   WorkspaceRunRequest,
   WorkspaceGetRequest,
-  PlanListRequest,
-  PlanCreateRequest,
-  PlanUpdateRequest,
-  PlanDeleteRequest,
-  TaskListRequest,
-  TaskCreateRequest,
-  TaskUpdateRequest,
-  TaskDeleteRequest,
-  TaskDependencyAddRequest,
-  TaskDependencyRemoveRequest,
 } from "./desktop/rpc";
 export type { ErrorEnvelope } from "./errors";
 export type {
@@ -205,6 +179,7 @@ export type {
 export type { FieldError, LifecycleConfig, ManifestParseResult } from "./manifest";
 export { getManifestFingerprint, LifecycleConfigSchema, parseManifest } from "./manifest";
 export type { RepositoryRecord } from "./repository";
+export { RepositoryRecordSchema } from "./repository";
 export {
   LifecycleAppearanceSettingsSchema,
   LifecycleAppearanceSettingsUpdateSchema,
@@ -269,7 +244,15 @@ export type {
   LifecycleTerminalSettings,
   LifecycleThemePreference,
 } from "./settings";
-export { WORKSPACE_MAX_TEXT_FILE_BYTES } from "./workspace";
+export {
+  WORKSPACE_MAX_TEXT_FILE_BYTES,
+  ServiceStatusReasonSchema,
+  ServiceStatusSchema,
+  WorkspaceCheckoutTypeSchema,
+  WorkspaceFailureReasonSchema,
+  WorkspaceHostSchema,
+  WorkspaceStatusSchema,
+} from "./workspace";
 export type {
   ServiceStatus,
   ServiceStatusReason,

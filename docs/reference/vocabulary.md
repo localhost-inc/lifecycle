@@ -288,6 +288,20 @@ An ephemeral client attachment to one terminal.
 
 Connections are client-scoped and transport-specific. They are not the same thing as terminal identity.
 
+### Terminal activity
+
+The bridge-owned derived runtime state for one terminal.
+
+Terminal activity is terminal-scoped first and may be aggregated into workspace activity.
+
+It may be sourced from explicit hook events, shell integration, or weaker recent-output heuristics.
+
+### Activity event
+
+A terminal-scoped runtime signal emitted from inside a Lifecycle-managed terminal, usually through `lifecycle workspace activity emit`.
+
+Activity events resolve by `LIFECYCLE_WORKSPACE_ID` and `LIFECYCLE_TERMINAL_ID`. `provider` may be attached as metadata, but it is not the authority key.
+
 ### Environment
 
 The declarative execution graph defined in `lifecycle.json`.
@@ -370,6 +384,10 @@ The linked VCS identity for a project.
 Repository records own provider linkage for clone, push, pull request create, and pull request merge. They do not define the runtime contract; that still lives in `lifecycle.json`.
 
 Repository records carry both a human `name` and a canonical `slug`.
+
+`repo install` is the repo-scoped setup path for Lifecycle-managed harness integration. The current shipped behavior installs merge-only repo-scoped MCP config plus repo-scoped hook integration for supported harnesses.
+
+`proxy install` is the machine-scoped setup path for local preview routing. It installs optional clean HTTP support for `*.lifecycle.localhost` on the current machine and is separate from repo-scoped harness integration.
 
 ### Remote collaboration
 
@@ -478,6 +496,8 @@ Examples: project pages, pull request tabs, project activity
 Live execution or local worktree context tied to one workspace.
 
 Examples: terminals, services and preview surfaces, local changes, workspace canvas layout
+
+Local worktree checkouts live under `~/.lifecycle/worktrees/<org_slug>/<repo_slug>/`, with `local` as the org slug when no active organization is selected.
 
 ## Current vs Target Terms
 

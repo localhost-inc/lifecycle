@@ -1,7 +1,7 @@
 import AppKit
 import Combine
 import Foundation
-import LifecycleGhosttyHost
+import LifecycleTerminalHost
 import LifecyclePresentation
 import SwiftUI
 
@@ -12,6 +12,45 @@ let minimumWorkspaceCanvasWidth: CGFloat = 480
 let workspaceExtensionSidebarDividerThickness: CGFloat = 12
 let bridgeDiscoveryRetryNanosecondsWhenDisconnected: UInt64 = 500_000_000
 let bridgeDiscoveryRetryNanosecondsWhenConnected: UInt64 = 1_500_000_000
+
+enum WorkspaceCreationHost: String, CaseIterable, Identifiable {
+  case local
+  case remote
+  case cloud
+
+  var id: String { rawValue }
+
+  var label: String {
+    switch self {
+    case .local:
+      "Local"
+    case .remote:
+      "Remote"
+    case .cloud:
+      "Cloud"
+    }
+  }
+
+  var detail: String {
+    switch self {
+    case .local:
+      "Runs on this Mac."
+    case .remote:
+      "Runs on a remote host."
+    case .cloud:
+      "Runs in Lifecycle cloud."
+    }
+  }
+
+  var isAvailableInDesktopMac: Bool {
+    switch self {
+    case .local:
+      true
+    case .remote, .cloud:
+      false
+    }
+  }
+}
 
 func clampedWorkspaceExtensionSidebarWidth(_ width: CGFloat, availableWidth: CGFloat) -> CGFloat {
   guard availableWidth.isFinite, availableWidth > 0 else {
@@ -32,6 +71,62 @@ func workspaceCanvasDocumentContainsAgentSurface(_ document: WorkspaceCanvasDocu
   }
 
   return document.surfacesByID.values.contains { $0.surfaceKind == .agent }
+}
+
+func repositoryName(from repositoryPath: String) -> String {
+  let trimmedPath = repositoryPath.trimmingCharacters(in: .whitespacesAndNewlines)
+  let lastComponent = URL(fileURLWithPath: trimmedPath).lastPathComponent
+  return lastComponent.isEmpty ? "repository" : lastComponent
+}
+
+func preferredRootWorkspaceName(branchName: String?, repositoryName: String) -> String {
+  let trimmedBranchName = branchName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+  guard !trimmedBranchName.isEmpty, trimmedBranchName != "HEAD" else {
+    return repositoryName
+  }
+
+  return trimmedBranchName
+}
+
+func preferredRepositoryWorkspace(_ repository: BridgeRepository) -> BridgeWorkspaceSummary? {
+  repository.workspaces.first(where: { isRootWorkspaceSummary($0, in: repository) }) ?? repository.workspaces.first
+}
+
+func isRootWorkspaceSummary(
+  _ workspace: BridgeWorkspaceSummary,
+  in repository: BridgeRepository
+) -> Bool {
+  workspace.path == repository.path
+}
+
+func slugifyName(_ value: String, fallback: String = "item") -> String {
+  var slug = value
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+    .lowercased()
+    .replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
+    .replacingOccurrences(of: "^-+|-+$", with: "", options: .regularExpression)
+
+  if slug.isEmpty {
+    slug = fallback
+  }
+
+  return slug
+}
+
+func slugifyWorkspaceName(_ value: String) -> String {
+  slugifyName(value, fallback: "workspace")
+}
+
+func shortWorkspaceID(_ workspaceID: String) -> String {
+  let prefix = workspaceID
+    .filter { $0.isLetter || $0.isNumber }
+    .prefix(8)
+
+  return prefix.isEmpty ? "workspace" : String(prefix)
+}
+
+func workspaceBranchName(workspaceName: String, workspaceID: String) -> String {
+  "lifecycle/\(slugifyWorkspaceName(workspaceName))-\(shortWorkspaceID(workspaceID))"
 }
 
 @MainActor
@@ -101,6 +196,7 @@ final class AppModel: ObservableObject {
   @Published var repositories: [BridgeRepository] = []
   @Published var terminalEnvelopeByWorkspaceID: [String: BridgeWorkspaceTerminalsEnvelope] = [:]
   @Published var stackSummaryByWorkspaceID: [String: BridgeWorkspaceStackSummary] = [:]
+  @Published private(set) var stackLoadingWorkspaceIDs = Set<String>()
   @Published var terminalConnectionBySurfaceID: [String: BridgeTerminalConnection] = [:]
   @Published var agentsByWorkspaceID: [String: [BridgeAgentRecord]] = [:]
   @Published private var canvasDocumentsByWorkspaceID: [String: WorkspaceCanvasDocument] = [:]
@@ -159,6 +255,30 @@ final class AppModel: ObservableObject {
     AppLog.info(.app, "Manual refresh requested")
     Task {
       await reload()
+    }
+  }
+
+  func addRepository() {
+    Task {
+      await addRepositoryTask()
+    }
+  }
+
+  func removeRepository(_ repositoryID: String) {
+    Task {
+      await removeRepositoryTask(repositoryID)
+    }
+  }
+
+  func createWorkspace(for repositoryID: String, name: String, host: WorkspaceCreationHost = .local) {
+    Task {
+      await createWorkspaceTask(for: repositoryID, name: name, host: host)
+    }
+  }
+
+  func archiveWorkspace(_ workspaceID: String, repositoryPath: String) {
+    Task {
+      await archiveWorkspaceTask(workspaceID, repositoryPath: repositoryPath)
     }
   }
 
@@ -441,12 +561,115 @@ final class AppModel: ObservableObject {
     )
   }
 
+  func activeCanvasGroupID(for workspaceID: String? = nil) -> String? {
+    guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID,
+          let canvasState = canvasState(for: targetWorkspaceID)
+    else {
+      return nil
+    }
+
+    if let activeGroupID = canvasState.activeGroupID,
+       canvasState.groupsByID[activeGroupID] != nil
+    {
+      return activeGroupID
+    }
+
+    return canvasGroupIDs(in: canvasState.layout).first
+  }
+
+  func activeCanvasSurfaceID(for workspaceID: String? = nil) -> String? {
+    guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID,
+          let canvasState = canvasState(for: targetWorkspaceID),
+          let groupID = activeCanvasGroupID(for: targetWorkspaceID),
+          let group = canvasState.groupsByID[groupID]
+    else {
+      return nil
+    }
+
+    if let activeSurfaceID = group.activeSurfaceID,
+       canvasState.surfacesByID[activeSurfaceID] != nil
+    {
+      return activeSurfaceID
+    }
+
+    return group.surfaceOrder.first
+  }
+
+  func canCloseActiveSurface(workspaceID: String? = nil) -> Bool {
+    guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID,
+          let canvasState = canvasState(for: targetWorkspaceID),
+          let surfaceID = activeCanvasSurfaceID(for: targetWorkspaceID),
+          let surface = canvasState.surfacesByID[surfaceID]
+    else {
+      return false
+    }
+
+    return surface.isClosable
+  }
+
+  func closeActiveSurface(workspaceID: String? = nil) {
+    guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID,
+          let surfaceID = activeCanvasSurfaceID(for: targetWorkspaceID)
+    else {
+      return
+    }
+
+    closeSurface(surfaceID, workspaceID: targetWorkspaceID)
+  }
+
+  func splitActiveGroup(
+    _ direction: CanvasTiledLayoutSplit.Direction,
+    workspaceID: String? = nil
+  ) {
+    guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID,
+          let groupID = activeCanvasGroupID(for: targetWorkspaceID)
+    else {
+      return
+    }
+
+    splitGroup(groupID, direction: direction, workspaceID: targetWorkspaceID)
+  }
+
   func terminalEnvelope(for workspaceID: String) -> BridgeWorkspaceTerminalsEnvelope? {
     terminalEnvelopeByWorkspaceID[workspaceID]
   }
 
   func stackSummary(for workspaceID: String) -> BridgeWorkspaceStackSummary? {
     stackSummaryByWorkspaceID[workspaceID]
+  }
+
+  func isStackActionLoading(for workspaceID: String) -> Bool {
+    stackLoadingWorkspaceIDs.contains(workspaceID)
+  }
+
+  func runPrimaryStackAction(workspaceID: String? = nil) {
+    guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID,
+          let actionState = workspaceStackHeaderActionState(
+            summary: stackSummaryByWorkspaceID[targetWorkspaceID],
+            isMutating: stackLoadingWorkspaceIDs.contains(targetWorkspaceID)
+          ),
+          actionState.isEnabled
+    else {
+      return
+    }
+
+    beginStackLoading(for: targetWorkspaceID)
+    Task {
+      await performStackAction(actionState.kind, workspaceID: targetWorkspaceID)
+    }
+  }
+
+  private func beginStackLoading(for workspaceID: String) {
+    let inserted = stackLoadingWorkspaceIDs.insert(workspaceID).inserted
+    if inserted {
+      syncWorkspaceStore(for: workspaceID)
+    }
+  }
+
+  private func endStackLoading(for workspaceID: String) {
+    if stackLoadingWorkspaceIDs.remove(workspaceID) != nil {
+      syncWorkspaceStore(for: workspaceID)
+    }
   }
 
   private func beginTerminalLoading(for workspaceID: String) {
@@ -861,6 +1084,177 @@ final class AppModel: ObservableObject {
     .authenticating(output: ["Waiting for bridge authentication..."])
   }
 
+  private func addRepositoryTask() async {
+    guard let directoryURL = chooseRepositoryDirectory() else {
+      return
+    }
+
+    let repositoryPath = directoryURL.standardizedFileURL.path
+    let nextRepositoryName = repositoryName(from: repositoryPath)
+    let rootWorkspaceName = preferredRootWorkspaceName(
+      branchName: await detectRepositoryBranch(at: repositoryPath),
+      repositoryName: nextRepositoryName
+    )
+
+    do {
+      let response = try await AppSignpost.withInterval(.workspace, "Add Repository") {
+        try await withBridgeRequest { client in
+          try await client.createRepository(
+            path: repositoryPath,
+            name: nextRepositoryName,
+            rootWorkspaceName: rootWorkspaceName,
+            sourceRef: rootWorkspaceName
+          )
+        }
+      }
+
+      try await loadRepositories()
+      clearError()
+
+      if let repository = repositories.first(where: { $0.id == response.id }) {
+        selectRepository(repository)
+      }
+
+      AppLog.notice(
+        .workspace,
+        "Added repository",
+        metadata: [
+          "repositoryID": response.id,
+          "repositoryPath": repositoryPath,
+          "created": response.created ? "true" : "false",
+        ]
+      )
+    } catch {
+      reportError(
+        error,
+        category: .workspace,
+        message: "Failed to add repository",
+        metadata: ["repositoryPath": repositoryPath]
+      )
+    }
+  }
+
+  private func removeRepositoryTask(_ repositoryID: String) async {
+    do {
+      try await AppSignpost.withInterval(.workspace, "Remove Repository") {
+        let _: Void = try await withBridgeRequest { client in
+          try await client.deleteRepository(repositoryID)
+        }
+      }
+
+      try await loadRepositories()
+      clearError()
+      AppLog.notice(
+        .workspace,
+        "Removed repository",
+        metadata: ["repositoryID": repositoryID]
+      )
+    } catch {
+      reportError(
+        error,
+        category: .workspace,
+        message: "Failed to remove repository",
+        metadata: ["repositoryID": repositoryID]
+      )
+    }
+  }
+
+  private func createWorkspaceTask(
+    for repositoryID: String,
+    name: String,
+    host: WorkspaceCreationHost
+  ) async {
+    guard let repository = repositories.first(where: { $0.id == repositoryID }) else {
+      return
+    }
+
+    let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedName.isEmpty else {
+      return
+    }
+
+    let workspaceSeed = UUID().uuidString.lowercased()
+    let sourceRef = workspaceBranchName(workspaceName: trimmedName, workspaceID: workspaceSeed)
+
+    do {
+      let response = try await AppSignpost.withInterval(.workspace, "Create Workspace") {
+        try await withBridgeRequest { client in
+          try await client.createWorkspace(
+            repoPath: repository.path,
+            name: trimmedName,
+            sourceRef: sourceRef,
+            host: host.rawValue
+          )
+        }
+      }
+
+      try await loadRepositories()
+      clearError()
+
+      if let refreshedRepository = repositories.first(where: { $0.id == repositoryID }),
+        let workspace = refreshedRepository.workspaces.first(where: { $0.id == response.id })
+      {
+        select(repository: refreshedRepository, workspace: workspace)
+      }
+
+      AppLog.notice(
+        .workspace,
+        "Created workspace",
+        metadata: [
+          "repositoryID": repositoryID,
+          "workspaceID": response.id,
+          "workspaceName": trimmedName,
+          "host": host.rawValue,
+          "sourceRef": sourceRef,
+        ]
+      )
+    } catch {
+      reportError(
+        error,
+        category: .workspace,
+        message: "Failed to create workspace",
+        metadata: [
+          "repositoryID": repositoryID,
+          "workspaceName": trimmedName,
+          "host": host.rawValue,
+        ]
+      )
+    }
+  }
+
+  private func archiveWorkspaceTask(_ workspaceID: String, repositoryPath: String) async {
+    do {
+      let response = try await AppSignpost.withInterval(.workspace, "Archive Workspace") {
+        try await withBridgeRequest { client in
+          try await client.archiveWorkspace(workspaceID, repoPath: repositoryPath)
+        }
+      }
+
+      try await loadRepositories()
+      await openSelectedWorkspaceIfNeeded()
+      clearError()
+      AppLog.notice(
+        .workspace,
+        "Archived workspace",
+        metadata: [
+          "workspaceID": workspaceID,
+          "repositoryPath": repositoryPath,
+          "workspaceName": response.name,
+        ]
+      )
+    } catch {
+      reportError(
+        error,
+        category: .workspace,
+        message: "Failed to archive workspace",
+        metadata: [
+          "workspaceID": workspaceID,
+          "repositoryPath": repositoryPath,
+        ]
+      )
+    }
+  }
+
   private func loadRepositories() async throws {
     let repositories = try await AppSignpost.withInterval(.workspace, "Load Repositories") {
       try await withBridgeRequest { client in
@@ -1107,6 +1501,59 @@ final class AppModel: ObservableObject {
         error,
         category: .workspace,
         message: "Failed to load stack summary",
+        workspaceID: workspaceID
+      )
+    }
+  }
+
+  private func performStackAction(
+    _ kind: WorkspaceStackHeaderActionKind,
+    workspaceID: String
+  ) async {
+    defer {
+      endStackLoading(for: workspaceID)
+    }
+
+    do {
+      let response = try await AppSignpost.withInterval(
+        .workspace,
+        kind == .stop ? "Stop Stack" : "Start"
+      ) {
+        try await withBridgeRequest { client in
+          switch kind {
+          case .start, .starting:
+            try await client.startStack(for: workspaceID)
+          case .stop, .stopping:
+            try await client.stopStack(for: workspaceID)
+          }
+        }
+      }
+
+      stackSummaryByWorkspaceID[workspaceID] = response.stack
+      syncWorkspaceStore(for: workspaceID)
+      clearErrorIfVisible(for: workspaceID)
+
+      let actionLabel = kind == .stop ? "Stopped stack" : "Started stack"
+      let serviceNames =
+        if kind == .stop {
+          response.stoppedServices ?? []
+        } else {
+          response.startedServices ?? []
+        }
+
+      AppLog.notice(
+        .workspace,
+        actionLabel,
+        metadata: [
+          "workspaceID": workspaceID,
+          "services": serviceNames.isEmpty ? "none" : serviceNames.joined(separator: ","),
+        ]
+      )
+    } catch {
+      reportError(
+        error,
+        category: .workspace,
+        message: kind == .stop ? "Failed to stop stack" : "Failed to start stack",
         workspaceID: workspaceID
       )
     }
@@ -1471,7 +1918,7 @@ final class AppModel: ObservableObject {
       )
     }
 
-    LifecycleGhosttyTerminalHostView.closeTerminalHost(withID: terminalHostID(for: surfaceID))
+    LifecycleTerminalHostView.closeTerminal(withID: terminalHostID(for: surfaceID))
 
     // Close on the bridge so the tmux window is cleaned up.
     do {
@@ -2229,6 +2676,43 @@ final class AppModel: ObservableObject {
 
   private static let lastWorkspaceIDKey = "lifecycle.lastWorkspaceID"
   private static let lastRepositoryIDKey = "lifecycle.lastRepositoryID"
+
+  private func chooseRepositoryDirectory() -> URL? {
+    let panel = NSOpenPanel()
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = false
+    panel.canCreateDirectories = false
+    panel.allowsMultipleSelection = false
+    panel.prompt = "Open"
+    panel.message = "Choose a repository folder to add to Lifecycle."
+    panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+
+    guard panel.runModal() == .OK else {
+      return nil
+    }
+
+    return panel.url
+  }
+
+  private func detectRepositoryBranch(at repositoryPath: String) async -> String? {
+    let output = try? await ProcessRunner.run(
+      program: "git",
+      args: ["rev-parse", "--abbrev-ref", "HEAD"],
+      cwd: repositoryPath
+    )
+    return output?.stdout
+  }
+
+  private func selectRepository(_ repository: BridgeRepository) {
+    selectedRepositoryID = repository.id
+
+    guard let workspace = preferredRepositoryWorkspace(repository) else {
+      selectedWorkspaceID = nil
+      return
+    }
+
+    select(repository: repository, workspace: workspace)
+  }
 
   private static func persistLastWorkspace(workspaceID: String, repositoryID: String) {
     UserDefaults.standard.set(workspaceID, forKey: lastWorkspaceIDKey)

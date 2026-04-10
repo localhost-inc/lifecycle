@@ -111,6 +111,54 @@ final class WorkspaceExtensionTests: XCTestCase {
     )
   }
 
+  func testStackExtensionSeparatesServiceAndTaskNodes() {
+    let summary = BridgeWorkspaceStackSummary(
+      workspaceID: "workspace-1",
+      state: "ready",
+      errors: [],
+      nodes: [
+        stackNode(name: "api", kind: "service"),
+        stackNode(name: "web", kind: "service"),
+        stackNode(name: "seed", kind: "task"),
+      ]
+    )
+
+    XCTAssertEqual(stackExtensionServiceNodes(from: summary).map(\.name), ["api", "web"])
+    XCTAssertEqual(stackExtensionTaskNodes(from: summary).map(\.name), ["seed"])
+  }
+
+  func testStackExtensionSummarySubtitleUsesMissingCopy() {
+    let summary = BridgeWorkspaceStackSummary(
+      workspaceID: "workspace-1",
+      state: "missing",
+      errors: [],
+      nodes: []
+    )
+
+    XCTAssertEqual(
+      stackExtensionSummarySubtitle(summary: summary),
+      "No stack configured for this workspace."
+    )
+  }
+
+  func testStackExtensionSummarySubtitleUsesServiceAndTaskCounts() {
+    let summary = BridgeWorkspaceStackSummary(
+      workspaceID: "workspace-1",
+      state: "ready",
+      errors: [],
+      nodes: [
+        stackNode(name: "api", kind: "service"),
+        stackNode(name: "web", kind: "service"),
+        stackNode(name: "seed", kind: "task"),
+      ]
+    )
+
+    XCTAssertEqual(
+      stackExtensionSummarySubtitle(summary: summary),
+      "2 services, 1 task"
+    )
+  }
+
   private func makeContext() -> WorkspaceExtensionContext {
     WorkspaceExtensionContext(
       model: AppModel(),
@@ -157,6 +205,25 @@ final class WorkspaceExtensionTests: XCTestCase {
       content: AnyWorkspaceExtensionContent {
         EmptyView()
       }
+    )
+  }
+
+  private func stackNode(name: String, kind: String) -> BridgeStackNode {
+    BridgeStackNode(
+      workspaceID: "workspace-1",
+      name: name,
+      kind: kind,
+      dependsOn: [],
+      runtime: kind == "service" ? "process" : nil,
+      status: kind == "service" ? "ready" : nil,
+      statusReason: nil,
+      assignedPort: nil,
+      previewURL: nil,
+      createdAt: nil,
+      updatedAt: nil,
+      runOn: kind == "task" ? "create" : nil,
+      command: kind == "task" ? "echo ok" : nil,
+      writeFilesCount: kind == "task" ? 0 : nil
     )
   }
 }

@@ -26,6 +26,13 @@ struct BridgeWorkspaceStackResponse: Decodable {
   let stack: BridgeWorkspaceStackSummary
 }
 
+struct BridgeWorkspaceStackMutationResponse: Decodable {
+  let stack: BridgeWorkspaceStackSummary
+  let workspaceId: String
+  let startedServices: [String]?
+  let stoppedServices: [String]?
+}
+
 struct BridgeWorkspaceStackSummary: Decodable, Equatable {
   let workspaceID: String
   let state: String

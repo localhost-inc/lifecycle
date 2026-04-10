@@ -30,7 +30,7 @@
         "@workos-inc/node": "^8.10.0",
         "drizzle-orm": "^0.44.0",
         "hono": "^4.7.10",
-        "routedjs": "0.1.5",
+        "routedjs": "0.1.6",
         "zod": "^4.3.6",
       },
       "devDependencies": {
@@ -164,7 +164,7 @@
         "@lifecycle/workspace": "workspace:*",
         "@standard-schema/spec": "^1.1.0",
         "hono": "^4.7.10",
-        "routedjs": "0.1.5",
+        "routedjs": "0.1.6",
         "zod": "^4.3.6",
       },
     },
@@ -186,7 +186,7 @@
         "@lifecycle/workspace": "workspace:*",
         "@modelcontextprotocol/sdk": "^1.28.0",
         "hono": "^4.7.10",
-        "routedjs": "0.1.5",
+        "routedjs": "0.1.6",
         "smol-toml": "^1.6.1",
         "zod": "^4.3.6",
       },
@@ -2371,7 +2371,7 @@
 
     "roughjs": ["roughjs@4.6.6", "", { "dependencies": { "hachure-fill": "^0.5.2", "path-data-parser": "^0.1.0", "points-on-curve": "^0.2.0", "points-on-path": "^0.2.1" } }, "sha512-ZUz/69+SYpFN/g/lUlo2FXcIjRkSu3nDarreVdGGndHEBJ6cXPdKguS8JGxwj5HA5xIbVKSmLgr5b3AWxtRfvQ=="],
 
-    "routedjs": ["routedjs@0.1.5", "", { "dependencies": { "@standard-schema/spec": "^1.1.0", "chokidar": "^4.0.0" }, "peerDependencies": { "elysia": "^1", "express": "^5", "hono": "^4", "koa": "^2 || ^3", "typescript": "^5", "zod-to-json-schema": "^3" }, "optionalPeers": ["elysia", "express", "hono", "koa", "zod-to-json-schema"], "bin": { "routed": "bin/routed" } }, "sha512-7Ck4at2cTvziY+wR6FQQTAs18FO15S/X4Gd7aDLAMgI6XOWj5k7bYE1pCsniTggQph24IRrGIPLqLpsE3JNpXQ=="],
+    "routedjs": ["routedjs@0.1.6", "", { "dependencies": { "@standard-schema/spec": "^1.1.0", "chokidar": "^4.0.0" }, "peerDependencies": { "elysia": "^1", "express": "^5", "hono": "^4", "koa": "^2 || ^3", "typescript": "^5", "zod-to-json-schema": "^3" }, "optionalPeers": ["elysia", "express", "hono", "koa", "zod-to-json-schema"], "bin": { "routed": "bin/routed" } }, "sha512-4S6pIe7T69BeiHotPaT7clganJTHwtCmYk2l47/6wUyxQmBz4TfBqhP5HYOlG5sm6NGjPtWk7K+Q1Zo2fyRa2A=="],
 
     "router": ["router@2.2.0", "", { "dependencies": { "debug": "^4.4.0", "depd": "^2.0.0", "is-promise": "^4.0.0", "parseurl": "^1.3.3", "path-to-regexp": "^8.0.0" } }, "sha512-nLTrUKm2UyiL7rlhapu/Zl45FwNgkZGaCpZbIHajDYgwlJCOzLSk+cIPAnsEqV955GjILJnKbdQC1nVPz+gAYQ=="],
 

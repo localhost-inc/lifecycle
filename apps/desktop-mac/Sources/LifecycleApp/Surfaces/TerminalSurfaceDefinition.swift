@@ -44,7 +44,7 @@ struct TerminalSurfaceDefinition: SurfaceDefinition {
       )
 
       content = AnySurfaceContent(id: record.id) { renderState in
-        GhosttyTerminalSurfaceView(
+        TerminalSurfaceView(
           surface: resolved,
           themeConfigPath: context.themeConfigPath,
           backgroundHexColor: context.terminalBackgroundHexColor,

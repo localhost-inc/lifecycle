@@ -75,6 +75,30 @@ Rules:
 2. if the default terminal does not exist yet, the runtime may create it
 3. creating additional terminals must not redefine what `workspace shell` means
 
+### Terminal activity
+
+Terminal activity is the bridge-owned derived runtime state for one terminal.
+
+Terminal activity is terminal-scoped first and workspace-scoped second.
+
+A terminal may be:
+
+1. `idle`
+2. `command_running`
+3. `turn_active`
+4. `tool_active`
+5. `waiting`
+6. `interactive_quiet`
+7. `interactive_active`
+8. `unknown`
+
+Rules:
+
+1. Terminal activity is attached to a stable terminal id.
+2. Workspace activity is derived from the set of terminal activity records in that workspace.
+3. A terminal may carry optional activity metadata such as `turnId`, `toolName`, `waitingKind`, `provider`, `source`, and timestamps.
+4. `provider` is optional metadata, not a required routing key.
+
 ## Authority Split
 
 ### Bridge owns
@@ -134,6 +158,8 @@ Semantic operations:
 3. `workspace.terminal.connect`
 4. `workspace.terminal.disconnect`
 5. `workspace.terminal.close`
+6. `workspace.activity.get`
+7. `workspace.activity.emit`
 
 Required response concepts:
 
@@ -141,7 +167,80 @@ Required response concepts:
 2. terminal record metadata
 3. connection id
 4. transport description
-5. typed launch/attach errors
+5. terminal activity records
+6. workspace-level derived activity
+7. typed launch/attach/activity errors
+
+## Activity Signals
+
+Activity signals come from multiple sources with different confidence levels.
+
+Authoritative sources:
+
+1. explicit activity events emitted from inside a Lifecycle-managed terminal, usually by harness hooks calling `lifecycle workspace activity emit`
+2. shell integration markers such as OSC 133 for command start and prompt return
+
+Fallback sources:
+
+1. foreground process identity
+2. recent terminal output
+3. host/runtime-specific transport fallbacks
+
+Rules:
+
+1. Explicit activity events outrank shell integration and all heuristics.
+2. Shell command lifecycle and harness turn lifecycle are separate signal classes and should not be collapsed at ingestion time.
+3. `workspace_id` and `terminal_id` are the routing keys for explicit activity events.
+4. `turn_id` is optional metadata. When it is absent, the reducer assumes at most one explicit turn per terminal.
+5. If a terminal is not Lifecycle-managed and cannot resolve both ids, explicit activity emission should fail instead of guessing.
+
+## Activity Reducer Rules
+
+The bridge owns the reducer that turns activity signals into terminal activity state.
+
+Precedence order:
+
+1. `waiting` from explicit `waiting.started` / `waiting.completed`
+2. `tool_active` from explicit `tool.started` / `tool.completed`
+3. `turn_active` from explicit `turn.started` / `turn.completed`
+4. `command_running` from shell integration command start / finish
+5. `interactive_active` when a known interactive harness process is in the foreground and output is recent
+6. `interactive_quiet` when a known interactive harness process is in the foreground but output has gone quiet
+7. `idle` when no stronger signal remains
+
+Reducer rules:
+
+1. Explicit completion events clear the matching explicit state on that terminal.
+2. Duplicate explicit start events refresh timestamps and metadata rather than creating parallel terminal states.
+3. `waiting` is sticky until an explicit completion event or terminal exit clears it.
+4. `interactive_active` decays to `interactive_quiet` after a short no-output timeout.
+5. Terminal exit clears terminal-scoped activity state and removes stale explicit turn or tool records for that terminal.
+6. Workspace-level busy state is derived from its terminals rather than written independently.
+
+## Activity Event Contract
+
+`lifecycle workspace activity emit` is the user-facing CLI surface for explicit terminal activity signals.
+
+The target event vocabulary is:
+
+1. `turn.started`
+2. `turn.completed`
+3. `tool.started`
+4. `tool.completed`
+5. `waiting.started`
+6. `waiting.completed`
+
+The command resolves `LIFECYCLE_WORKSPACE_ID` and `LIFECYCLE_TERMINAL_ID` from the terminal session by default and only needs explicit workspace or terminal overrides for tests and debugging.
+
+Optional event fields:
+
+1. `turnId`
+2. `name` for tool names such as `Bash`
+3. `kind` for waiting kinds such as `approval`
+4. `provider`
+5. `metadata`
+
+The bridge read surface should return one terminal activity record per terminal plus a workspace-derived aggregate view.
 
 ## Transport Rule
 

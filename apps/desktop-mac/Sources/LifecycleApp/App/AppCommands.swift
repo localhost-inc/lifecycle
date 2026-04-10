@@ -25,7 +25,6 @@ extension FocusedValues {
 /// Actions that the command system can trigger on the active scene.
 @MainActor
 struct AppActions {
-  let openSettings: () -> Void
   let navigateBack: () -> Void
   let navigateForward: () -> Void
   let canNavigateBack: Bool
@@ -42,13 +41,20 @@ struct AppCommands: Commands {
     // Replace the default "Settings" menu item (Cmd+,)
     CommandGroup(replacing: .appSettings) {
       Button("Settings…") {
-        actions?.openSettings()
+        AppCommandRequest.openSettings.post()
       }
       .keyboardShortcut(",", modifiers: .command)
     }
 
     // Tab commands under File menu
     CommandGroup(after: .newItem) {
+      Button("Command Palette…") {
+        AppCommandRequest.toggleCommandPalette.post()
+      }
+      .keyboardShortcut("k", modifiers: .command)
+
+      Divider()
+
       Button("New Tab") {
         model?.createTerminalTab()
       }
@@ -56,10 +62,10 @@ struct AppCommands: Commands {
       .disabled(model?.selectedWorkspaceID == nil)
 
       Button("Close Tab") {
-        closeActiveTab()
+        model?.closeActiveSurface()
       }
       .keyboardShortcut("w", modifiers: .command)
-      .disabled(!canCloseTab)
+      .disabled(model?.canCloseActiveSurface() != true)
 
       Divider()
     }
@@ -85,35 +91,6 @@ struct AppCommands: Commands {
       }
       .keyboardShortcut("e", modifiers: [.command, .shift])
       .disabled(model == nil)
-    }
-  }
-
-  private var canCloseTab: Bool {
-    guard let model, let canvasState = model.canvasState() else {
-      return false
-    }
-
-    let activeGroupID = canvasState.activeGroupID
-    let group = activeGroupID.flatMap { canvasState.groupsByID[$0] }
-    let activeSurfaceID = group?.activeSurfaceID ?? group?.surfaceOrder.first
-    guard let activeSurfaceID, let surface = canvasState.surfacesByID[activeSurfaceID] else {
-      return false
-    }
-
-    return surface.isClosable
-  }
-
-  private func closeActiveTab() {
-    guard let model, let canvasState = model.canvasState() else {
-      return
-    }
-
-    let activeGroupID = canvasState.activeGroupID
-    let group = activeGroupID.flatMap { canvasState.groupsByID[$0] }
-    let activeSurfaceID = group?.activeSurfaceID ?? group?.surfaceOrder.first
-
-    if let activeSurfaceID {
-      model.closeSurface(activeSurfaceID)
     }
   }
 }

@@ -1,59 +1,69 @@
-export type AgentProviderId = "claude" | "codex";
+import { z } from "zod";
 
-export type AgentMessageRole = "user" | "assistant" | "system" | "tool";
+export const AgentProviderIdSchema = z.enum(["claude", "codex"]).meta({ id: "AgentProviderId" });
+export type AgentProviderId = z.infer<typeof AgentProviderIdSchema>;
 
-export type AgentStatus =
-  | "starting"
-  | "idle"
-  | "running"
-  | "waiting_input"
-  | "waiting_approval"
-  | "completed"
-  | "failed"
-  | "cancelled";
+export const AgentMessageRoleSchema = z
+  .enum(["user", "assistant", "system", "tool"])
+  .meta({ id: "AgentMessageRole" });
+export type AgentMessageRole = z.infer<typeof AgentMessageRoleSchema>;
 
-export interface AgentRecord {
-  id: string;
-  workspace_id: string;
-  provider: AgentProviderId;
-  provider_id: string | null;
-  title: string;
-  status: AgentStatus;
-  last_message_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
+export const AgentStatusSchema = z
+  .enum([
+    "starting",
+    "idle",
+    "running",
+    "waiting_input",
+    "waiting_approval",
+    "completed",
+    "failed",
+    "cancelled",
+  ])
+  .meta({ id: "AgentStatus" });
+export type AgentStatus = z.infer<typeof AgentStatusSchema>;
 
-export interface AgentMessageRecord {
-  id: string;
-  agent_id: string;
-  role: AgentMessageRole;
-  text: string;
-  turn_id: string | null;
-  created_at: string;
-}
+export const AgentRecordSchema = z
+  .object({
+    id: z.string(),
+    workspace_id: z.string(),
+    provider: AgentProviderIdSchema,
+    provider_id: z.string().nullable(),
+    title: z.string(),
+    status: AgentStatusSchema,
+    last_message_at: z.string().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  })
+  .meta({ id: "AgentRecord" });
+export type AgentRecord = z.infer<typeof AgentRecordSchema>;
+
+export const AgentMessageRecordSchema = z
+  .object({
+    id: z.string(),
+    agent_id: z.string(),
+    role: AgentMessageRoleSchema,
+    text: z.string(),
+    turn_id: z.string().nullable(),
+    created_at: z.string(),
+  })
+  .meta({ id: "AgentMessageRecord" });
+export type AgentMessageRecord = z.infer<typeof AgentMessageRecordSchema>;
 
 /** Hydrated message with inline parts — the shape the UI consumes. */
-export interface AgentMessageWithParts {
-  id: string;
-  agent_id: string;
-  role: AgentMessageRole;
-  text: string;
-  turn_id: string | null;
-  parts: AgentMessagePartRecord[];
-  created_at: string;
-}
-
-export type AgentMessagePartType =
-  | "text"
-  | "thinking"
-  | "status"
-  | "image"
-  | "tool_call"
-  | "tool_result"
-  | "attachment_ref"
-  | "approval_ref"
-  | "artifact_ref";
+export const AgentMessagePartTypeSchema = z
+  .enum([
+    "text",
+    "thinking",
+    "status",
+    "image",
+    "tool_call",
+    "tool_result",
+    "attachment_ref",
+    "approval_ref",
+    "artifact_ref",
+  ])
+  .meta({ id: "AgentMessagePartType" });
+export type AgentMessagePartType = z.infer<typeof AgentMessagePartTypeSchema>;
 
 export interface AgentToolCallPartData {
   tool_call_id: string;
@@ -113,16 +123,25 @@ export type AgentMessagePartData = AgentMessagePartDataByType[AgentMessagePartTy
 export type AgentMessagePartDataOf<Type extends AgentMessagePartType> =
   AgentMessagePartDataByType[Type];
 
-export interface AgentMessagePartRecord {
-  id: string;
-  message_id: string;
-  agent_id: string;
-  part_index: number;
-  part_type: AgentMessagePartType;
-  text: string | null;
-  data: string | null;
-  created_at: string;
-}
+export const AgentMessagePartRecordSchema = z
+  .object({
+    id: z.string(),
+    message_id: z.string(),
+    agent_id: z.string(),
+    part_index: z.number().int(),
+    part_type: AgentMessagePartTypeSchema,
+    text: z.string().nullable(),
+    data: z.string().nullable(),
+    created_at: z.string(),
+  })
+  .meta({ id: "AgentMessagePartRecord" });
+export type AgentMessagePartRecord = z.infer<typeof AgentMessagePartRecordSchema>;
+
+/** Hydrated message with inline parts — the shape the UI consumes. */
+export const AgentMessageWithPartsSchema = AgentMessageRecordSchema.extend({
+  parts: z.array(AgentMessagePartRecordSchema),
+}).meta({ id: "AgentMessageWithParts" });
+export type AgentMessageWithParts = z.infer<typeof AgentMessageWithPartsSchema>;
 
 export interface AgentEventRecord {
   id: string;

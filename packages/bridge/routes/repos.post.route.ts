@@ -1,11 +1,19 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
+import { RepositoryRecordSchema } from "@lifecycle/contracts";
 import {
   getRepositoryByPath,
   insertRepository,
   insertWorkspace,
   listWorkspacesByRepository,
 } from "@lifecycle/db/queries";
+
+const BridgeRepositoryCreateResponseSchema = z
+  .object({
+    id: RepositoryRecordSchema.shape.id,
+    created: z.boolean(),
+  })
+  .meta({ id: "BridgeRepositoryCreateResponse" });
 
 export default createRoute({
   schemas: {
@@ -20,6 +28,10 @@ export default createRoute({
         })
         .optional(),
     }),
+    responses: {
+      200: BridgeRepositoryCreateResponseSchema,
+      201: BridgeRepositoryCreateResponseSchema,
+    },
   },
   handler: async ({ body, ctx }) => {
     const db = ctx.get("db");
@@ -38,6 +50,7 @@ export default createRoute({
           workspaceRoot: body.rootWorkspace.workspaceRoot,
           host: "local",
           checkoutType: "root",
+          preparedAt: new Date().toISOString(),
         });
       }
     }

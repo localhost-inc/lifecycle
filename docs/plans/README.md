@@ -9,9 +9,10 @@ Current plan priority: CLI, terminals, control plane, sandbox providers, and thi
 1. [CLI](./cli.md) — canonical CLI grammar, bridge-first runtime operations, and stable output contracts
 2. [Runtime Boundaries](./runtime-boundaries.md) — bridge-first package ownership, authority cleanup, and package collapse plan
 3. [Mac Presentation Boundaries](./mac-presentation-boundaries.md) — native shell ownership, render-only Swift boundaries, and target-level enforcement plan
-4. [Cloud](./cloud.md) — hosted workspace loop, remote shell attach, routed OpenCode endpoint, and PR workflow
-5. [Cloud Hardening](./cloud-hardening.md) — sleep/wake restore, TTL enforcement, quotas, cloud lifecycle SLOs
-6. [Terminals](./terminals.md) — first-class terminal runtime contract across CLI, TUI, native, web, local, and cloud
+4. [Desktop Packaging](./desktop-packaging.md) — production app bundle contract, bundled bridge and CLI runtime, and clean-machine distribution readiness
+5. [Cloud](./cloud.md) — hosted workspace loop, remote shell attach, routed OpenCode endpoint, and PR workflow
+6. [Cloud Hardening](./cloud-hardening.md) — sleep/wake restore, TTL enforcement, quotas, cloud lifecycle SLOs
+7. [Terminals](./terminals.md) — first-class terminal runtime contract across CLI, TUI, native, web, local, and cloud
 
 ## Archived Plans
 

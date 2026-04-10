@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_GENERATED_DIR="$ROOT_DIR/apps/desktop-legacy-do-not-touch/src-tauri/.generated/ghostty"
+DEFAULT_GENERATED_DIR="$ROOT_DIR/apps/desktop-mac/.generated/ghostty"
 GENERATED_DIR="${LIFECYCLE_GHOSTTY_GENERATED_DIR:-$DEFAULT_GENERATED_DIR}"
 SOURCE_DIR="${LIFECYCLE_GHOSTTY_SOURCE_DIR:-$GENERATED_DIR/source}"
 OUTPUT_DIR="${LIFECYCLE_GHOSTTYKIT_OUTPUT_DIR:-$GENERATED_DIR/GhosttyKit.xcframework}"

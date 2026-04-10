@@ -70,6 +70,7 @@ private struct SignedInAccountView: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .lcPointerCursor()
     .popover(isPresented: $isOrgPickerOpen, arrowEdge: .bottom) {
       OrgPickerPopover(
         organizations: organizations,

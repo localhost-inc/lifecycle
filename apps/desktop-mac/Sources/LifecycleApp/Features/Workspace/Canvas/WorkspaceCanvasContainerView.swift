@@ -69,5 +69,6 @@ struct WorkspaceCanvasContainerView: View {
         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(theme.borderColor.opacity(0.4)))
     }
     .buttonStyle(.plain)
+    .lcPointerCursor()
   }
 }

@@ -1,34 +1,32 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
-import {
-  archiveWorkspace,
-  getRepositoryByPath,
-  listWorkspacesByRepository,
-} from "@lifecycle/db/queries";
+import { archiveWorkspace } from "../../src/domains/workspace/provision";
+
+const BridgeWorkspaceArchiveResponseSchema = z
+  .object({
+    archived: z.boolean(),
+    name: z.string(),
+  })
+  .meta({ id: "BridgeWorkspaceArchiveResponse" });
 
 export default createRoute({
   schemas: {
     params: z.object({ id: z.string().min(1) }),
     query: z.object({
-      repoPath: z.string().min(1),
+      force: z.enum(["true", "false"]).optional(),
+      repoPath: z.string().min(1).optional(),
     }),
+    responses: {
+      200: BridgeWorkspaceArchiveResponseSchema,
+    },
   },
   handler: async ({ params, query, ctx }) => {
     const db = ctx.get("db");
-    const repo = await getRepositoryByPath(db, query.repoPath);
-    if (!repo) {
-      ctx.status(404);
-      return { archived: false, error: "repository_not_found" };
-    }
-
-    const workspaces = await listWorkspacesByRepository(db, repo.id);
-    const ws = workspaces.find((w) => w.id === params.id || w.name === params.id);
-    if (!ws) {
-      ctx.status(404);
-      return { archived: false, error: "workspace_not_found" };
-    }
-
-    await archiveWorkspace(db, repo.id, ws.name);
-    return { archived: true, name: ws.name, workspaceRoot: ws.workspace_root };
+    const workspaceRegistry = ctx.get("workspaceRegistry");
+    return archiveWorkspace(db, workspaceRegistry, {
+      force: query.force === "true",
+      workspaceId: params.id,
+      ...(query.repoPath ? { repoPath: query.repoPath } : {}),
+    });
   },
 });

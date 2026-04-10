@@ -11,8 +11,39 @@ APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 EXECUTABLE_NAME="lifecycle-macos"
 RESOURCE_BUNDLE_NAME="LifecycleMac_LifecycleApp.bundle"
 APP_ICON_PATH="$APP_DIR/Resources/AppIcon.icns"
+BRIDGE_OPENAPI_PATH="$ROOT_DIR/packages/bridge/openapi.json"
+APP_OPENAPI_PATH="$APP_DIR/Sources/LifecycleApp/openapi.json"
+
+assert_bridge_openapi_symlink() {
+  if [[ ! -L "$APP_OPENAPI_PATH" ]]; then
+    echo "Expected $APP_OPENAPI_PATH to be a symlink to $BRIDGE_OPENAPI_PATH." >&2
+    exit 1
+  fi
+
+  local link_target resolved_target
+  link_target="$(readlink "$APP_OPENAPI_PATH")"
+
+  if [[ "$link_target" = /* ]]; then
+    resolved_target="$link_target"
+  else
+    resolved_target="$(
+      cd "$(dirname "$APP_OPENAPI_PATH")/$(dirname "$link_target")"
+      pwd
+    )/$(basename "$link_target")"
+  fi
+
+  if [[ "$resolved_target" != "$BRIDGE_OPENAPI_PATH" ]]; then
+    echo "Expected $APP_OPENAPI_PATH to resolve to $BRIDGE_OPENAPI_PATH, got $resolved_target." >&2
+    exit 1
+  fi
+}
 
 "$APP_DIR/scripts/prepare-ghosttykit.sh" >/dev/null
+(
+  cd "$ROOT_DIR/packages/bridge"
+  bun run generate:openapi >/dev/null
+)
+assert_bridge_openapi_symlink
 
 cd "$APP_DIR"
 swift build >/dev/null

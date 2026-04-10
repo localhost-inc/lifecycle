@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-HOST="${LIFECYCLE_API_HOST:-127.0.0.1}"
-PORT="${LIFECYCLE_API_PORT:-8787}"
+HOST="${LIFECYCLE_SERVICE_API_HOST:-${LIFECYCLE_API_HOST:-127.0.0.1}}"
+PORT="${PORT:-${LIFECYCLE_SERVICE_API_PORT:-${LIFECYCLE_API_PORT:-8787}}}"
 
 if [[ "${LIFECYCLE_DEV:-}" == "1" ]]; then
   listener_pids="$(lsof -tiTCP:"$PORT" -sTCP:LISTEN || true)"

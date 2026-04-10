@@ -119,6 +119,7 @@ struct CanvasTiledSplitView: View {
         )
     }
     .contentShape(Rectangle())
+    .lcResizeCursor(horizontal: split.direction == .row)
     .gesture(
       DragGesture(minimumDistance: 0)
         .onChanged { value in

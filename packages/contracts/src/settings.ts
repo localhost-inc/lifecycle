@@ -176,24 +176,26 @@ export const LifecycleProvidersSettingsSchema = z.object({
   }),
 });
 
-export const LifecycleSettingsSchema = z.object({
-  appearance: LifecycleAppearanceSettingsSchema.default({ theme: "dark" }),
-  providers: LifecycleProvidersSettingsSchema.default({
-    claude: {
-      loginMethod: "claudeai",
-    },
-  }),
-  terminal: LifecycleTerminalSettingsSchema.default({
-    command: { program: null },
-    persistence: {
-      backend: "tmux",
-      mode: "managed",
-      executablePath: null,
-    },
-    defaultProfile: "shell",
-    profiles: LifecycleDefaultTerminalProfileItems,
-  }),
-});
+export const LifecycleSettingsSchema = z
+  .object({
+    appearance: LifecycleAppearanceSettingsSchema.default({ theme: "dark" }),
+    providers: LifecycleProvidersSettingsSchema.default({
+      claude: {
+        loginMethod: "claudeai",
+      },
+    }),
+    terminal: LifecycleTerminalSettingsSchema.default({
+      command: { program: null },
+      persistence: {
+        backend: "tmux",
+        mode: "managed",
+        executablePath: null,
+      },
+      defaultProfile: "shell",
+      profiles: LifecycleDefaultTerminalProfileItems,
+    }),
+  })
+  .meta({ id: "LifecycleSettings" });
 
 export const LifecycleAppearanceSettingsUpdateSchema = LifecycleAppearanceSettingsSchema.partial();
 export const LifecycleClaudeProviderSettingsUpdateSchema =
@@ -217,11 +219,13 @@ export const LifecycleTerminalSettingsUpdateSchema =
     profiles: LifecycleTerminalProfilesUpdateSchema,
   });
 
-export const LifecycleSettingsUpdateSchema = LifecycleSettingsSchema.partial().extend({
-  appearance: LifecycleAppearanceSettingsUpdateSchema.optional(),
-  providers: LifecycleProvidersSettingsUpdateSchema.optional(),
-  terminal: LifecycleTerminalSettingsUpdateSchema.optional(),
-});
+export const LifecycleSettingsUpdateSchema = LifecycleSettingsSchema.partial()
+  .extend({
+    appearance: LifecycleAppearanceSettingsUpdateSchema.optional(),
+    providers: LifecycleProvidersSettingsUpdateSchema.optional(),
+    terminal: LifecycleTerminalSettingsUpdateSchema.optional(),
+  })
+  .meta({ id: "LifecycleSettingsUpdate" });
 
 export type LifecycleThemePreference = z.infer<typeof LifecycleThemePreferenceSchema>;
 export type LifecycleClaudeLoginMethod = z.infer<typeof LifecycleClaudeLoginMethodSchema>;

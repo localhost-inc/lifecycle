@@ -1,6 +1,6 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
-import { readControlPlaneJson } from "../../../src/control-plane";
+import { readControlPlaneJson } from "../../../src/domains/auth/control-plane";
 
 export default createRoute({
   schemas: {
@@ -11,7 +11,7 @@ export default createRoute({
       command: z.array(z.string()).min(1),
       cwd: z.string().trim().min(1).optional(),
       env: z.record(z.string(), z.string()).optional(),
-      timeoutSeconds: z.number().int().positive().max(300).optional(),
+      timeoutSeconds: z.number().int().min(1).max(300).optional(),
     }),
   },
   handler: async ({ params, body, ctx }) => {

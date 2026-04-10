@@ -16,6 +16,7 @@ struct LCSelectInput<Value: Hashable>: View {
     .pickerStyle(.menu)
     .tint(theme.primaryTextColor)
     .frame(width: width)
+    .lcPointerCursor()
   }
 }
 

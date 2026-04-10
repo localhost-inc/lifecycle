@@ -1,4 +1,4 @@
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { createConnection } from "node:net";
 import {
   type AgentInspectRequest,
@@ -9,20 +9,11 @@ import {
   type DesktopRpcRequest,
   type DesktopRpcResponse,
   DesktopRpcResponseSchema,
-  type DesktopRpcShellResult,
   LIFECYCLE_AGENT_ID_ENV,
   LIFECYCLE_DESKTOP_SESSION_TOKEN_ENV,
   LIFECYCLE_DESKTOP_SOCKET_ENV,
   LIFECYCLE_WORKSPACE_ID_ENV,
   LIFECYCLE_WORKSPACE_PATH_ENV,
-  type PlanCreateRequest,
-  PLAN_CREATE_OPERATION,
-  type PlanDeleteRequest,
-  PLAN_DELETE_OPERATION,
-  type PlanListRequest,
-  PLAN_LIST_OPERATION,
-  type PlanUpdateRequest,
-  PLAN_UPDATE_OPERATION,
   SERVICE_GET_OPERATION,
   type ServiceGetRequest,
   type ServiceListRequest,
@@ -33,20 +24,6 @@ import {
   SERVICE_START_OPERATION,
   type ServiceStopRequest,
   SERVICE_STOP_OPERATION,
-  TAB_OPEN_OPERATION,
-  type TabOpenRequest,
-  type TaskCreateRequest,
-  TASK_CREATE_OPERATION,
-  type TaskDeleteRequest,
-  TASK_DELETE_OPERATION,
-  type TaskDependencyAddRequest,
-  TASK_DEPENDENCY_ADD_OPERATION,
-  type TaskDependencyRemoveRequest,
-  TASK_DEPENDENCY_REMOVE_OPERATION,
-  type TaskListRequest,
-  TASK_LIST_OPERATION,
-  type TaskUpdateRequest,
-  TASK_UPDATE_OPERATION,
   type WorkspaceArchiveRequest,
   WORKSPACE_ARCHIVE_OPERATION,
   type WorkspaceCreateRequest,
@@ -335,57 +312,6 @@ export function createContextRequest(input: { workspaceId?: string }): ContextRe
   };
 }
 
-function defaultPreviewKey(url: string): string {
-  const digest = createHash("sha256").update(url).digest("hex").slice(0, 16);
-  return `url:${digest}`;
-}
-
-function defaultPreviewLabel(url: string): string {
-  try {
-    const parsed = new URL(url);
-    return parsed.host || parsed.toString();
-  } catch {
-    return url;
-  }
-}
-
-export function createTabOpenPreviewRequest(input: {
-  select: boolean;
-  split: boolean;
-  url: string;
-  workspaceId?: string;
-}): TabOpenRequest {
-  return {
-    id: randomUUID(),
-    method: TAB_OPEN_OPERATION,
-    params: {
-      label: defaultPreviewLabel(input.url),
-      previewKey: defaultPreviewKey(input.url),
-      select: input.select,
-      split: input.split,
-      surface: "preview",
-      url: input.url,
-      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
-    },
-    session: buildDesktopRpcSession(),
-    version: 1,
-  };
-}
-
-export function requireShellSessionToken(): string {
-  const token = process.env[LIFECYCLE_DESKTOP_SESSION_TOKEN_ENV];
-  if (!token) {
-    throw new LifecycleCliError({
-      code: "desktop_rpc_session_unavailable",
-      message: "Desktop RPC shell commands require a Lifecycle session token.",
-      suggestedAction:
-        "Run the command from a Lifecycle-launched workspace session or use the desktop UI directly.",
-    });
-  }
-
-  return token;
-}
-
 export function createServiceStopRequest(input: {
   serviceNames?: string[];
   workspaceId?: string;
@@ -571,188 +497,4 @@ export function formatDesktopRpcError(error: DesktopRpcError): string {
   }
 
   return error.message;
-}
-
-export function formatTabOpenResult(result: DesktopRpcShellResult): string {
-  return `Opened ${result.surface} tab ${result.tabKey} for ${result.url}.`;
-}
-
-// ── Plan + Task request creators ──
-
-export function createPlanListRequest(input: { repositoryId: string }): PlanListRequest {
-  return {
-    id: randomUUID(),
-    method: PLAN_LIST_OPERATION,
-    params: { repositoryId: input.repositoryId },
-    session: buildDesktopRpcSession(),
-    version: 1,
-  };
-}
-
-export function createPlanCreateRequest(input: {
-  repositoryId: string;
-  workspaceId?: string;
-  name: string;
-  description?: string;
-  body?: string;
-  status?: string;
-}): PlanCreateRequest {
-  return {
-    id: randomUUID(),
-    method: PLAN_CREATE_OPERATION,
-    params: {
-      repositoryId: input.repositoryId,
-      name: input.name,
-      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
-      ...(input.description ? { description: input.description } : {}),
-      ...(input.body ? { body: input.body } : {}),
-      ...(input.status ? { status: input.status } : {}),
-    },
-    session: buildDesktopRpcSession(),
-    version: 1,
-  };
-}
-
-export function createPlanUpdateRequest(input: {
-  planId: string;
-  name?: string;
-  description?: string;
-  body?: string;
-  status?: string;
-}): PlanUpdateRequest {
-  return {
-    id: randomUUID(),
-    method: PLAN_UPDATE_OPERATION,
-    params: {
-      planId: input.planId,
-      ...(input.name ? { name: input.name } : {}),
-      ...(input.description ? { description: input.description } : {}),
-      ...(input.body ? { body: input.body } : {}),
-      ...(input.status ? { status: input.status } : {}),
-    },
-    session: buildDesktopRpcSession(),
-    version: 1,
-  };
-}
-
-export function createPlanDeleteRequest(input: {
-  planId: string;
-  repositoryId: string;
-}): PlanDeleteRequest {
-  return {
-    id: randomUUID(),
-    method: PLAN_DELETE_OPERATION,
-    params: { planId: input.planId, repositoryId: input.repositoryId },
-    session: buildDesktopRpcSession(),
-    version: 1,
-  };
-}
-
-export function createTaskListRequest(input: { repositoryId: string }): TaskListRequest {
-  return {
-    id: randomUUID(),
-    method: TASK_LIST_OPERATION,
-    params: { repositoryId: input.repositoryId },
-    session: buildDesktopRpcSession(),
-    version: 1,
-  };
-}
-
-export function createTaskCreateRequest(input: {
-  planId: string;
-  repositoryId: string;
-  workspaceId?: string;
-  agentId?: string;
-  name: string;
-  description?: string;
-  status?: string;
-  priority?: number;
-}): TaskCreateRequest {
-  return {
-    id: randomUUID(),
-    method: TASK_CREATE_OPERATION,
-    params: {
-      planId: input.planId,
-      repositoryId: input.repositoryId,
-      name: input.name,
-      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
-      ...(input.agentId ? { agentId: input.agentId } : {}),
-      ...(input.description ? { description: input.description } : {}),
-      ...(input.status ? { status: input.status } : {}),
-      ...(input.priority ? { priority: input.priority } : {}),
-    },
-    session: buildDesktopRpcSession(),
-    version: 1,
-  };
-}
-
-export function createTaskUpdateRequest(input: {
-  taskId: string;
-  name?: string;
-  description?: string;
-  status?: string;
-  priority?: number;
-}): TaskUpdateRequest {
-  return {
-    id: randomUUID(),
-    method: TASK_UPDATE_OPERATION,
-    params: {
-      taskId: input.taskId,
-      ...(input.name ? { name: input.name } : {}),
-      ...(input.description ? { description: input.description } : {}),
-      ...(input.status ? { status: input.status } : {}),
-      ...(input.priority ? { priority: input.priority } : {}),
-    },
-    session: buildDesktopRpcSession(),
-    version: 1,
-  };
-}
-
-export function createTaskDeleteRequest(input: {
-  taskId: string;
-  repositoryId: string;
-}): TaskDeleteRequest {
-  return {
-    id: randomUUID(),
-    method: TASK_DELETE_OPERATION,
-    params: { taskId: input.taskId, repositoryId: input.repositoryId },
-    session: buildDesktopRpcSession(),
-    version: 1,
-  };
-}
-
-export function createTaskDependencyAddRequest(input: {
-  taskId: string;
-  dependsOnTaskId: string;
-  repositoryId: string;
-}): TaskDependencyAddRequest {
-  return {
-    id: randomUUID(),
-    method: TASK_DEPENDENCY_ADD_OPERATION,
-    params: {
-      taskId: input.taskId,
-      dependsOnTaskId: input.dependsOnTaskId,
-      repositoryId: input.repositoryId,
-    },
-    session: buildDesktopRpcSession(),
-    version: 1,
-  };
-}
-
-export function createTaskDependencyRemoveRequest(input: {
-  taskId: string;
-  dependsOnTaskId: string;
-  repositoryId: string;
-}): TaskDependencyRemoveRequest {
-  return {
-    id: randomUUID(),
-    method: TASK_DEPENDENCY_REMOVE_OPERATION,
-    params: {
-      taskId: input.taskId,
-      dependsOnTaskId: input.dependsOnTaskId,
-      repositoryId: input.repositoryId,
-    },
-    session: buildDesktopRpcSession(),
-    version: 1,
-  };
 }

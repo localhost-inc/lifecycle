@@ -1,5 +1,5 @@
 import { defineCommand, defineFlag } from "@lifecycle/cmd";
-import { LIFECYCLE_WORKSPACE_ID_ENV } from "@lifecycle/contracts";
+import { LIFECYCLE_TERMINAL_ID_ENV, LIFECYCLE_WORKSPACE_ID_ENV } from "@lifecycle/contracts";
 import { z } from "zod";
 
 import { LifecycleCliError } from "../errors";
@@ -19,6 +19,11 @@ export const repositoryIdFlag = z
   .optional()
   .describe("Repository id. If omitted, resolve from local context when supported.");
 
+export const terminalIdFlag = z
+  .string()
+  .optional()
+  .describe("Terminal id. If omitted, resolve from the current Lifecycle-managed terminal session.");
+
 export function resolveWorkspaceId(explicitWorkspaceId?: string): string {
   const workspaceId = explicitWorkspaceId ?? process.env[LIFECYCLE_WORKSPACE_ID_ENV];
   if (!workspaceId) {
@@ -31,6 +36,20 @@ export function resolveWorkspaceId(explicitWorkspaceId?: string): string {
   }
 
   return workspaceId;
+}
+
+export function resolveTerminalId(explicitTerminalId?: string): string {
+  const terminalId = explicitTerminalId ?? process.env[LIFECYCLE_TERMINAL_ID_ENV];
+  if (!terminalId) {
+    throw new LifecycleCliError({
+      code: "terminal_unresolved",
+      message: "Lifecycle could not resolve a terminal for this command.",
+      suggestedAction:
+        "Pass --terminal-id or run the command from a Lifecycle-managed terminal session.",
+    });
+  }
+
+  return terminalId;
 }
 
 export function createStubCommand<Input extends z.ZodObject<z.ZodRawShape>>(options: {

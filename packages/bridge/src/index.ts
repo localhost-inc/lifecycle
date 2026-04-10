@@ -4,23 +4,31 @@ export {
   broadcastAgentEvent,
   bridgeSocketMessageFromAgentEvent,
   type BridgeSocketAgentMessage,
-} from "./agents";
-export { createAgentManager, type AgentManager, type AgentManagerInspectResult } from "./agents";
-export { resolveControlPlaneUrl } from "./control-plane-url";
-export { resolveLifecycleRuntimePath, resolveLifecycleRuntimeRootPath } from "./runtime-paths";
-export { buildTmuxSessionName } from "./tmux";
+} from "./domains/workspace/agents";
+export { createAgentManager, type AgentManager, type AgentManagerInspectResult } from "./domains/workspace/agents";
+export { resolveControlPlaneUrl } from "./domains/auth/control-plane-url";
+export {
+  installProxyCleanHttp,
+  proxyInstallStatus,
+  readProxyInstallState,
+  uninstallProxyCleanHttp,
+  type ProxyInstallState,
+  type ProxyInstallStatus,
+} from "./domains/stack/install-proxy";
+export { resolveLifecycleRuntimePath, resolveLifecycleRuntimeRootPath } from "./lib/runtime-paths";
+export { buildTmuxSessionName } from "./domains/terminal/tmux";
 export {
   readBridgeRegistration,
   writeBridgeRegistration,
   removeBridgeRegistration,
   bridgeRegistrationPath,
   type BridgeRegistration,
-} from "./registration";
-export { ensureBridge, type BridgeClient } from "./ensure";
+} from "./lib/registration";
+export { ensureBridge, type BridgeClient } from "./lib/ensure";
 export {
   broadcastMessage,
   startBridgeServer,
   type BridgeServer,
   type BridgeSocketData,
   type BridgeSocketMessage,
-} from "./server";
+} from "./lib/server";

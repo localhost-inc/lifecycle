@@ -185,6 +185,7 @@ describe("lifecycle cli", () => {
     expect(sink.stdout[0]).toContain("browser");
     expect(sink.stdout[0]).toContain("context");
     expect(sink.stdout[0]).toContain("project");
+    expect(sink.stdout[0]).toContain("proxy");
     expect(sink.stdout[0]).toContain("service");
     expect(sink.stdout[0]).toContain("tab");
     expect(sink.stdout[0]).toContain("workspace");
@@ -835,10 +836,6 @@ describe("lifecycle cli", () => {
           ok: true,
           result: {
             capabilities: {
-              browser: {
-                reload: false,
-                snapshot: false,
-              },
               cliInstalled: true,
               context: true,
               service: {
@@ -850,12 +847,6 @@ describe("lifecycle cli", () => {
                 start: true,
                 stop: false,
               },
-              tab: {
-                commitDiff: false,
-                file: false,
-                preview: true,
-                pullRequest: false,
-              },
             },
             cli: {
               path: "/tmp/lifecycle",
@@ -865,7 +856,6 @@ describe("lifecycle cli", () => {
               "lifecycle service list",
               "lifecycle service info <service>",
               "lifecycle service start [service...]",
-              "lifecycle tab open --surface preview --url <url>",
             ],
             desktopRpc: {
               available: true,
@@ -1050,6 +1040,351 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual([]);
   });
 
+  test("archives the current workspace through the bridge", async () => {
+    const sink = createIo();
+    await withHttpBridge(
+      async (request) => {
+        expect(request).toMatchObject({
+          method: "DELETE",
+          pathname: "/workspaces/ws_123",
+        });
+        expect(request.search.get("repoPath")).toBeNull();
+
+        return {
+          archived: true,
+          name: "Feature Workspace",
+          workspaceRoot: "/repo/.worktrees/ws_123",
+        };
+      },
+      async () => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () => await main(["workspace", "destroy", "--json"], sink.io),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
+      archived: true,
+      name: "Feature Workspace",
+    });
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("runs workspace health through the bridge", async () => {
+    const sink = createIo();
+    await withHttpBridge(
+      async (request) => {
+        expect(request).toMatchObject({
+          method: "GET",
+          pathname: "/workspaces/ws_123/health",
+        });
+
+        return {
+          checks: [
+            {
+              healthy: true,
+              message: null,
+              service: "api",
+            },
+          ],
+          workspace: {
+            checkout_type: "worktree",
+            created_at: "2026-03-21T00:00:00.000Z",
+            failed_at: null,
+            failure_reason: null,
+            git_sha: "abc123",
+            id: "ws_123",
+            last_active_at: "2026-03-21T00:00:00.000Z",
+            manifest_fingerprint: "manifest_123",
+            name: "Feature Workspace",
+            slug: "feature-workspace",
+            prepared_at: "2026-03-21T00:00:00.000Z",
+            repository_id: "project_123",
+            source_ref: "feat/cli",
+            status: "active",
+            host: "local",
+            updated_at: "2026-03-21T00:00:00.000Z",
+            workspace_root: "/repo/.worktrees/ws_123",
+          },
+        };
+      },
+      async () => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () => await main(["workspace", "health", "--json"], sink.io),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
+      checks: [
+        {
+          healthy: true,
+          service: "api",
+        },
+      ],
+      workspace: {
+        id: "ws_123",
+      },
+    });
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("resets the workspace through the bridge", async () => {
+    const sink = createIo();
+    await withHttpBridge(
+      async (request) => {
+        expect(request).toMatchObject({
+          body: null,
+          method: "POST",
+          pathname: "/workspaces/ws_123/reset",
+        });
+
+        return {
+          workspace: {
+            checkout_type: "worktree",
+            created_at: "2026-03-21T00:00:00.000Z",
+            failed_at: null,
+            failure_reason: null,
+            git_sha: "abc123",
+            id: "ws_123",
+            last_active_at: "2026-03-21T00:00:00.000Z",
+            manifest_fingerprint: "manifest_123",
+            name: "Feature Workspace",
+            slug: "feature-workspace",
+            prepared_at: "2026-03-21T00:00:00.000Z",
+            repository_id: "project_123",
+            source_ref: "feat/cli",
+            status: "active",
+            host: "local",
+            updated_at: "2026-03-21T00:00:00.000Z",
+            workspace_root: "/repo/.worktrees/ws_123",
+          },
+        };
+      },
+      async () => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () => await main(["workspace", "reset", "--json"], sink.io),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
+      workspace: {
+        id: "ws_123",
+        status: "active",
+      },
+    });
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("archives a named workspace through bridge-owned archive policy", async () => {
+    const sink = createIo();
+    await withHttpBridge(
+      async (request) => {
+        expect(request).toMatchObject({
+          method: "DELETE",
+          pathname: "/workspaces/feature-workspace",
+        });
+        expect(request.search.get("repoPath")).toBe("/repo");
+        expect(request.search.get("force")).toBe("true");
+
+        return {
+          archived: true,
+          name: "feature-workspace",
+          workspaceRoot: "/repo/.worktrees/feature-workspace",
+        };
+      },
+      async () => {
+        const code = await withEnvironment({}, async () =>
+          await main(
+            ["workspace", "archive", "feature-workspace", "--repo-path", "/repo", "--force", "--json"],
+            sink.io,
+          ),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
+      archived: true,
+      name: "feature-workspace",
+    });
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("emits workspace activity through the bridge using terminal session env", async () => {
+    const sink = createIo();
+    await withHttpBridge(
+      async (request) => {
+        expect(request).toMatchObject({
+          body: {
+            event: "turn.started",
+            metadata: {
+              source: "hook",
+            },
+            provider: "codex",
+            terminalId: "term_123",
+            turnId: "turn_123",
+          },
+          method: "POST",
+          pathname: "/workspaces/ws_123/activity",
+        });
+
+        return {
+          busy: true,
+          terminals: [
+            {
+              busy: true,
+              last_event_at: "2026-04-09T00:00:00.000Z",
+              metadata: {
+                source: "hook",
+              },
+              provider: "codex",
+              source: "explicit",
+              state: "turn_active",
+              terminal_id: "term_123",
+              tool_name: null,
+              turn_id: "turn_123",
+              updated_at: "2026-04-09T00:00:00.000Z",
+              waiting_kind: null,
+            },
+          ],
+          updated_at: "2026-04-09T00:00:00.000Z",
+          workspace_id: "ws_123",
+        };
+      },
+      async () => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_TERMINAL_ID: "term_123",
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () =>
+            await main(
+              [
+                "workspace",
+                "activity",
+                "emit",
+                "turn.started",
+                "--turn-id",
+                "turn_123",
+                "--provider",
+                "codex",
+                "--metadata",
+                '{"source":"hook"}',
+              ],
+              sink.io,
+            ),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(sink.stdout).toEqual([]);
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("fails workspace activity emit when terminal context cannot be resolved", async () => {
+    const sink = createIo();
+
+    const code = await withEnvironment(
+      {
+        LIFECYCLE_TERMINAL_ID: undefined,
+        LIFECYCLE_WORKSPACE_ID: "ws_123",
+      },
+      async () => await main(["workspace", "activity", "emit", "turn.started"], sink.io),
+    );
+
+    expect(code).toBe(1);
+    expect(sink.stdout).toEqual([]);
+    expect(sink.stderr).toEqual([
+      "Lifecycle could not resolve a terminal for this command.",
+      "Suggested action: Pass --terminal-id or run the command from a Lifecycle-managed terminal session.",
+    ]);
+  });
+
+  test("prints workspace activity status as json", async () => {
+    const sink = createIo();
+    await withHttpBridge(
+      async (request) => {
+        expect(request).toMatchObject({
+          method: "GET",
+          pathname: "/workspaces/ws_123/activity",
+        });
+
+        return {
+          busy: true,
+          terminals: [
+            {
+              busy: false,
+              last_event_at: "2026-04-09T00:00:00.000Z",
+              metadata: null,
+              provider: "codex",
+              source: "explicit",
+              state: "waiting",
+              terminal_id: "term_123",
+              tool_name: null,
+              turn_id: "turn_123",
+              updated_at: "2026-04-09T00:00:00.000Z",
+              waiting_kind: "approval",
+            },
+          ],
+          updated_at: "2026-04-09T00:00:00.000Z",
+          workspace_id: "ws_123",
+        };
+      },
+      async () => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () => await main(["workspace", "activity", "status", "--json"], sink.io),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(JSON.parse(sink.stdout[0] ?? "null")).toEqual({
+      busy: true,
+      terminals: [
+        {
+          busy: false,
+          last_event_at: "2026-04-09T00:00:00.000Z",
+          metadata: null,
+          provider: "codex",
+          source: "explicit",
+          state: "waiting",
+          terminal_id: "term_123",
+          tool_name: null,
+          turn_id: "turn_123",
+          updated_at: "2026-04-09T00:00:00.000Z",
+          waiting_kind: "approval",
+        },
+      ],
+      updated_at: "2026-04-09T00:00:00.000Z",
+      workspace_id: "ws_123",
+    });
+    expect(sink.stderr).toEqual([]);
+  });
+
   test("validates required service info positionals", async () => {
     const sink = createIo();
 
@@ -1059,6 +1394,218 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual([
       "lifecycle service info requires exactly one <service> argument.",
     ]);
+  });
+
+  test("installs repo-scoped harness config idempotently", async () => {
+    const sink = createIo();
+    const repoPath = await mkdtemp(join(tmpdir(), "lifecycle-cli-repo-install-"));
+
+    try {
+      await mkdir(join(repoPath, ".claude"), { recursive: true });
+      await mkdir(join(repoPath, ".codex"), { recursive: true });
+      await writeFile(
+        join(repoPath, ".claude", "settings.json"),
+        `${JSON.stringify(
+          {
+            hooks: {
+              Stop: [
+                {
+                  hooks: [
+                    {
+                      command:
+                        'sh "${CLAUDE_PROJECT_DIR}/.lifecycle/hooks/activity.sh" turn.completed --provider claude-code --old-flag',
+                      type: "command",
+                    },
+                  ],
+                },
+              ],
+            },
+            permissions: {
+              allow: ["Read"],
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      await writeFile(
+        join(repoPath, ".mcp.json"),
+        `${JSON.stringify(
+          {
+            mcpServers: {
+              lifecycle: {
+                args: ["old"],
+                command: "old-lifecycle",
+                enabled: true,
+              },
+            },
+            version: 1,
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      await writeFile(
+        join(repoPath, ".codex", "config.toml"),
+        ['[mcp_servers.lifecycle]', 'notes = "keep me"', 'command = "old-lifecycle"', "", "[features]", 'theme = "light"', ""].join("\n"),
+      );
+      await writeFile(
+        join(repoPath, ".codex", "hooks.json"),
+        `${JSON.stringify(
+          {
+            hooks: {
+              Stop: [
+                {
+                  hooks: [
+                    {
+                      command:
+                        'sh "$(git rev-parse --show-toplevel)/.lifecycle/hooks/activity.sh" turn.completed --provider codex --old-flag',
+                      type: "command",
+                    },
+                  ],
+                },
+              ],
+            },
+            version: 1,
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      const firstCode = await main(["repo", "install", "--path", repoPath, "--json"], sink.io);
+      expect(firstCode).toBe(0);
+      expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
+        check: false,
+        ready: true,
+        repoPath,
+        results: [
+          { harness_id: "lifecycle", integration: "hook-adapter", status: "created" },
+          { harness_id: "claude-code", integration: "hooks", status: "updated" },
+          { harness_id: "claude-code", integration: "mcp", status: "updated" },
+          { harness_id: "codex", integration: "hook-features", status: "updated" },
+          { harness_id: "codex", integration: "hooks", status: "updated" },
+          { harness_id: "codex", integration: "mcp", status: "updated" },
+        ],
+      });
+
+      const hookAdapterAfterFirstInstall = await readFile(
+        join(repoPath, ".lifecycle", "hooks", "activity.sh"),
+        "utf8",
+      );
+      const claudeAfterFirstInstall = await readFile(join(repoPath, ".claude", "settings.json"), "utf8");
+      const jsonAfterFirstInstall = await readFile(join(repoPath, ".mcp.json"), "utf8");
+      const tomlAfterFirstInstall = await readFile(join(repoPath, ".codex", "config.toml"), "utf8");
+      const codexHooksAfterFirstInstall = await readFile(join(repoPath, ".codex", "hooks.json"), "utf8");
+
+      const secondSink = createIo();
+      const secondCode = await main(["repo", "install", "--path", repoPath, "--json"], secondSink.io);
+      expect(secondCode).toBe(0);
+      expect(JSON.parse(secondSink.stdout[0] ?? "null")).toMatchObject({
+        results: [
+          { harness_id: "lifecycle", integration: "hook-adapter", status: "unchanged" },
+          { harness_id: "claude-code", integration: "hooks", status: "unchanged" },
+          { harness_id: "claude-code", integration: "mcp", status: "unchanged" },
+          { harness_id: "codex", integration: "hook-features", status: "unchanged" },
+          { harness_id: "codex", integration: "hooks", status: "unchanged" },
+          { harness_id: "codex", integration: "mcp", status: "unchanged" },
+        ],
+      });
+      expect(await readFile(join(repoPath, ".lifecycle", "hooks", "activity.sh"), "utf8")).toBe(
+        hookAdapterAfterFirstInstall,
+      );
+      expect(await readFile(join(repoPath, ".claude", "settings.json"), "utf8")).toBe(
+        claudeAfterFirstInstall,
+      );
+      expect(await readFile(join(repoPath, ".mcp.json"), "utf8")).toBe(jsonAfterFirstInstall);
+      expect(await readFile(join(repoPath, ".codex", "config.toml"), "utf8")).toBe(
+        tomlAfterFirstInstall,
+      );
+      expect(await readFile(join(repoPath, ".codex", "hooks.json"), "utf8")).toBe(
+        codexHooksAfterFirstInstall,
+      );
+    } finally {
+      await rm(repoPath, { force: true, recursive: true });
+    }
+  });
+
+  test("reports proxy install status as json", async () => {
+    const sink = createIo();
+    const dir = await mkdtemp(join(tmpdir(), "lifecycle-cli-proxy-status-"));
+
+    try {
+      const code = await withEnvironment(
+        {
+          LIFECYCLE_PROXY_INSTALL_STATE_PATH: join(dir, "install.json"),
+        },
+        async () => await main(["proxy", "status", "--json"], sink.io),
+      );
+
+      expect(code).toBe(1);
+      expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
+        currentPlatformSupported: process.platform === "darwin" || process.platform === "linux",
+        installed: false,
+        platform: process.platform,
+      });
+      expect(sink.stderr).toEqual([]);
+    } finally {
+      await rm(dir, { force: true, recursive: true });
+    }
+  });
+
+  test("renders proxy install dry-run output as json", async () => {
+    const sink = createIo();
+    const dir = await mkdtemp(join(tmpdir(), "lifecycle-cli-proxy-install-"));
+
+    try {
+      const environment: Record<string, string> = {
+        LIFECYCLE_PREVIEW_PROXY_PORT: "52444",
+        LIFECYCLE_PROXY_INSTALL_STATE_PATH: join(dir, "install.json"),
+      };
+
+      let expectedActions: string[] = [];
+      if (process.platform === "darwin") {
+        const pfConfPath = join(dir, "pf.conf");
+        await writeFile(pfConfPath, "scrub-anchor \"com.apple/*\"\n");
+        environment.LIFECYCLE_PROXY_DARWIN_PF_CONF = pfConfPath;
+        environment.LIFECYCLE_PROXY_DARWIN_ANCHOR_PATH = join(dir, "anchor.conf");
+        environment.LIFECYCLE_PROXY_DARWIN_LAUNCH_DAEMON_PATH = join(dir, "launchd.plist");
+        expectedActions = [
+          `update ${pfConfPath}`,
+          `write ${environment.LIFECYCLE_PROXY_DARWIN_ANCHOR_PATH}`,
+          `write ${environment.LIFECYCLE_PROXY_DARWIN_LAUNCH_DAEMON_PATH}`,
+        ];
+      } else if (process.platform === "linux") {
+        environment.LIFECYCLE_PROXY_LINUX_SERVICE_PATH = join(
+          dir,
+          "lifecycle-http-redirect.service",
+        );
+        expectedActions = [`write ${environment.LIFECYCLE_PROXY_LINUX_SERVICE_PATH}`];
+      }
+
+      const code = await withEnvironment(environment, async () =>
+        main(["proxy", "install", "--dry-run", "--json"], sink.io),
+      );
+
+      if (process.platform === "darwin" || process.platform === "linux") {
+        expect(code).toBe(0);
+        expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
+          actions: expectedActions,
+          dryRun: true,
+          mode: "clean-http",
+          proxyPort: 52444,
+        });
+        expect(sink.stderr).toEqual([]);
+      } else {
+        expect(code).toBe(1);
+        expect(sink.stdout).toEqual([]);
+        expect(sink.stderr[0]).toContain(
+          "lifecycle proxy install is currently supported on macOS and Linux only.",
+        );
+      }
+    } finally {
+      await rm(dir, { force: true, recursive: true });
+    }
   });
 
   test("initializes lifecycle.json from repo dev scripts", async () => {

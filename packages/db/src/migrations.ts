@@ -35,6 +35,11 @@ const DB_MIGRATIONS: DbMigration[] = [
     description: "drop legacy service table",
     fileName: "0005_drop_service.sql",
   },
+  {
+    version: 6,
+    description: "drop legacy planning tables",
+    fileName: "0006_drop_planning.sql",
+  },
 ];
 
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");

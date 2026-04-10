@@ -16,7 +16,7 @@ enum LifecyclePathDefaults {
   static let bridgeRegistrationFileName = "bridge.json"
   static let cacheDirectoryName = "cache"
   static let desktopMacCacheDirectoryName = "desktop-mac"
-  static let ghosttyCacheDirectoryName = "ghostty"
+  static let terminalThemeCacheDirectoryName = "terminal"
   static let lifecycleRoot = "~/.lifecycle"
   static let settingsFileName = "settings.json"
 }

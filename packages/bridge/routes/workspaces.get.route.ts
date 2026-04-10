@@ -1,7 +1,7 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
 
-import { readControlPlaneJson, requireActiveOrganizationId } from "../src/control-plane";
+import { readControlPlaneJson, requireActiveOrganizationId } from "../src/domains/auth/control-plane";
 
 export default createRoute({
   schemas: {

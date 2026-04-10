@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS task_dependency;
+DROP TABLE IF EXISTS task;
+DROP TABLE IF EXISTS plan;

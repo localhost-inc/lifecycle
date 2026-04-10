@@ -22,18 +22,5 @@ export const SERVICE_STOP_OPERATION = "service.stop";
 export const SERVICE_LOGS_OPERATION = "service.logs";
 
 export const CONTEXT_READ_OPERATION = "context.read";
-export const TAB_OPEN_OPERATION = "tab.open";
 
 export const AGENT_INSPECT_OPERATION = "agent.inspect";
-
-export const PLAN_LIST_OPERATION = "plan.list";
-export const PLAN_CREATE_OPERATION = "plan.create";
-export const PLAN_UPDATE_OPERATION = "plan.update";
-export const PLAN_DELETE_OPERATION = "plan.delete";
-
-export const TASK_LIST_OPERATION = "task.list";
-export const TASK_CREATE_OPERATION = "task.create";
-export const TASK_UPDATE_OPERATION = "task.update";
-export const TASK_DELETE_OPERATION = "task.delete";
-export const TASK_DEPENDENCY_ADD_OPERATION = "task.dependency.add";
-export const TASK_DEPENDENCY_REMOVE_OPERATION = "task.dependency.remove";

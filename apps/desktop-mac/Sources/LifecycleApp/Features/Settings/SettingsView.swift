@@ -42,6 +42,7 @@ struct SettingsView: View {
           .foregroundStyle(theme.mutedColor)
         }
         .buttonStyle(.plain)
+        .lcPointerCursor()
 
         Spacer()
       }
@@ -98,6 +99,7 @@ struct SettingsView: View {
                   .pickerStyle(.menu)
                   .tint(theme.primaryTextColor)
                   .frame(width: 160)
+                  .lcPointerCursor()
                 }
 
                 if let errorMessage = settingsStore.errorMessage {
@@ -289,6 +291,7 @@ struct SettingsView: View {
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
         .frame(width: 160)
+        .lcPointerCursor()
       }
 
       SettingsRowView(
@@ -303,6 +306,7 @@ struct SettingsView: View {
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
         .frame(width: 160)
+        .lcPointerCursor()
       }
 
       SettingsRowView(
@@ -348,6 +352,7 @@ struct SettingsView: View {
           .pickerStyle(.menu)
           .tint(theme.primaryTextColor)
           .frame(width: 180)
+          .lcPointerCursor()
         }
 
         if let activeTerminalProfile {
@@ -381,6 +386,7 @@ struct SettingsView: View {
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
         .frame(width: 160)
+        .lcPointerCursor()
       }
 
       ProviderAccountsSection(model: model)
@@ -441,6 +447,7 @@ struct SettingsView: View {
             )
         }
         .buttonStyle(.plain)
+        .lcPointerCursor()
       }
     }
     .padding(3)
@@ -546,6 +553,7 @@ struct SettingsView: View {
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
         .frame(width: 180)
+        .lcPointerCursor()
       }
 
       SettingsRowView(
@@ -562,6 +570,7 @@ struct SettingsView: View {
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
         .frame(width: 180)
+        .lcPointerCursor()
       }
     }
   }
@@ -614,6 +623,7 @@ struct SettingsView: View {
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
         .frame(width: 180)
+        .lcPointerCursor()
       }
 
       SettingsRowView(
@@ -630,6 +640,7 @@ struct SettingsView: View {
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
         .frame(width: 180)
+        .lcPointerCursor()
       }
 
       SettingsRowView(
@@ -646,6 +657,7 @@ struct SettingsView: View {
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
         .frame(width: 180)
+        .lcPointerCursor()
       }
 
       SettingsRowView(
@@ -662,6 +674,7 @@ struct SettingsView: View {
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
         .frame(width: 180)
+        .lcPointerCursor()
       }
     }
   }
@@ -960,6 +973,7 @@ private struct SettingsRailButton: View {
       .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
     .buttonStyle(.plain)
+    .lcPointerCursor()
   }
 }
 
@@ -1148,6 +1162,7 @@ private struct ProviderAccountCard: View {
             )
         }
         .buttonStyle(.plain)
+        .lcPointerCursor()
       }
     }
     .padding(.horizontal, 12)

@@ -16,6 +16,7 @@ export {
   getWorkspaceById,
   getWorkspaceRecordById,
   insertWorkspace,
+  markWorkspacePrepared,
   archiveWorkspace,
   resolveUniqueWorkspaceSlug,
   insertWorkspaceStatement,

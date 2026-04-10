@@ -1,8 +1,18 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
-import { createBridgeWorkspace } from "../../src/workspaces";
+import { WorkspaceHostSchema, WorkspaceRecordSchema } from "@lifecycle/contracts";
+import { createWorkspace } from "../../src/domains/workspace/provision";
 
-const workspaceHostSchema = z.enum(["local", "docker", "cloud", "remote"]);
+const BridgeWorkspaceCreateResponseSchema = z
+  .object({
+    id: WorkspaceRecordSchema.shape.id,
+    repositoryId: WorkspaceRecordSchema.shape.repository_id,
+    host: WorkspaceRecordSchema.shape.host,
+    name: WorkspaceRecordSchema.shape.name,
+    sourceRef: WorkspaceRecordSchema.shape.source_ref,
+    workspaceRoot: WorkspaceRecordSchema.shape.workspace_root.optional(),
+  })
+  .meta({ id: "BridgeWorkspaceCreateResponse" });
 
 export default createRoute({
   schemas: {
@@ -10,13 +20,16 @@ export default createRoute({
       repoPath: z.string().min(1),
       name: z.string().min(1),
       sourceRef: z.string().min(1).optional(),
-      host: workspaceHostSchema.default("local"),
+      host: WorkspaceHostSchema.default("local"),
     }),
+    responses: {
+      201: BridgeWorkspaceCreateResponseSchema,
+    },
   },
   handler: async ({ body, ctx }) => {
     const db = ctx.get("db");
     const workspaceRegistry = ctx.get("workspaceRegistry");
-    const createdWorkspace = await createBridgeWorkspace(db, workspaceRegistry, {
+    const createdWorkspace = await createWorkspace(db, workspaceRegistry, {
       repoPath: body.repoPath,
       name: body.name,
       host: body.host,

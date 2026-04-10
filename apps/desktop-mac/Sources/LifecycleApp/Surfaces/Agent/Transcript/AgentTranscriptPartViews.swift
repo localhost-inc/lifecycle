@@ -99,6 +99,7 @@ private struct AgentToolGroupView: View {
           .foregroundStyle(theme.mutedColor)
         }
         .buttonStyle(.plain)
+        .lcPointerCursor()
 
         if isExpanded {
           VStack(alignment: .leading, spacing: 4) {
@@ -222,6 +223,7 @@ private struct AgentThinkingPartView: View {
           .foregroundStyle(theme.mutedColor)
         }
         .buttonStyle(.plain)
+        .lcPointerCursor()
 
         if isExpanded {
           Text(verbatim: text)
@@ -304,6 +306,7 @@ private struct AgentToolCallPartView: View {
               .foregroundStyle(theme.mutedColor)
           }
           .buttonStyle(.plain)
+          .lcPointerCursor()
         } else {
           Color.clear
             .frame(width: 10, height: 10)
@@ -317,6 +320,7 @@ private struct AgentToolCallPartView: View {
               toolLabel(display: display)
             }
             .buttonStyle(.plain)
+            .lcPointerCursor()
           } else {
             toolLabel(display: display)
           }
@@ -450,6 +454,7 @@ private struct AgentApprovalPartView: View {
                 .foregroundStyle(decision == .reject ? theme.errorColor : theme.primaryTextColor)
             }
             .buttonStyle(.plain)
+            .lcPointerCursor()
             .disabled(isResolving)
           }
         }

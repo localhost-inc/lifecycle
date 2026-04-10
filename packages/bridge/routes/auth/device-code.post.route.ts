@@ -1,5 +1,5 @@
 import { createRoute } from "routedjs";
-import { readControlPlaneJson } from "../../src/control-plane";
+import { readControlPlaneJson } from "../../src/domains/auth/control-plane";
 
 export default createRoute({
   handler: async ({ ctx }) => {

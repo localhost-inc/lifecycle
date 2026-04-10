@@ -46,6 +46,7 @@ struct WorkspaceExtensionRailTabView: View {
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
+      .lcPointerCursor()
       .frame(width: isSelected ? expandedWidth : collapsedWidth, alignment: .leading)
       .frame(maxHeight: .infinity, alignment: .leading)
     }

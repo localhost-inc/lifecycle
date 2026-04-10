@@ -1,6 +1,6 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
-import { readControlPlaneJson } from "../../src/control-plane";
+import { readControlPlaneJson } from "../../src/domains/auth/control-plane";
 
 export default createRoute({
   schemas: {

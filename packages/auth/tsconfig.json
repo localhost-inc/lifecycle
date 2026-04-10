@@ -1,9 +1,0 @@
-{
-  "extends": "../config/tsconfig.package.json",
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "lib": ["ES2022", "DOM"],
-    "outDir": "dist"
-  },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
-}

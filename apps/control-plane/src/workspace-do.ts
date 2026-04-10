@@ -268,11 +268,11 @@ export class WorkspaceDO extends DurableObject<WorkspaceDOEnv> {
     }
   }
 
-  async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
+  async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
     ws.close(code, reason);
   }
 
-  async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
+  async webSocketError(ws: WebSocket, _error: unknown): Promise<void> {
     ws.close(1011, "Unexpected error");
   }
 

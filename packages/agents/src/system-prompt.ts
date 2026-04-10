@@ -50,9 +50,6 @@ All commands accept \`--json\` for machine-readable output.
 **Agent:**
 - \`lifecycle agent inspect [--agent-id ID]\` — Inspect your own agent: metadata, messages, and parts. Reads \`LIFECYCLE_AGENT_ID\` by default. Use \`--json\` for the full message/part payloads.
 
-**Desktop integration:**
-- \`lifecycle tab open --surface preview --url <url>\` — Open a URL in the workspace preview surface.
-
 ### lifecycle.json
 
 The workspace is configured by a \`lifecycle.json\` manifest at the workspace root. It defines:
@@ -70,7 +67,6 @@ Services transition through these states: \`starting\` → \`ready\` → \`stopp
 1. Use \`lifecycle context --json\` as your first move when you need workspace state. It returns everything in one call.
 2. Use \`lifecycle service logs <name> -f\` to diagnose service issues — logs stream in real-time.
 3. When services are unhealthy, check \`lifecycle service info <name> --json\` for the \`status_reason\` field.
-4. You can open previews of running services with \`lifecycle tab open --surface preview --url <url>\` using the service's \`preview_url\`.
-5. Do not modify \`lifecycle.json\` without the user's explicit request — it defines the workspace contract.
-6. The workspace path is your working directory. Files, git operations, and builds all happen here.
+4. Do not modify \`lifecycle.json\` without the user's explicit request — it defines the workspace contract.
+5. The workspace path is your working directory. Files, git operations, and builds all happen here.
 `.trim();

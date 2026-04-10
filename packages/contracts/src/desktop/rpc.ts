@@ -3,22 +3,11 @@ import { z } from "zod";
 import {
   AGENT_INSPECT_OPERATION,
   CONTEXT_READ_OPERATION,
-  PLAN_CREATE_OPERATION,
-  PLAN_DELETE_OPERATION,
-  PLAN_LIST_OPERATION,
-  PLAN_UPDATE_OPERATION,
   SERVICE_GET_OPERATION,
   SERVICE_LIST_OPERATION,
   SERVICE_LOGS_OPERATION,
   SERVICE_START_OPERATION,
   SERVICE_STOP_OPERATION,
-  TAB_OPEN_OPERATION,
-  TASK_CREATE_OPERATION,
-  TASK_DELETE_OPERATION,
-  TASK_DEPENDENCY_ADD_OPERATION,
-  TASK_DEPENDENCY_REMOVE_OPERATION,
-  TASK_LIST_OPERATION,
-  TASK_UPDATE_OPERATION,
   WORKSPACE_ARCHIVE_OPERATION,
   WORKSPACE_CREATE_OPERATION,
   WORKSPACE_GET_OPERATION,
@@ -34,6 +23,7 @@ export const LIFECYCLE_DESKTOP_SOCKET_ENV = "LIFECYCLE_DESKTOP_SOCKET";
 export const LIFECYCLE_DESKTOP_SESSION_TOKEN_ENV = "LIFECYCLE_DESKTOP_SESSION_TOKEN";
 export const LIFECYCLE_CLI_PATH_ENV = "LIFECYCLE_CLI_PATH";
 export const LIFECYCLE_AGENT_ID_ENV = "LIFECYCLE_AGENT_ID";
+export const LIFECYCLE_TERMINAL_ID_ENV = "LIFECYCLE_TERMINAL_ID";
 export const LIFECYCLE_WORKSPACE_ID_ENV = "LIFECYCLE_WORKSPACE_ID";
 export const LIFECYCLE_WORKSPACE_PATH_ENV = "LIFECYCLE_WORKSPACE_PATH";
 
@@ -166,22 +156,6 @@ export const ContextRequestSchema = z.object({
   id: z.string(),
   method: z.literal(CONTEXT_READ_OPERATION),
   params: z.object({
-    workspaceId: z.string().optional(),
-  }),
-  session: DesktopRpcSessionSchema,
-  version: z.literal(DESKTOP_RPC_VERSION),
-});
-
-export const TabOpenRequestSchema = z.object({
-  id: z.string(),
-  method: z.literal(TAB_OPEN_OPERATION),
-  params: z.object({
-    label: z.string().optional(),
-    previewKey: z.string().optional(),
-    select: z.boolean().default(true),
-    split: z.boolean().default(false),
-    surface: z.literal("preview"),
-    url: z.string(),
     workspaceId: z.string().optional(),
   }),
   session: DesktopRpcSessionSchema,
@@ -336,159 +310,6 @@ export const AgentInspectRequestSchema = z.object({
   version: z.literal(DESKTOP_RPC_VERSION),
 });
 
-// ── Plan + Task desktop rpc schemas ──
-
-const PlanRecordSchema = z.object({
-  id: z.string(),
-  repository_id: z.string(),
-  workspace_id: z.string().nullable(),
-  name: z.string(),
-  description: z.string(),
-  body: z.string(),
-  status: z.string(),
-  position: z.number().int(),
-  created_at: z.string(),
-  updated_at: z.string(),
-});
-
-const TaskRecordSchema = z.object({
-  id: z.string(),
-  plan_id: z.string(),
-  repository_id: z.string(),
-  workspace_id: z.string().nullable(),
-  agent_id: z.string().nullable(),
-  name: z.string(),
-  description: z.string(),
-  status: z.string(),
-  priority: z.number().int(),
-  position: z.number().int(),
-  completed_at: z.string().nullable(),
-  created_at: z.string(),
-  updated_at: z.string(),
-});
-
-export const PlanListRequestSchema = z.object({
-  id: z.string(),
-  method: z.literal(PLAN_LIST_OPERATION),
-  params: z.object({ repositoryId: z.string() }),
-  session: DesktopRpcSessionSchema,
-  version: z.literal(DESKTOP_RPC_VERSION),
-});
-
-export const PlanCreateRequestSchema = z.object({
-  id: z.string(),
-  method: z.literal(PLAN_CREATE_OPERATION),
-  params: z.object({
-    repositoryId: z.string(),
-    workspaceId: z.string().optional(),
-    name: z.string(),
-    description: z.string().optional(),
-    body: z.string().optional(),
-    status: z.string().optional(),
-  }),
-  session: DesktopRpcSessionSchema,
-  version: z.literal(DESKTOP_RPC_VERSION),
-});
-
-export const PlanUpdateRequestSchema = z.object({
-  id: z.string(),
-  method: z.literal(PLAN_UPDATE_OPERATION),
-  params: z.object({
-    planId: z.string(),
-    name: z.string().optional(),
-    description: z.string().optional(),
-    body: z.string().optional(),
-    status: z.string().optional(),
-  }),
-  session: DesktopRpcSessionSchema,
-  version: z.literal(DESKTOP_RPC_VERSION),
-});
-
-export const PlanDeleteRequestSchema = z.object({
-  id: z.string(),
-  method: z.literal(PLAN_DELETE_OPERATION),
-  params: z.object({
-    planId: z.string(),
-    repositoryId: z.string(),
-  }),
-  session: DesktopRpcSessionSchema,
-  version: z.literal(DESKTOP_RPC_VERSION),
-});
-
-export const TaskListRequestSchema = z.object({
-  id: z.string(),
-  method: z.literal(TASK_LIST_OPERATION),
-  params: z.object({ repositoryId: z.string() }),
-  session: DesktopRpcSessionSchema,
-  version: z.literal(DESKTOP_RPC_VERSION),
-});
-
-export const TaskCreateRequestSchema = z.object({
-  id: z.string(),
-  method: z.literal(TASK_CREATE_OPERATION),
-  params: z.object({
-    planId: z.string(),
-    repositoryId: z.string(),
-    workspaceId: z.string().optional(),
-    agentId: z.string().optional(),
-    name: z.string(),
-    description: z.string().optional(),
-    status: z.string().optional(),
-    priority: z.number().int().optional(),
-  }),
-  session: DesktopRpcSessionSchema,
-  version: z.literal(DESKTOP_RPC_VERSION),
-});
-
-export const TaskUpdateRequestSchema = z.object({
-  id: z.string(),
-  method: z.literal(TASK_UPDATE_OPERATION),
-  params: z.object({
-    taskId: z.string(),
-    name: z.string().optional(),
-    description: z.string().optional(),
-    status: z.string().optional(),
-    priority: z.number().int().optional(),
-  }),
-  session: DesktopRpcSessionSchema,
-  version: z.literal(DESKTOP_RPC_VERSION),
-});
-
-export const TaskDeleteRequestSchema = z.object({
-  id: z.string(),
-  method: z.literal(TASK_DELETE_OPERATION),
-  params: z.object({
-    taskId: z.string(),
-    repositoryId: z.string(),
-  }),
-  session: DesktopRpcSessionSchema,
-  version: z.literal(DESKTOP_RPC_VERSION),
-});
-
-export const TaskDependencyAddRequestSchema = z.object({
-  id: z.string(),
-  method: z.literal(TASK_DEPENDENCY_ADD_OPERATION),
-  params: z.object({
-    taskId: z.string(),
-    dependsOnTaskId: z.string(),
-    repositoryId: z.string(),
-  }),
-  session: DesktopRpcSessionSchema,
-  version: z.literal(DESKTOP_RPC_VERSION),
-});
-
-export const TaskDependencyRemoveRequestSchema = z.object({
-  id: z.string(),
-  method: z.literal(TASK_DEPENDENCY_REMOVE_OPERATION),
-  params: z.object({
-    taskId: z.string(),
-    dependsOnTaskId: z.string(),
-    repositoryId: z.string(),
-  }),
-  session: DesktopRpcSessionSchema,
-  version: z.literal(DESKTOP_RPC_VERSION),
-});
-
 export const DesktopRpcRequestSchema = z.discriminatedUnion("method", [
   ServiceGetRequestSchema,
   ServiceListRequestSchema,
@@ -496,7 +317,6 @@ export const DesktopRpcRequestSchema = z.discriminatedUnion("method", [
   ServiceStopRequestSchema,
   ServiceLogsRequestSchema,
   ContextRequestSchema,
-  TabOpenRequestSchema,
   WorkspaceCreateRequestSchema,
   WorkspaceArchiveRequestSchema,
   WorkspaceRunRequestSchema,
@@ -505,16 +325,6 @@ export const DesktopRpcRequestSchema = z.discriminatedUnion("method", [
   WorkspaceResetRequestSchema,
   WorkspaceHealthRequestSchema,
   AgentInspectRequestSchema,
-  PlanListRequestSchema,
-  PlanCreateRequestSchema,
-  PlanUpdateRequestSchema,
-  PlanDeleteRequestSchema,
-  TaskListRequestSchema,
-  TaskCreateRequestSchema,
-  TaskUpdateRequestSchema,
-  TaskDeleteRequestSchema,
-  TaskDependencyAddRequestSchema,
-  TaskDependencyRemoveRequestSchema,
 ]);
 
 const ServiceGetResultSchema = z.object({
@@ -533,10 +343,6 @@ const ServiceStartResultSchema = z.object({
 
 const ContextResultSchema = z.object({
   capabilities: z.object({
-    browser: z.object({
-      reload: z.boolean(),
-      snapshot: z.boolean(),
-    }),
     cliInstalled: z.boolean(),
     context: z.boolean(),
     service: z.object({
@@ -547,12 +353,6 @@ const ContextResultSchema = z.object({
       set: z.boolean(),
       start: z.boolean(),
       stop: z.boolean(),
-    }),
-    tab: z.object({
-      commitDiff: z.boolean(),
-      file: z.boolean(),
-      preview: z.boolean(),
-      pullRequest: z.boolean(),
     }),
   }),
   cli: z.object({
@@ -582,14 +382,6 @@ const ContextResultSchema = z.object({
   }),
   services: z.array(ServiceRecordSchema),
   workspace: WorkspaceRecordSchema,
-});
-
-const TabOpenResultSchema = z.object({
-  repositoryId: z.string(),
-  surface: z.literal("preview"),
-  tabKey: z.string(),
-  url: z.string(),
-  workspaceId: z.string(),
 });
 
 const ServiceStopResultSchema = z.object({
@@ -664,13 +456,6 @@ const ContextSuccessSchema = z.object({
   method: z.literal(CONTEXT_READ_OPERATION),
   ok: z.literal(true),
   result: ContextResultSchema,
-});
-
-const TabOpenSuccessSchema = z.object({
-  id: z.string(),
-  method: z.literal(TAB_OPEN_OPERATION),
-  ok: z.literal(true),
-  result: TabOpenResultSchema,
 });
 
 const ServiceStopSuccessSchema = z.object({
@@ -771,13 +556,6 @@ const ContextFailureSchema = z.object({
   ok: z.literal(false),
 });
 
-const TabOpenFailureSchema = z.object({
-  error: DesktopRpcErrorSchema,
-  id: z.string(),
-  method: z.literal(TAB_OPEN_OPERATION),
-  ok: z.literal(false),
-});
-
 const ServiceStopFailureSchema = z.object({
   error: DesktopRpcErrorSchema,
   id: z.string(),
@@ -848,130 +626,6 @@ const AgentInspectFailureSchema = z.object({
   ok: z.literal(false),
 });
 
-// ── Plan + Task response schemas ──
-
-const PlanListSuccessSchema = z.object({
-  id: z.string(),
-  method: z.literal(PLAN_LIST_OPERATION),
-  ok: z.literal(true),
-  result: z.object({ plans: z.array(PlanRecordSchema) }),
-});
-const PlanCreateSuccessSchema = z.object({
-  id: z.string(),
-  method: z.literal(PLAN_CREATE_OPERATION),
-  ok: z.literal(true),
-  result: z.object({ plan: PlanRecordSchema }),
-});
-const PlanUpdateSuccessSchema = z.object({
-  id: z.string(),
-  method: z.literal(PLAN_UPDATE_OPERATION),
-  ok: z.literal(true),
-  result: z.object({ plan: PlanRecordSchema }),
-});
-const PlanDeleteSuccessSchema = z.object({
-  id: z.string(),
-  method: z.literal(PLAN_DELETE_OPERATION),
-  ok: z.literal(true),
-  result: z.object({}),
-});
-const TaskListSuccessSchema = z.object({
-  id: z.string(),
-  method: z.literal(TASK_LIST_OPERATION),
-  ok: z.literal(true),
-  result: z.object({ tasks: z.array(TaskRecordSchema) }),
-});
-const TaskCreateSuccessSchema = z.object({
-  id: z.string(),
-  method: z.literal(TASK_CREATE_OPERATION),
-  ok: z.literal(true),
-  result: z.object({ task: TaskRecordSchema }),
-});
-const TaskUpdateSuccessSchema = z.object({
-  id: z.string(),
-  method: z.literal(TASK_UPDATE_OPERATION),
-  ok: z.literal(true),
-  result: z.object({ task: TaskRecordSchema }),
-});
-const TaskDeleteSuccessSchema = z.object({
-  id: z.string(),
-  method: z.literal(TASK_DELETE_OPERATION),
-  ok: z.literal(true),
-  result: z.object({}),
-});
-const TaskDependencyAddSuccessSchema = z.object({
-  id: z.string(),
-  method: z.literal(TASK_DEPENDENCY_ADD_OPERATION),
-  ok: z.literal(true),
-  result: z.object({}),
-});
-const TaskDependencyRemoveSuccessSchema = z.object({
-  id: z.string(),
-  method: z.literal(TASK_DEPENDENCY_REMOVE_OPERATION),
-  ok: z.literal(true),
-  result: z.object({}),
-});
-
-const PlanListFailureSchema = z.object({
-  error: DesktopRpcErrorSchema,
-  id: z.string(),
-  method: z.literal(PLAN_LIST_OPERATION),
-  ok: z.literal(false),
-});
-const PlanCreateFailureSchema = z.object({
-  error: DesktopRpcErrorSchema,
-  id: z.string(),
-  method: z.literal(PLAN_CREATE_OPERATION),
-  ok: z.literal(false),
-});
-const PlanUpdateFailureSchema = z.object({
-  error: DesktopRpcErrorSchema,
-  id: z.string(),
-  method: z.literal(PLAN_UPDATE_OPERATION),
-  ok: z.literal(false),
-});
-const PlanDeleteFailureSchema = z.object({
-  error: DesktopRpcErrorSchema,
-  id: z.string(),
-  method: z.literal(PLAN_DELETE_OPERATION),
-  ok: z.literal(false),
-});
-const TaskListFailureSchema = z.object({
-  error: DesktopRpcErrorSchema,
-  id: z.string(),
-  method: z.literal(TASK_LIST_OPERATION),
-  ok: z.literal(false),
-});
-const TaskCreateFailureSchema = z.object({
-  error: DesktopRpcErrorSchema,
-  id: z.string(),
-  method: z.literal(TASK_CREATE_OPERATION),
-  ok: z.literal(false),
-});
-const TaskUpdateFailureSchema = z.object({
-  error: DesktopRpcErrorSchema,
-  id: z.string(),
-  method: z.literal(TASK_UPDATE_OPERATION),
-  ok: z.literal(false),
-});
-const TaskDeleteFailureSchema = z.object({
-  error: DesktopRpcErrorSchema,
-  id: z.string(),
-  method: z.literal(TASK_DELETE_OPERATION),
-  ok: z.literal(false),
-});
-const TaskDependencyAddFailureSchema = z.object({
-  error: DesktopRpcErrorSchema,
-  id: z.string(),
-  method: z.literal(TASK_DEPENDENCY_ADD_OPERATION),
-  ok: z.literal(false),
-});
-const TaskDependencyRemoveFailureSchema = z.object({
-  error: DesktopRpcErrorSchema,
-  id: z.string(),
-  method: z.literal(TASK_DEPENDENCY_REMOVE_OPERATION),
-  ok: z.literal(false),
-});
-
 export const DesktopRpcResponseSchema = z.union([
   ServiceGetSuccessSchema,
   ServiceListSuccessSchema,
@@ -979,7 +633,6 @@ export const DesktopRpcResponseSchema = z.union([
   ServiceStopSuccessSchema,
   ServiceLogsSuccessSchema,
   ContextSuccessSchema,
-  TabOpenSuccessSchema,
   WorkspaceCreateSuccessSchema,
   WorkspaceArchiveSuccessSchema,
   WorkspaceRunSuccessSchema,
@@ -988,23 +641,12 @@ export const DesktopRpcResponseSchema = z.union([
   WorkspaceResetSuccessSchema,
   WorkspaceHealthSuccessSchema,
   AgentInspectSuccessSchema,
-  PlanListSuccessSchema,
-  PlanCreateSuccessSchema,
-  PlanUpdateSuccessSchema,
-  PlanDeleteSuccessSchema,
-  TaskListSuccessSchema,
-  TaskCreateSuccessSchema,
-  TaskUpdateSuccessSchema,
-  TaskDeleteSuccessSchema,
-  TaskDependencyAddSuccessSchema,
-  TaskDependencyRemoveSuccessSchema,
   ServiceGetFailureSchema,
   ServiceListFailureSchema,
   ServiceStartFailureSchema,
   ServiceStopFailureSchema,
   ServiceLogsFailureSchema,
   ContextFailureSchema,
-  TabOpenFailureSchema,
   WorkspaceCreateFailureSchema,
   WorkspaceArchiveFailureSchema,
   WorkspaceRunFailureSchema,
@@ -1013,44 +655,12 @@ export const DesktopRpcResponseSchema = z.union([
   WorkspaceResetFailureSchema,
   WorkspaceHealthFailureSchema,
   AgentInspectFailureSchema,
-  PlanListFailureSchema,
-  PlanCreateFailureSchema,
-  PlanUpdateFailureSchema,
-  PlanDeleteFailureSchema,
-  TaskListFailureSchema,
-  TaskCreateFailureSchema,
-  TaskUpdateFailureSchema,
-  TaskDeleteFailureSchema,
-  TaskDependencyAddFailureSchema,
-  TaskDependencyRemoveFailureSchema,
 ]);
-
-export const DesktopRpcShellRequestSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("tab.open.preview"),
-    label: z.string(),
-    previewKey: z.string(),
-    repositoryId: z.string(),
-    requestId: z.string(),
-    url: z.string(),
-    workspaceId: z.string(),
-  }),
-]);
-
-export const DesktopRpcShellResultSchema = z.object({
-  repositoryId: z.string(),
-  surface: z.literal("preview"),
-  tabKey: z.string(),
-  url: z.string(),
-  workspaceId: z.string(),
-});
 
 export type DesktopRpcError = z.infer<typeof DesktopRpcErrorSchema>;
 export type DesktopRpcRequest = z.infer<typeof DesktopRpcRequestSchema>;
 export type DesktopRpcResponse = z.infer<typeof DesktopRpcResponseSchema>;
 export type DesktopRpcSession = z.infer<typeof DesktopRpcSessionSchema>;
-export type DesktopRpcShellRequest = z.infer<typeof DesktopRpcShellRequestSchema>;
-export type DesktopRpcShellResult = z.infer<typeof DesktopRpcShellResultSchema>;
 export type ContextRequest = z.infer<typeof ContextRequestSchema>;
 export type HealthCheckResult = z.infer<typeof HealthCheckResultSchema>;
 export type LogLine = z.infer<typeof LogLineSchema>;
@@ -1059,7 +669,6 @@ export type ServiceListRequest = z.infer<typeof ServiceListRequestSchema>;
 export type ServiceLogsRequest = z.infer<typeof ServiceLogsRequestSchema>;
 export type ServiceStartRequest = z.infer<typeof ServiceStartRequestSchema>;
 export type ServiceStopRequest = z.infer<typeof ServiceStopRequestSchema>;
-export type TabOpenRequest = z.infer<typeof TabOpenRequestSchema>;
 export type WorkspaceCreateRequest = z.infer<typeof WorkspaceCreateRequestSchema>;
 export type WorkspaceArchiveRequest = z.infer<typeof WorkspaceArchiveRequestSchema>;
 export type WorkspaceHealthRequest = z.infer<typeof WorkspaceHealthRequestSchema>;
@@ -1068,13 +677,3 @@ export type WorkspaceResetRequest = z.infer<typeof WorkspaceResetRequestSchema>;
 export type WorkspaceRunRequest = z.infer<typeof WorkspaceRunRequestSchema>;
 export type AgentInspectRequest = z.infer<typeof AgentInspectRequestSchema>;
 export type WorkspaceGetRequest = z.infer<typeof WorkspaceGetRequestSchema>;
-export type PlanListRequest = z.infer<typeof PlanListRequestSchema>;
-export type PlanCreateRequest = z.infer<typeof PlanCreateRequestSchema>;
-export type PlanUpdateRequest = z.infer<typeof PlanUpdateRequestSchema>;
-export type PlanDeleteRequest = z.infer<typeof PlanDeleteRequestSchema>;
-export type TaskListRequest = z.infer<typeof TaskListRequestSchema>;
-export type TaskCreateRequest = z.infer<typeof TaskCreateRequestSchema>;
-export type TaskUpdateRequest = z.infer<typeof TaskUpdateRequestSchema>;
-export type TaskDeleteRequest = z.infer<typeof TaskDeleteRequestSchema>;
-export type TaskDependencyAddRequest = z.infer<typeof TaskDependencyAddRequestSchema>;
-export type TaskDependencyRemoveRequest = z.infer<typeof TaskDependencyRemoveRequestSchema>;

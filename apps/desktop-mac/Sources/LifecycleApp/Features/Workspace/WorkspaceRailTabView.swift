@@ -48,6 +48,7 @@ struct WorkspaceRailTabView<TrailingAccessory: View>: View {
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
+      .lcPointerCursor()
       .frame(maxWidth: .infinity, alignment: .leading)
 
       trailingAccessory

@@ -37,5 +37,6 @@ struct LCTabItem: View {
         }
     }
     .buttonStyle(.plain)
+    .lcPointerCursor()
   }
 }

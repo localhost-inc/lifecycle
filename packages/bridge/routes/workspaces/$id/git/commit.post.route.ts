@@ -1,7 +1,7 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
 
-import { resolveBridgeWorkspaceRecord } from "../../../../src/workspaces";
+import { resolveWorkspaceRecord } from "../../../../src/domains/workspace/resolve";
 
 export default createRoute({
   schemas: {
@@ -18,7 +18,7 @@ export default createRoute({
     const db = ctx.get("db");
     const workspaceRegistry = ctx.get("workspaceRegistry");
 
-    const workspace = await resolveBridgeWorkspaceRecord(db, params.id);
+    const workspace = await resolveWorkspaceRecord(db, params.id);
     const client = workspaceRegistry.resolve(workspace.host);
 
     if (body.stageAll) {

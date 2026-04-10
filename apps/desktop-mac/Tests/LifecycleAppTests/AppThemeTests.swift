@@ -16,6 +16,10 @@ final class AppThemeTests: XCTestCase {
     XCTAssertEqual(url.path, "/Users/kyle/custom-lifecycle")
   }
 
+  func testAppResourcesLoadsLifecycleLogoImage() {
+    XCTAssertNotNil(AppResources.lifecycleLogoImage)
+  }
+
   func testAppThemeStorePersistsThemePreferenceAndPreservesUnknownFields() throws {
     let rootURL = temporaryRootURL()
     let settingsURL = rootURL.appendingPathComponent("settings.json")
@@ -44,7 +48,7 @@ final class AppThemeTests: XCTestCase {
     XCTAssertEqual(raw["customUserField"] as? Int, 42)
   }
 
-  func testAppThemeStoreWritesGhosttyThemeConfigIntoLifecycleCache() throws {
+  func testAppThemeStoreWritesTerminalThemeConfigIntoLifecycleCache() throws {
     let rootURL = temporaryRootURL()
     let store = AppThemeStore(
       environment: [
@@ -194,9 +198,9 @@ final class AppThemeTests: XCTestCase {
     XCTAssertEqual(dev["launcher"] as? String, "command")
   }
 
-  func testGhosttyThemeConfigWriterRendersTerminalPaletteFromPresetTokens() {
+  func testTerminalThemeConfigWriterRendersTerminalPaletteFromPresetTokens() {
     let preset = AppThemeCatalog.resolve(preference: .monokai, systemAppearance: .dark)
-    let contents = GhosttyThemeConfigWriter.render(preset: preset)
+    let contents = TerminalThemeConfigWriter.render(preset: preset)
 
     XCTAssertTrue(contents.contains("background = #272822"))
     XCTAssertTrue(contents.contains("foreground = #f8f8f2"))

@@ -150,6 +150,7 @@ struct AgentStatusBarView: View {
             .foregroundStyle(theme.mutedColor.opacity(0.55))
         }
         .buttonStyle(.plain)
+        .lcPointerCursor()
         .help("Agent debug")
         .sheet(isPresented: $isDebugInspectorPresented) {
           AgentDebugInspectorView(debugData: debugData)
@@ -167,6 +168,7 @@ struct AgentStatusBarView: View {
             .foregroundStyle(canSend ? theme.primaryTextColor : theme.mutedColor.opacity(0.45))
         }
         .buttonStyle(.plain)
+        .lcPointerCursor()
         .disabled(!canSend)
       }
     }
@@ -302,6 +304,7 @@ private struct AgentDebugInspectorView: View {
           copyDebugJSON()
         }
         .buttonStyle(.plain)
+        .lcPointerCursor()
         .font(.system(size: 11, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.mutedColor)
 
@@ -309,6 +312,7 @@ private struct AgentDebugInspectorView: View {
           dismiss()
         }
         .buttonStyle(.plain)
+        .lcPointerCursor()
         .font(.system(size: 11, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.mutedColor)
       }

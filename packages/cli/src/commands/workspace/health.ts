@@ -1,12 +1,9 @@
 import { defineCommand } from "@lifecycle/cmd";
+import { ensureBridge } from "@lifecycle/bridge";
 import { z } from "zod";
 
-import {
-  createWorkspaceHealthRequest,
-  requestDesktopRpc,
-  resolveWorkspaceId,
-} from "../../desktop/rpc";
 import { failCommand, jsonFlag, printHealthCheck, workspaceIdFlag } from "../_shared";
+import { resolveWorkspaceId } from "../_shared";
 
 export default defineCommand({
   description: "Run workspace health checks.",
@@ -17,20 +14,25 @@ export default defineCommand({
   run: async (input, context) => {
     try {
       const workspaceId = resolveWorkspaceId(input.workspaceId);
-      const response = await requestDesktopRpc(
-        createWorkspaceHealthRequest({
-          workspaceId,
-        }),
-      );
+      const { client } = await ensureBridge();
+      const response = await client.workspaces[":id"].health.$get({
+        param: { id: workspaceId },
+      });
+      const result = await response.json();
+      const checks = result.checks as Array<{
+        healthy: boolean;
+        message: string | null;
+        service: string;
+      }>;
 
       if (input.json) {
-        context.stdout(JSON.stringify(response.result, null, 2));
+        context.stdout(JSON.stringify(result, null, 2));
         return 0;
       }
 
-      const allHealthy = response.result.checks.every((check) => check.healthy);
+      const allHealthy = checks.every((check) => check.healthy);
 
-      for (const check of response.result.checks) {
+      for (const check of checks) {
         printHealthCheck(check, context.stdout);
       }
 

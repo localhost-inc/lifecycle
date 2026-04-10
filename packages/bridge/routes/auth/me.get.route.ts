@@ -1,8 +1,35 @@
 import { createRoute } from "routedjs";
-import { readCredentials } from "../../src/credentials";
-import { resolveGitProfile } from "../../src/git-profile";
+import { z } from "zod";
+import { readCredentials } from "../../src/domains/auth/credentials";
+import { resolveGitProfile } from "../../src/domains/auth/git-profile";
+
+const BridgeGitProfileSchema = z
+  .object({
+    name: z.string().optional(),
+    email: z.string().optional(),
+    login: z.string().optional(),
+    avatarUrl: z.string().optional(),
+  })
+  .meta({ id: "BridgeGitProfile" });
+
+const BridgeAuthStateSchema = z
+  .object({
+    authenticated: z.boolean(),
+    userId: z.string().optional(),
+    email: z.string().optional(),
+    displayName: z.string().optional(),
+    activeOrgId: z.string().optional(),
+    activeOrgSlug: z.string().optional(),
+    gitProfile: BridgeGitProfileSchema.optional(),
+  })
+  .meta({ id: "BridgeAuthState" });
 
 export default createRoute({
+  schemas: {
+    responses: {
+      200: BridgeAuthStateSchema,
+    },
+  },
   handler: async () => {
     const credentials = readCredentials();
 

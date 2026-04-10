@@ -56,15 +56,14 @@ Lifecycle clients do not invent their own authority paths.
 
 1. **CLI** (`packages/cli`) — workspace lifecycle, stack/service commands, bridge launcher, shell/runtime control, context dump
 2. **TUI** (`apps/tui`) — Rust terminal UI with tmux-backed shell attach, workspace sidebar, host-aware activity
-3. **Workspace package** (`packages/workspace`) — host-aware workspace client with `local`, `cloud`, `docker`, `remote` implementations
-4. **Stack package** (`packages/stack`) — process supervisor, health checks, port management
+3. **Bridge workspace runtime** (`packages/bridge/src/workspace`) — host-aware workspace client with `local`, `cloud`, `docker`, `remote` implementations
+4. **Bridge stack runtime** (`packages/bridge/src/stack`) — process supervisor, graph lowering, health checks, logs, port management
 5. **Contracts package** (`packages/contracts`) — shared domain types, manifest parsing, Zod validation
 6. **DB package** (`packages/db`) — control-plane persistence (Turso/SQLite)
 7. **API scaffold** (`apps/control-plane`) — Hono-based backend
 8. **Bridge package** (`packages/bridge`) — bridge runtime, authority routing, routes, registration, client bootstrap
 9. **Native desktop app** (`apps/desktop-mac`) — Swift/AppKit client
-10. **Desktop app** (`apps/desktop-legacy-do-not-touch`) — Tauri app, maintenance-only
-11. **Landing page** (`apps/www`)
+10. **Landing page** (`apps/www`)
 
 ## CLI Interface
 
@@ -82,6 +81,7 @@ Key commands:
 
 ```bash
 lifecycle project init                    # scaffold lifecycle.json
+lifecycle proxy install                  # optional clean HTTP lifecycle.localhost routing
 lifecycle workspace create                # materialize a workspace
 lifecycle workspace prepare               # bootstrap the environment
 lifecycle workspace shell <workspace>     # attach a shell
@@ -123,6 +123,7 @@ git clone https://github.com/localhost-inc/lifecycle.git
 cd lifecycle
 bun install
 bun run qa
+lifecycle proxy install --dry-run         # inspect machine-scoped preview routing changes
 bun run dev   # desktop loop: bridge + control plane + desktop-mac
 ```
 
@@ -149,7 +150,6 @@ From repo root:
 apps/
   control-plane/ Hosted Hono control plane
   desktop-mac/  Native Swift desktop app
-  desktop-legacy-do-not-touch/ Tauri desktop app (maintenance-only)
   tui/          Rust TUI — tmux-backed workspace shell
   www/          Landing page
 packages/
@@ -161,10 +161,8 @@ packages/
   config/       Shared TypeScript config
   contracts/    Domain contracts, manifest parsing, validation
   db/           Control-plane persistence
-  stack/        Stack client, process supervisor, health, ports
   store/        Control-plane query/mutation layer
   ui/           Shared UI primitives
-  workspace/    Host-aware workspace client contracts
 docs/
   reference/    Canonical contracts (architecture, vision, journey, TUI, shell, etc.)
   plans/        Execution plans (local CLI, cloud V1, sandbox providers)

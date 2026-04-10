@@ -14,7 +14,7 @@ Rules:
 2. `bridge` means the runtime authority process nearest the workspace, running on that workspace host.
 3. Clients do not resolve workspace host placement or choose host adapters on their own.
 4. If the contacted bridge is not authoritative for a workspace, the bridge layer resolves the owning bridge and forwards the request or returns explicit authority information.
-5. The authoritative bridge owns host-local orchestration: shell attach, stack/service runtime control, git status, activity, and host-aware execution.
+5. The authoritative bridge owns host-local orchestration: shell attach, stack/service runtime control, preview proxy routing, git status, activity, and host-aware execution.
 6. When an authoritative bridge-handled request needs cloud or organization authority above the workspace runtime, the bridge calls the control plane.
 7. When bridge-side runtime state changes, the bridge emits lifecycle events over WebSocket and clients update UI state from those events. Routed OpenCode/provider traffic is a secondary integration surface.
 8. Interactive bridge clients must self-heal bridge discovery. If the pinned bridge endpoint dies or the bridge registration in `~/.lifecycle/bridge.json` changes, clients rediscover the current bridge, retry the request, and may start the bridge when no healthy instance exists.
@@ -65,7 +65,7 @@ Clients are interchangeable. State lives in the bridge, control plane, and works
 
 Lifecycle runs a bridge on each workspace host context. `lifecycle bridge start` starts the bridge for the current host context, and `lifecycle` launches the TUI as a client of that bridge surface. The client owns its selected workspace in local state, but it addresses runtime operations by workspace id instead of resolving host placement itself. The same bridge boundary is intended to run on local, remote, and cloud hosts so clients can reuse one authority surface across environments.
 
-In repository development mode, the control plane defaults to the local API dev server instead of `https://control-plane.lifecycle.dev`. The root `bun dev` command exports `LIFECYCLE_DEV=1`, `LIFECYCLE_RUNTIME_ROOT=$REPO/.lifecycle-runtime-dev`, `LIFECYCLE_API_URL=http://127.0.0.1:18787`, `LIFECYCLE_API_PORT=18787`, `LIFECYCLE_BRIDGE_URL=http://127.0.0.1:52222`, and `LIFECYCLE_BRIDGE_PORT=52222`, then uses `turbo run dev` to start `packages/bridge`, `apps/control-plane`, and `apps/desktop-mac` in parallel. Bridge and CLI clients resolve their control-plane base URL from that shared process environment, while the repo-local runtime root keeps dev bridge process state isolated from `~/.lifecycle` without swapping out the user's normal product data by default.
+In repository development mode, the control plane defaults to the local API dev server instead of `https://control-plane.lifecycle.dev`. The root `bun dev` command exports `LIFECYCLE_DEV=1`, `LIFECYCLE_RUNTIME_ROOT=$REPO/.lifecycle-runtime-dev`, `LIFECYCLE_API_URL=http://127.0.0.1:18787`, `LIFECYCLE_API_PORT=18787`, `LIFECYCLE_BRIDGE_URL=http://127.0.0.1:52222`, and `LIFECYCLE_BRIDGE_PORT=52222`, then uses `turbo run dev` to start `packages/bridge`, `apps/control-plane`, and `apps/desktop-mac` in parallel. Bridge and CLI clients resolve their control-plane base URL from that shared process environment. The repo-local runtime root only isolates bridge runtime state such as registration and supervisor files; local worktree checkouts still use the canonical `~/.lifecycle/worktrees/<org_slug>/<repo_slug>/` layout, with `local` as the org slug when no active organization is selected.
 
 Operation naming should stay consistent at the semantic layer. Bridge and control-plane methods use singular dotted names such as `workspace.get`, `workspace.list`, `workspace.activity`, `workspace.shell`, `service.get`, `service.list`, and `repo.list`. CLI commands and MCP tools keep the filesystem command tree, but they should map cleanly onto the same underlying operations.
 
@@ -82,12 +82,19 @@ The bridge is the authoritative runtime process for Lifecycle clients, running o
 3. Host-local execution through the workspace client boundary on the authoritative bridge
 4. Shell attach and tmux session orchestration
 5. Stack and service runtime operations
-6. Git and activity reads
-7. Local DB-backed state and runtime coordination
-8. WebSocket lifecycle streaming to clients
-9. Upstream calls to the control plane when a request needs cloud or organization authority above the workspace runtime
+6. Preview proxy routing for stable `*.lifecycle.localhost` service hosts
+7. Git and activity reads
+8. Local DB-backed state and runtime coordination
+9. WebSocket lifecycle streaming to clients
+10. Upstream calls to the control plane when a request needs cloud or organization authority above the workspace runtime
 
 The bridge is the runtime authority. Clients should not bypass it for normal workspace operations.
+
+OpenAPI contract publication follows the same boundary:
+
+1. The bridge owns the canonical OpenAPI document generated from its routed route tree.
+2. The bridge serves that document at `GET /openapi.json`.
+3. Clients that generate typed interfaces should compile against that bridge-owned document instead of maintaining handwritten request wiring or duplicate schema copies.
 
 Current implementation note:
 

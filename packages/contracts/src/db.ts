@@ -1,5 +1,11 @@
+import { z } from "zod";
 import type { AgentRecord } from "./agent";
-import type { PlanStatus, TaskPriority, TaskStatus } from "./planning";
+import {
+  WorkspaceCheckoutTypeSchema,
+  WorkspaceFailureReasonSchema,
+  WorkspaceStatusSchema,
+  WorkspaceHostSchema,
+} from "./workspace";
 import type {
   WorkspaceCheckoutType,
   WorkspaceFailureReason,
@@ -7,58 +13,28 @@ import type {
   WorkspaceHost,
 } from "./workspace";
 
-export interface WorkspaceRecord {
-  id: string;
-  repository_id: string;
-  name: string;
-  slug: string;
-  checkout_type: WorkspaceCheckoutType;
-  source_ref: string;
-  git_sha: string | null;
-  workspace_root: string | null;
-  host: WorkspaceHost;
-  manifest_fingerprint?: string | null;
-  created_at: string;
-  updated_at: string;
-  last_active_at: string;
-  prepared_at?: string | null;
-  status: WorkspaceStatus;
-  failure_reason: WorkspaceFailureReason | null;
-  failed_at: string | null;
-}
+export const WorkspaceRecordSchema = z
+  .object({
+    id: z.string(),
+    repository_id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+    checkout_type: WorkspaceCheckoutTypeSchema,
+    source_ref: z.string(),
+    git_sha: z.string().nullable(),
+    workspace_root: z.string().nullable(),
+    host: WorkspaceHostSchema,
+    manifest_fingerprint: z.string().nullable().optional(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    last_active_at: z.string(),
+    prepared_at: z.string().nullable().optional(),
+    status: WorkspaceStatusSchema,
+    failure_reason: WorkspaceFailureReasonSchema.nullable(),
+    failed_at: z.string().nullable(),
+  })
+  .meta({ id: "WorkspaceRecord" });
+
+export type WorkspaceRecord = z.infer<typeof WorkspaceRecordSchema>;
 
 export type { AgentRecord };
-
-export interface PlanRecord {
-  id: string;
-  repository_id: string;
-  workspace_id: string | null;
-  name: string;
-  description: string;
-  body: string;
-  status: PlanStatus;
-  position: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface TaskRecord {
-  id: string;
-  plan_id: string;
-  repository_id: string;
-  workspace_id: string | null;
-  agent_id: string | null;
-  name: string;
-  description: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-  position: number;
-  completed_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface TaskDependencyRecord {
-  task_id: string;
-  depends_on_task_id: string;
-}

@@ -1,7 +1,7 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
-import { readControlPlaneJson } from "../../src/control-plane";
-import { writeCredentials } from "../../src/credentials";
+import { readControlPlaneJson } from "../../src/domains/auth/control-plane";
+import { writeCredentials } from "../../src/domains/auth/credentials";
 
 export default createRoute({
   schemas: {

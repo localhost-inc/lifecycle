@@ -29,6 +29,7 @@ private struct GroupControlButton: View {
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .lcPointerCursor()
     .help(helpText)
   }
 }
@@ -72,6 +73,7 @@ private struct AgentControlMenu: View {
     }
     .menuStyle(.borderlessButton)
     .menuIndicator(.hidden)
+    .lcPointerCursor()
     .help("Open agent")
   }
 
@@ -154,6 +156,7 @@ struct WorkspaceGroupView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .lcPointerCursor()
             .help("Create terminal")
 
             AgentControlMenu(
@@ -179,12 +182,6 @@ struct WorkspaceGroupView: View {
           }
 
           Spacer(minLength: 0)
-
-          if model.terminalLoadingWorkspaceIDs.contains(workspaceID) {
-            ProgressView()
-              .controlSize(.small)
-              .tint(theme.primaryTextColor)
-          }
         }
         .padding(.leading, 0)
         .padding(.trailing, 8)
@@ -310,22 +307,16 @@ struct WorkspaceGroupView: View {
       title: tab.title,
       subtitle: tab.subtitle,
       isSelected: isSelected,
-      trailingContentInset: surface.isClosable ? 34 : 14
+      trailingContentInset: surface.isClosable ? 40 : 14
     ) {
       model.selectSurface(surface.id, workspaceID: workspaceID, groupID: group.id)
     } trailingAccessory: {
       if surface.isClosable {
-        Button {
+        WorkspaceTabCloseButton(isSelected: isSelected) {
           model.closeSurface(surface.id, workspaceID: workspaceID)
-        } label: {
-          Image(systemName: "xmark")
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(isSelected ? theme.mutedColor : theme.mutedColor.opacity(0.78))
-            .frame(width: 14, height: 14)
         }
-        .buttonStyle(.plain)
         .help("Close tab")
-        .padding(.trailing, 12)
+        .padding(.trailing, 8)
       }
     }
     .overlay {
@@ -417,5 +408,46 @@ struct WorkspaceGroupView: View {
     }
 
     return true
+  }
+}
+
+private struct WorkspaceTabCloseButton: View {
+  @Environment(\.appTheme) private var theme
+
+  let isSelected: Bool
+  let action: () -> Void
+
+  @State private var isHovering = false
+
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: "xmark")
+        .font(.system(size: 9, weight: .bold))
+        .foregroundStyle(iconColor)
+        .frame(width: 14, height: 14)
+        .padding(5)
+        .background(
+          RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(isHovering ? theme.mutedColor.opacity(0.10) : .clear)
+        )
+        .overlay(
+          RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .strokeBorder(isHovering ? theme.borderColor.opacity(0.55) : .clear, lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+    .buttonStyle(.plain)
+    .lcPointerCursor()
+    .onHover { hovering in
+      isHovering = hovering
+    }
+  }
+
+  private var iconColor: Color {
+    if isHovering {
+      return isSelected ? theme.primaryTextColor : theme.mutedColor
+    }
+
+    return isSelected ? theme.mutedColor : theme.mutedColor.opacity(0.78)
   }
 }

@@ -9,7 +9,7 @@ struct AppTerminalThemeContext: Equatable, Sendable {
   let darkAppearance: Bool
 
   static let fallback = AppTerminalThemeContext(
-    themeConfigPath: AppResources.bundledGhosttyThemeConfigPath(),
+    themeConfigPath: AppResources.bundledTerminalThemeConfigPath(),
     backgroundHexColor: AppThemeCatalog.defaultPreset.tokens.terminalBackgroundHexColor,
     darkAppearance: AppThemeCatalog.defaultPreset.appearance.isDark
   )
@@ -799,7 +799,7 @@ final class AppSettingsStore: ObservableObject {
     resolvedTheme = AppThemeCatalog.resolve(preference: preference, systemAppearance: systemAppearance)
 
     do {
-      terminalThemeContext = try GhosttyThemeConfigWriter.write(
+      terminalThemeContext = try TerminalThemeConfigWriter.write(
         preset: resolvedTheme,
         fileManager: fileManager,
         environment: environment
@@ -807,7 +807,7 @@ final class AppSettingsStore: ObservableObject {
       errorMessage = nil
     } catch {
       terminalThemeContext = AppTerminalThemeContext(
-        themeConfigPath: AppResources.bundledGhosttyThemeConfigPath(),
+        themeConfigPath: AppResources.bundledTerminalThemeConfigPath(),
         backgroundHexColor: resolvedTheme.tokens.terminalBackgroundHexColor,
         darkAppearance: resolvedTheme.appearance.isDark
       )
@@ -1071,11 +1071,11 @@ enum LifecyclePaths {
       .appendingPathComponent(LifecyclePathDefaults.settingsFileName)
   }
 
-  static func ghosttyThemeDirectoryURL(environment: [String: String]) throws -> URL {
+  static func terminalThemeDirectoryURL(environment: [String: String]) throws -> URL {
     try lifecycleRootURL(environment: environment)
       .appendingPathComponent(LifecyclePathDefaults.cacheDirectoryName, isDirectory: true)
       .appendingPathComponent(LifecyclePathDefaults.desktopMacCacheDirectoryName, isDirectory: true)
-      .appendingPathComponent(LifecyclePathDefaults.ghosttyCacheDirectoryName, isDirectory: true)
+      .appendingPathComponent(LifecyclePathDefaults.terminalThemeCacheDirectoryName, isDirectory: true)
   }
 
   static func lifecycleRootURL(environment: [String: String]) throws -> URL {
@@ -1249,13 +1249,13 @@ enum LifecycleSettingsFile {
   }
 }
 
-enum GhosttyThemeConfigWriter {
+enum TerminalThemeConfigWriter {
   static func write(
     preset: AppThemePreset,
     fileManager: FileManager = .default,
     environment: [String: String]
   ) throws -> AppTerminalThemeContext {
-    let directoryURL = try LifecyclePaths.ghosttyThemeDirectoryURL(environment: environment)
+    let directoryURL = try LifecyclePaths.terminalThemeDirectoryURL(environment: environment)
     try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 
     let contents = render(preset: preset)

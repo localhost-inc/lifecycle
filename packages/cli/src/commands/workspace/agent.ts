@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { defineCommand } from "@lifecycle/cmd";
 import { ensureBridge } from "@lifecycle/bridge";
-import { buildCloudShellSshArgs } from "@lifecycle/workspace/internal/cloud";
+import { buildCloudShellSshArgs } from "@lifecycle/bridge/workspace";
 import { z } from "zod";
 
 import { gatherEnvironment } from "../../env-sync";

@@ -1,7 +1,7 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
 
-const providerRequestOutcomeSchema = z.enum([
+const BridgeAgentProviderRequestOutcomeSchema = z.enum([
   "approved",
   "cancelled",
   "completed",
@@ -17,7 +17,7 @@ export default createRoute({
     }),
     body: z.object({
       requestId: z.string().min(1),
-      outcome: providerRequestOutcomeSchema,
+      outcome: BridgeAgentProviderRequestOutcomeSchema,
       response: z.record(z.string(), z.unknown()).nullable().optional(),
     }),
   },

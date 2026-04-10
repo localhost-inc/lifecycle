@@ -8,17 +8,38 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./workspace": {
+      "types": "./src/domains/workspace/index.ts",
+      "default": "./src/domains/workspace/index.ts"
+    },
+    "./workspace/host": {
+      "types": "./src/domains/workspace/host.ts",
+      "default": "./src/domains/workspace/host.ts"
+    },
+    "./workspace/hosts/cloud": {
+      "types": "./src/domains/workspace/hosts/cloud/index.ts",
+      "default": "./src/domains/workspace/hosts/cloud/index.ts"
+    },
+    "./workspace/hosts/local": {
+      "types": "./src/domains/workspace/hosts/local/index.ts",
+      "default": "./src/domains/workspace/hosts/local/index.ts"
+    },
+    "./stack": {
+      "types": "./src/domains/stack/index.ts",
+      "default": "./src/domains/stack/index.ts"
+    },
     "./runtime-paths": {
-      "types": "./src/runtime-paths.ts",
-      "default": "./src/runtime-paths.ts"
+      "types": "./src/lib/runtime-paths.ts",
+      "default": "./src/lib/runtime-paths.ts"
     },
     "./server": {
-      "types": "./src/server.ts",
-      "default": "./src/server.ts"
+      "types": "./src/lib/server.ts",
+      "default": "./src/lib/server.ts"
     }
   },
   "scripts": {
     "generate": "bun run node_modules/routedjs/src/cli/index.ts generate",
+    "generate:openapi": "bun run node_modules/routedjs/src/cli/index.ts openapi",
     "build": "tsc -b tsconfig.json",
     "dev": "./scripts/dev.sh",
     "format": "oxfmt src",
@@ -32,11 +53,9 @@
     "@lifecycle/contracts": "workspace:*",
     "@lifecycle/control-plane": "workspace:*",
     "@lifecycle/db": "workspace:*",
-    "@lifecycle/stack": "workspace:*",
-    "@lifecycle/workspace": "workspace:*",
     "@standard-schema/spec": "^1.1.0",
     "hono": "^4.7.10",
-    "routedjs": "0.1.5",
+    "routedjs": "0.1.6",
     "zod": "^4.3.6"
   }
 }
