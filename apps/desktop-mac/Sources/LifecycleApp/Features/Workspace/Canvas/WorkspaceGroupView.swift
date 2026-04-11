@@ -34,55 +34,6 @@ private struct GroupControlButton: View {
   }
 }
 
-private struct AgentControlMenu: View {
-  @Environment(\.appTheme) private var theme
-  @ObservedObject var model: AppModel
-  let workspaceID: String
-  let groupID: String
-  let agents: [BridgeAgentRecord]
-
-  var body: some View {
-    Menu {
-      Section("New Agent") {
-        ForEach(BridgeAgentProvider.allCases) { provider in
-          Button("New \(provider.label)") {
-            model.createAgentSurface(provider: provider, workspaceID: workspaceID, groupID: groupID)
-          }
-        }
-      }
-
-      if !agents.isEmpty {
-        Section("Open Agent") {
-          ForEach(agents) { agent in
-            Button(agentMenuLabel(for: agent)) {
-              model.openAgentSurface(
-                agentID: agent.id,
-                workspaceID: workspaceID,
-                groupID: groupID
-              )
-            }
-          }
-        }
-      }
-    } label: {
-      Image(systemName: "sparkles")
-        .font(.system(size: 12, weight: .semibold))
-        .foregroundStyle(theme.mutedColor)
-        .frame(width: 28, height: 28)
-        .contentShape(Rectangle())
-    }
-    .menuStyle(.borderlessButton)
-    .menuIndicator(.hidden)
-    .lcPointerCursor()
-    .help("Open agent")
-  }
-
-  private func agentMenuLabel(for agent: BridgeAgentRecord) -> String {
-    let title = resolvedAgentTitle(agent)
-    return "\(title) (\(agent.status))"
-  }
-}
-
 struct WorkspaceGroupRenderedSurface: Identifiable {
   let id: String
   let renderState: SurfaceRenderState
@@ -124,10 +75,6 @@ struct WorkspaceGroupView: View {
   @State private var hoveredSurfaceID: String?
   @State private var selectedTabFrame: CGRect?
 
-  private var agents: [BridgeAgentRecord] {
-    model.agentsByWorkspaceID[workspaceID] ?? []
-  }
-
   var body: some View {
     VStack(spacing: 0) {
       VStack(spacing: 0) {
@@ -158,14 +105,6 @@ struct WorkspaceGroupView: View {
             .buttonStyle(.plain)
             .lcPointerCursor()
             .help("Create terminal")
-
-            AgentControlMenu(
-              model: model,
-              workspaceID: workspaceID,
-              groupID: group.id,
-              agents: agents
-            )
-
             GroupControlButton(
               systemImage: "rectangle.split.2x1",
               helpText: "Split Right"

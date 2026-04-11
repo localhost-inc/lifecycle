@@ -1,0 +1,38 @@
+{
+  "name": "@lifecycle/cli",
+  "version": "0.0.0",
+  "private": true,
+  "bin": {
+    "lifecycle": "./src/index.ts"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "bridge:dev": "./scripts/bridge-dev.sh",
+    "bridge:generate": "bunx routedjs generate",
+    "bridge:generate:openapi": "bunx routedjs openapi",
+    "build:release": "bun ./scripts/build-release.ts",
+    "format": "oxfmt src scripts",
+    "lint": "oxlint src scripts",
+    "test": "bun test src",
+    "typecheck": "tsc -b tsconfig.json"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.2.0",
+    "@localhost-inc/cmd": "^0.2.1",
+    "@lifecycle/contracts": "workspace:*",
+    "@lifecycle/control-plane": "workspace:*",
+    "@lifecycle/db": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "hono": "^4.7.10",
+    "routedjs": "0.1.6",
+    "smol-toml": "^1.6.1",
+    "zod": "^4.3.6"
+  }
+}

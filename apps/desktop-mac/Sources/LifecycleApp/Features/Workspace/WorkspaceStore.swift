@@ -9,7 +9,6 @@ final class WorkspaceStore: ObservableObject {
   @Published private(set) var canvasState: CanvasState?
   @Published private(set) var extensionSidebarState: WorkspaceExtensionSidebarState?
   @Published private(set) var terminalEnvelope: BridgeWorkspaceTerminalsEnvelope?
-  @Published private(set) var agents: [BridgeAgentRecord] = []
   @Published private(set) var isTerminalLoading = false
   @Published private(set) var draggingSurfaceID: String?
 
@@ -31,7 +30,6 @@ final class WorkspaceStore: ObservableObject {
     canvasState = model.canvasState(for: workspaceID)
     extensionSidebarState = model.extensionSidebarState(for: workspaceID)
     terminalEnvelope = model.terminalEnvelope(for: workspaceID)
-    agents = model.agentsByWorkspaceID[workspaceID] ?? []
     isTerminalLoading = model.terminalLoadingWorkspaceIDs.contains(workspaceID)
     draggingSurfaceID = model.draggingSurfaceID
   }
@@ -50,14 +48,6 @@ final class WorkspaceStore: ObservableObject {
 
   func createTerminalTab(groupID: String? = nil) {
     model.createTerminalTab(workspaceID: workspaceID, groupID: groupID)
-  }
-
-  func createAgentSurface(provider: BridgeAgentProvider, groupID: String? = nil) {
-    model.createAgentSurface(provider: provider, workspaceID: workspaceID, groupID: groupID)
-  }
-
-  func openAgentSurface(agentID: String, groupID: String? = nil) {
-    model.openAgentSurface(agentID: agentID, workspaceID: workspaceID, groupID: groupID)
   }
 
   func selectSurface(_ surfaceID: String, groupID: String? = nil) {

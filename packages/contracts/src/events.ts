@@ -8,7 +8,7 @@ import type {
 
 // ── Supporting types for agent event payloads ───────────────────────────────
 // These are part of the event contract. Agent-internal types that don't appear
-// in event payloads stay in @lifecycle/agents.
+// in event payloads stay local to the surface that still uses them.
 
 export type AgentImageMediaType = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
 

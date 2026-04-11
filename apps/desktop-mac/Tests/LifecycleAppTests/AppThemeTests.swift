@@ -212,7 +212,7 @@ final class AppThemeTests: XCTestCase {
 
   private func temporaryRootURL() -> URL {
     FileManager.default.temporaryDirectory
-      .appendingPathComponent("lifecycle-macos-theme-tests", isDirectory: true)
+      .appendingPathComponent("lifecycle-theme-tests", isDirectory: true)
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
   }
 }

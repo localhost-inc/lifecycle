@@ -163,21 +163,13 @@ Forbidden:
 
 ### Agent Sessions
 
-Swift should not own the canonical agent state machine.
+Custom agent surfaces are no longer part of the active desktop product contract.
 
-Canonical ownership:
+Rules:
 
-1. `packages/agents`
-2. `packages/bridge/src/agents`
-3. bridge session snapshot and event projection routes
-
-Mac responsibility:
-
-1. consume projected session state
-2. render transcript and controls
-3. emit typed intents like `sendTurn`, `cancelTurn`, `resolveApproval`
-
-This means logic currently living in mac-only files such as session handle buffering and transcript projection should be reduced over time until the bridge or shared layer provides the render-ready shape.
+1. Do not add new first-party custom-agent UI, provider-auth flows, or transcript controls to the desktop app.
+2. Keep desktop runtime ownership focused on workspace, terminal, stack, and bridge supervision concerns.
+3. Any remaining legacy agent presentation code should be treated as cleanup work, not an active product area.
 
 ### Canvas
 

@@ -6,8 +6,5 @@
     "build": "cargo build --release",
     "build:debug": "cargo build",
     "dev": "bun scripts/dev.ts"
-  },
-  "dependencies": {
-    "@lifecycle/bridge": "workspace:*"
   }
 }

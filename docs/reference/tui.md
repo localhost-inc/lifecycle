@@ -37,7 +37,7 @@ Client selection and bridge operations are separate.
 Rules:
 
 1. `lifecycle` with no args launches the TUI.
-2. `packages/cli/src/tui/launch.ts` ensures the Lifecycle bridge is available before the Rust process starts.
+2. `apps/cli/src/tui/launch.ts` ensures the Lifecycle bridge is available before the Rust process starts.
 3. The Lifecycle bridge endpoint is passed through `LIFECYCLE_BRIDGE_URL` and `LIFECYCLE_BRIDGE_TOKEN`.
 4. The client owns selected-workspace state and may restore it from local state or an initial hint such as `LIFECYCLE_INITIAL_WORKSPACE_ID`.
 5. The TUI must not resolve workspace host, bridge authority, shell attach policy, or tmux session naming on its own when the bridge is available.

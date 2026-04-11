@@ -577,17 +577,20 @@ final class CanvasRuntimeTests: XCTestCase {
     XCTAssertEqual(process.executableURL?.path, "/usr/bin/env")
     XCTAssertEqual(
       process.arguments ?? [],
-      ["bun", "--cwd", "/tmp/lifecycle/packages/bridge", "run", "src/app.ts", "--port", "52222"]
+      ["bun", "--cwd", "/tmp/lifecycle/apps/cli", "run", "src/bridge/app.ts", "--port", "52222"]
     )
   }
 
-  func testBridgeStartProcessFallsBackToLifecycleCliOutsideDevMode() {
+  func testBridgeStartProcessUsesConfiguredCliOutsideDevMode() {
     let process = BridgeConfiguration.defaultStartProcess(
-      environment: LifecycleEnvironment(values: [:])
+      environment: LifecycleEnvironment(values: [
+        "LIFECYCLE_CLI_PATH": "/tmp/lifecycle",
+      ])
     )
 
-    XCTAssertEqual(process.executableURL?.path, "/usr/bin/env")
-    XCTAssertEqual(process.arguments ?? [], ["lifecycle", "bridge", "start"])
+    XCTAssertEqual(process.executableURL?.path, "/tmp/lifecycle")
+    XCTAssertEqual(process.arguments ?? [], ["bridge", "start"])
+    XCTAssertEqual(process.environment?["LIFECYCLE_CLI_PATH"], "/tmp/lifecycle")
   }
 
   func testBridgeConnectivityErrorRecognizesConnectionFailures() {

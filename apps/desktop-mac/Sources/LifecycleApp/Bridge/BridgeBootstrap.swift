@@ -6,7 +6,7 @@ enum BridgeBootstrapError: LocalizedError {
   var errorDescription: String? {
     switch self {
     case let .couldNotStart(url):
-      return "Failed to start the local Lifecycle bridge. Set LIFECYCLE_BRIDGE_URL, ensure `lifecycle bridge start` is available on PATH, or set LIFECYCLE_BRIDGE_START_COMMAND. Expected bridge URL: \(url.absoluteString)"
+      return "Failed to start the local Lifecycle bridge. Set LIFECYCLE_BRIDGE_URL, set LIFECYCLE_CLI_PATH to a lifecycle binary, or set LIFECYCLE_BRIDGE_START_COMMAND. Expected bridge URL: \(url.absoluteString)"
     }
   }
 }
@@ -184,15 +184,6 @@ func bridgeURL(fromRegistrationData data: Data) -> URL? {
 
 struct HealthPayload: Decodable {
   let healthy: Bool
-  let capabilities: BridgeHealthCapabilities?
-}
-
-struct BridgeHealthCapabilities: Decodable, Equatable {
-  let agents: Bool?
-
-  enum CodingKeys: String, CodingKey {
-    case agents = "agents"
-  }
 }
 
 func bridgeHealthSupportsDesktopRuntime(_ payload: HealthPayload) -> Bool {

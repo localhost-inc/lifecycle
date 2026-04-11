@@ -3,7 +3,6 @@ import SwiftUI
 private enum SettingsViewSection: String, CaseIterable, Identifiable {
   case appearance = "Appearance"
   case terminal = "Terminal"
-  case providers = "Providers"
   case connection = "Connection"
 
   var id: String { rawValue }
@@ -57,7 +56,7 @@ struct SettingsView: View {
               .font(.system(size: 22, weight: .semibold))
               .foregroundStyle(theme.primaryTextColor)
 
-            Text("Manage appearance, terminal, provider, and connection preferences.")
+            Text("Manage appearance, terminal, and connection preferences.")
               .font(.system(size: 13))
               .foregroundStyle(theme.mutedColor)
           }
@@ -114,11 +113,6 @@ struct SettingsView: View {
 
                 terminalRuntimeSection
 
-                trackedSectionHeader(.providers, in: scrollSpySpace)
-                  .padding(.top, 32)
-
-                providersSection
-
                 trackedSectionHeader(.connection, in: scrollSpySpace)
                   .padding(.top, 32)
 
@@ -155,12 +149,10 @@ struct SettingsView: View {
     .onAppear {
       syncDrafts()
       syncActiveTerminalProfileSelection()
-      refreshProviderAuthStatusesIfNeeded()
     }
     .onChange(of: settingsStore.settings) { _ in
       syncDrafts()
       syncActiveTerminalProfileSelection()
-      model.refreshProviderAuthStatus(for: .claude, force: true)
     }
   }
 
@@ -168,13 +160,6 @@ struct SettingsView: View {
     Binding(
       get: { settingsStore.preference },
       set: { settingsStore.setThemePreference($0) }
-    )
-  }
-
-  private var claudeLoginMethodBinding: Binding<AppClaudeLoginMethod> {
-    Binding(
-      get: { settingsStore.settings.providers.claude.loginMethod },
-      set: { settingsStore.setClaudeLoginMethod($0) }
     )
   }
 
@@ -365,33 +350,6 @@ struct SettingsView: View {
       }
       .padding(.vertical, 10)
     }
-  }
-
-  private var providersSection: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text("Manage your connected AI provider accounts.")
-        .font(.system(size: 12))
-        .foregroundStyle(theme.mutedColor)
-        .fixedSize(horizontal: false, vertical: true)
-
-      SettingsRowView(
-        label: "Sign-in Method",
-        description: "How the app authenticates with Claude."
-      ) {
-        Picker("", selection: claudeLoginMethodBinding) {
-          ForEach(AppClaudeLoginMethod.allCases) { mode in
-            Text(mode.label).tag(mode)
-          }
-        }
-        .pickerStyle(.menu)
-        .tint(theme.primaryTextColor)
-        .frame(width: 160)
-        .lcPointerCursor()
-      }
-
-      ProviderAccountsSection(model: model)
-    }
-    .padding(.vertical, 10)
   }
 
   private var persistenceBackendDescription: String {
@@ -801,12 +759,6 @@ struct SettingsView: View {
     return trimmed.isEmpty ? nil : trimmed
   }
 
-  private func refreshProviderAuthStatusesIfNeeded() {
-    for provider in BridgeAgentProvider.allCases {
-      model.refreshProviderAuthStatus(for: provider, force: false)
-    }
-  }
-
   @MainActor @ViewBuilder
   private func trackedSectionHeader(
     _ section: SettingsViewSection,
@@ -1069,147 +1021,5 @@ private struct SettingsOptionalTextFieldControl: View {
         LCButton(label: "Reset", variant: .ghost, size: .small, action: reset)
       }
     }
-  }
-}
-
-private struct ProviderAccountsSection: View {
-  @ObservedObject var model: AppModel
-
-  var body: some View {
-    VStack(spacing: 10) {
-      ForEach(BridgeAgentProvider.allCases) { provider in
-        ProviderAccountCard(
-          provider: provider,
-          status: model.providerAuthStatus(for: provider),
-          action: {
-            model.loginProviderAuth(provider)
-          }
-        )
-      }
-    }
-  }
-}
-
-private struct ProviderAccountCard: View {
-  @Environment(\.appTheme) private var theme
-
-  let provider: BridgeAgentProvider
-  let status: BridgeProviderAuthStatus
-  let action: () -> Void
-
-  private var actionLabel: String {
-    providerAccountActionLabel(for: status)
-  }
-
-  private var shouldShowAction: Bool {
-    providerAccountShouldShowAction(for: status)
-  }
-
-  private var statusColor: Color {
-    switch status.state {
-    case .authenticated:
-      theme.successColor
-    case .error:
-      theme.errorColor
-    case .notChecked, .checking, .authenticating, .unauthenticated:
-      theme.mutedColor
-    }
-  }
-
-  private var statusText: String {
-    providerAccountStatusText(for: status)
-  }
-
-  var body: some View {
-    HStack(spacing: 12) {
-      ZStack {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(theme.mutedColor.opacity(0.12))
-
-        Image(systemName: provider.iconName)
-          .font(.system(size: 14, weight: .medium))
-          .foregroundStyle(theme.primaryTextColor)
-      }
-      .frame(width: 34, height: 34)
-
-      VStack(alignment: .leading, spacing: 3) {
-        Text(provider.label)
-          .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(theme.primaryTextColor)
-
-        Text(statusText)
-          .font(.system(size: 11, weight: .medium))
-          .foregroundStyle(statusColor)
-          .lineLimit(2)
-          .fixedSize(horizontal: false, vertical: true)
-      }
-
-      Spacer(minLength: 12)
-
-      if status.state == .checking || status.state == .authenticating {
-        ProgressView()
-          .controlSize(.small)
-      } else if shouldShowAction {
-        Button(action: action) {
-          Text(actionLabel)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(theme.primaryTextColor)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-              RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(theme.mutedColor.opacity(0.12))
-            )
-        }
-        .buttonStyle(.plain)
-        .lcPointerCursor()
-      }
-    }
-    .padding(.horizontal, 12)
-    .padding(.vertical, 10)
-    .background(
-      RoundedRectangle(cornerRadius: 10, style: .continuous)
-        .fill(theme.surfaceBackground)
-    )
-    .overlay(
-      RoundedRectangle(cornerRadius: 10, style: .continuous)
-        .stroke(theme.borderColor, lineWidth: 1)
-    )
-  }
-}
-
-func providerAccountShouldShowAction(for status: BridgeProviderAuthStatus) -> Bool {
-  switch status.state {
-  case .unauthenticated, .error:
-    return true
-  case .notChecked, .checking, .authenticating, .authenticated:
-    return false
-  }
-}
-
-func providerAccountActionLabel(for status: BridgeProviderAuthStatus) -> String {
-  status.state == .error ? "Retry" : "Sign In"
-}
-
-func providerAccountStatusText(for status: BridgeProviderAuthStatus) -> String {
-  switch status.state {
-  case .notChecked:
-    return "Waiting for status..."
-  case .checking:
-    return "Checking local account..."
-  case .authenticating:
-    return status.output?.last ?? "Signing in... check your browser"
-  case .authenticated:
-    if let email = status.email, !email.isEmpty {
-      return "Connected as \(email)"
-    }
-    if let organization = status.organization, !organization.isEmpty {
-      return "Connected to \(organization)"
-    }
-    return "Connected"
-  case .unauthenticated:
-    return "Not connected"
-  case .error:
-    return status.message ?? "Authentication failed."
   }
 }

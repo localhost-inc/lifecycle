@@ -1,0 +1,3486 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Lifecycle Bridge API",
+    "version": "0.0.0",
+    "description": "Local bridge API consumed by the desktop app and repo tooling."
+  },
+  "paths": {
+    "/organizations/{orgId}/cloud-accounts": {
+      "post": {
+        "operationId": "postOrganizationsByOrgIdCloud-accounts",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "apiToken": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "apiToken"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/organizations": {
+      "get": {
+        "operationId": "getOrganizations",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeOrganizationsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "postOrganizations",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/terminals/{terminalId}/connections/{connectionId}": {
+      "delete": {
+        "operationId": "deleteWorkspacesByIdTerminalsByTerminalIdConnectionsByConnectionId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "terminalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceTerminalDisconnectResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/terminals/{terminalId}/connections": {
+      "post": {
+        "operationId": "postWorkspacesByIdTerminalsByTerminalIdConnections",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "terminalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "clientId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "access": {
+                    "default": "interactive",
+                    "type": "string",
+                    "enum": [
+                      "interactive",
+                      "observe"
+                    ]
+                  },
+                  "preferredTransport": {
+                    "default": "spawn",
+                    "type": "string",
+                    "enum": [
+                      "spawn",
+                      "stream"
+                    ]
+                  }
+                },
+                "required": [
+                  "clientId",
+                  "access",
+                  "preferredTransport"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceTerminalConnectionEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/terminals/{terminalId}": {
+      "delete": {
+        "operationId": "deleteWorkspacesByIdTerminalsByTerminalId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "terminalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceTerminalCloseResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getWorkspacesByIdTerminalsByTerminalId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "terminalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceTerminalEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Response 404",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/terminals": {
+      "get": {
+        "operationId": "getWorkspacesByIdTerminals",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceTerminalsEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "postWorkspacesByIdTerminals",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/BridgeTerminalKind"
+                      }
+                    ]
+                  },
+                  "title": {
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceCreatedTerminalEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/activity": {
+      "get": {
+        "operationId": "getWorkspacesByIdActivity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      },
+      "post": {
+        "operationId": "postWorkspacesByIdActivity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "event": {
+                    "type": "string",
+                    "enum": [
+                      "turn.started",
+                      "turn.completed",
+                      "tool.started",
+                      "tool.completed",
+                      "waiting.started",
+                      "waiting.completed"
+                    ]
+                  },
+                  "kind": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "provider": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "terminalId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "turnId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "event",
+                  "terminalId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/health": {
+      "get": {
+        "operationId": "getWorkspacesByIdHealth",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/stack/start": {
+      "post": {
+        "operationId": "postWorkspacesByIdStackStart",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "serviceNames": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceStackMutationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/stack/stop": {
+      "post": {
+        "operationId": "postWorkspacesByIdStackStop",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "serviceNames": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceStackMutationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/shell": {
+      "get": {
+        "operationId": "getWorkspacesByIdShell",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      },
+      "post": {
+        "operationId": "postWorkspacesByIdShell",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceShellEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/stack": {
+      "get": {
+        "operationId": "getWorkspacesByIdStack",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceStackResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/reset": {
+      "post": {
+        "operationId": "postWorkspacesByIdReset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/logs": {
+      "get": {
+        "operationId": "getWorkspacesByIdLogs",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "tail",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/exec": {
+      "post": {
+        "operationId": "postWorkspacesByIdExec",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "cwd": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "env": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "timeoutSeconds": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 300
+                  }
+                },
+                "required": [
+                  "command"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/git/commit": {
+      "post": {
+        "operationId": "postWorkspacesByIdGitCommit",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "push": {
+                    "type": "boolean"
+                  },
+                  "stageAll": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "message"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/git": {
+      "get": {
+        "operationId": "getWorkspacesByIdGit",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/pr/merge": {
+      "post": {
+        "operationId": "postWorkspacesByIdPrMerge",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pullRequestNumber": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "pullRequestNumber"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/workspaces/{id}/pr": {
+      "post": {
+        "operationId": "postWorkspacesByIdPr",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "baseBranch": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/workspaces/{id}": {
+      "delete": {
+        "operationId": "deleteWorkspacesById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "repoPath",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceArchiveResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getWorkspacesById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces": {
+      "get": {
+        "operationId": "getWorkspaces",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      },
+      "post": {
+        "operationId": "postWorkspaces",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "repoPath": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sourceRef": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "host": {
+                    "default": "local",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/WorkspaceHost"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "repoPath",
+                  "name",
+                  "host"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceCreateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "operationId": "getSettings",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeSettingsEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "putSettings",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifecycleSettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeSettingsEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/link": {
+      "post": {
+        "operationId": "postReposLink",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "organizationId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "owner": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "providerRepoId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "defaultBranch": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "organizationId",
+                  "owner",
+                  "name",
+                  "providerRepoId",
+                  "path"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/users/me/environment": {
+      "put": {
+        "operationId": "putUsersMeEnvironment",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "git": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "configBase64": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "email",
+                      "configBase64"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "claude": {
+                    "type": "object",
+                    "properties": {
+                      "accessToken": {
+                        "type": "string"
+                      },
+                      "refreshToken": {
+                        "nullable": true,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "accessToken",
+                      "refreshToken"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "claudeConfig": {
+                    "type": "object",
+                    "properties": {
+                      "settingsBase64": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "settingsBase64"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "codex": {
+                    "type": "object",
+                    "properties": {
+                      "authBase64": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "authBase64"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/repos/{repoId}": {
+      "delete": {
+        "operationId": "deleteReposByRepoId",
+        "parameters": [
+          {
+            "name": "repoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeRepositoryDeleteResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos": {
+      "get": {
+        "operationId": "getRepos",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeRepositoriesResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "postRepos",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "rootWorkspace": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "sourceRef": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "workspaceRoot": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "sourceRef",
+                      "workspaceRoot"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "path",
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeRepositoryCreateResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeRepositoryCreateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/device-code": {
+      "post": {
+        "operationId": "postAuthDevice-code",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "postAuthRefresh",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/auth/token": {
+      "post": {
+        "operationId": "postAuthToken",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "deviceCode": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "deviceCode"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "getAuthMe",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeAuthState"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BridgeOrganization": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "role"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeOrganizationsResponse": {
+        "type": "object",
+        "properties": {
+          "organizations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BridgeOrganization"
+            }
+          }
+        },
+        "required": [
+          "organizations"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceScope": {
+        "type": "object",
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/BridgeWorkspaceBinding"
+          },
+          "workspace_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "workspace_name": {
+            "type": "string"
+          },
+          "repo_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "host": {
+            "$ref": "#/components/schemas/BridgeWorkspaceScopeHost"
+          },
+          "status": {
+            "nullable": true,
+            "type": "string"
+          },
+          "source_ref": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cwd": {
+            "nullable": true,
+            "type": "string"
+          },
+          "workspace_root": {
+            "nullable": true,
+            "type": "string"
+          },
+          "resolution_note": {
+            "nullable": true,
+            "type": "string"
+          },
+          "resolution_error": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "binding",
+          "workspace_id",
+          "workspace_name",
+          "repo_name",
+          "host",
+          "status",
+          "source_ref",
+          "cwd",
+          "workspace_root",
+          "resolution_note",
+          "resolution_error"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceBinding": {
+        "type": "string",
+        "enum": [
+          "bound",
+          "adhoc"
+        ]
+      },
+      "BridgeWorkspaceScopeHost": {
+        "type": "string",
+        "enum": [
+          "local",
+          "docker",
+          "remote",
+          "cloud",
+          "unknown"
+        ]
+      },
+      "BridgeWorkspaceTerminalDisconnectResponse": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/BridgeWorkspaceScope"
+          },
+          "terminal_id": {
+            "type": "string"
+          },
+          "connection_id": {
+            "type": "string"
+          },
+          "disconnected": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "workspace",
+          "terminal_id",
+          "connection_id",
+          "disconnected"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceTerminalRuntime": {
+        "type": "object",
+        "properties": {
+          "backend_label": {
+            "type": "string"
+          },
+          "runtime_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "launch_error": {
+            "nullable": true,
+            "type": "string"
+          },
+          "persistent": {
+            "type": "boolean"
+          },
+          "supports_create": {
+            "type": "boolean"
+          },
+          "supports_close": {
+            "type": "boolean"
+          },
+          "supports_connect": {
+            "type": "boolean"
+          },
+          "supports_rename": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "backend_label",
+          "runtime_id",
+          "launch_error",
+          "persistent",
+          "supports_create",
+          "supports_close",
+          "supports_connect",
+          "supports_rename"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceTerminalConnection": {
+        "type": "object",
+        "properties": {
+          "connection_id": {
+            "type": "string"
+          },
+          "terminal_id": {
+            "type": "string"
+          },
+          "launch_error": {
+            "nullable": true,
+            "type": "string"
+          },
+          "transport": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BridgeTerminalTransport"
+              }
+            ]
+          }
+        },
+        "required": [
+          "connection_id",
+          "terminal_id",
+          "launch_error"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeTerminalTransport": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BridgeSpawnTerminalTransport"
+          },
+          {
+            "$ref": "#/components/schemas/BridgeStreamTerminalTransport"
+          }
+        ]
+      },
+      "BridgeSpawnTerminalTransport": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "spawn"
+            ]
+          },
+          "prepare": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BridgeShellLaunchSpec"
+              }
+            ]
+          },
+          "spec": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BridgeShellLaunchSpec"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeShellLaunchSpec": {
+        "type": "object",
+        "properties": {
+          "program": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cwd": {
+            "nullable": true,
+            "type": "string"
+          },
+          "env": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        "required": [
+          "program",
+          "args",
+          "cwd",
+          "env"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeStreamTerminalTransport": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "stream"
+            ]
+          },
+          "streamId": {
+            "type": "string"
+          },
+          "websocketPath": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "streamId",
+          "websocketPath",
+          "token",
+          "protocol"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceTerminalConnectionEnvelope": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/BridgeWorkspaceScope"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/BridgeWorkspaceTerminalRuntime"
+          },
+          "connection": {
+            "$ref": "#/components/schemas/BridgeWorkspaceTerminalConnection"
+          }
+        },
+        "required": [
+          "workspace",
+          "runtime",
+          "connection"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceTerminalCloseResponse": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/BridgeWorkspaceScope"
+          },
+          "terminal_id": {
+            "type": "string"
+          },
+          "closed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "workspace",
+          "terminal_id",
+          "closed"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceTerminalRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "busy": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "kind",
+          "busy"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceTerminalEnvelope": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/BridgeWorkspaceScope"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/BridgeWorkspaceTerminalRuntime"
+          },
+          "terminal": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BridgeWorkspaceTerminalRecord"
+              }
+            ]
+          }
+        },
+        "required": [
+          "workspace",
+          "runtime",
+          "terminal"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeErrorDetail": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeErrorEnvelope": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/BridgeErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceTerminalsEnvelope": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/BridgeWorkspaceScope"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/BridgeWorkspaceTerminalRuntime"
+          },
+          "terminals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BridgeWorkspaceTerminalRecord"
+            }
+          }
+        },
+        "required": [
+          "workspace",
+          "runtime",
+          "terminals"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeTerminalKind": {
+        "type": "string",
+        "enum": [
+          "shell",
+          "claude",
+          "codex",
+          "custom"
+        ]
+      },
+      "BridgeWorkspaceCreatedTerminalEnvelope": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/BridgeWorkspaceScope"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/BridgeWorkspaceTerminalRuntime"
+          },
+          "terminal": {
+            "$ref": "#/components/schemas/BridgeWorkspaceTerminalRecord"
+          }
+        },
+        "required": [
+          "workspace",
+          "runtime",
+          "terminal"
+        ],
+        "additionalProperties": false
+      },
+      "WorkspaceStackSummary": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/WorkspaceStackState"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceStackNode"
+            }
+          }
+        },
+        "required": [
+          "workspace_id",
+          "state",
+          "errors",
+          "nodes"
+        ],
+        "additionalProperties": false
+      },
+      "WorkspaceStackState": {
+        "type": "string",
+        "enum": [
+          "ready",
+          "missing",
+          "invalid"
+        ]
+      },
+      "WorkspaceStackNode": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/WorkspaceStackServiceNode"
+          },
+          {
+            "$ref": "#/components/schemas/WorkspaceStackTaskNode"
+          }
+        ]
+      },
+      "WorkspaceStackServiceNode": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "depends_on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "service"
+            ]
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/WorkspaceStackServiceRuntime"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ServiceStatus"
+          },
+          "status_reason": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ServiceStatusReason"
+              }
+            ]
+          },
+          "assigned_port": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "preview_url": {
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "name",
+          "depends_on",
+          "kind",
+          "runtime",
+          "status",
+          "status_reason",
+          "assigned_port",
+          "preview_url",
+          "created_at",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      },
+      "WorkspaceStackServiceRuntime": {
+        "type": "string",
+        "enum": [
+          "process",
+          "image"
+        ]
+      },
+      "ServiceStatus": {
+        "type": "string",
+        "enum": [
+          "starting",
+          "ready",
+          "failed",
+          "stopped"
+        ]
+      },
+      "ServiceStatusReason": {
+        "type": "string",
+        "enum": [
+          "service_start_failed",
+          "service_process_exited",
+          "service_dependency_failed",
+          "service_port_unreachable",
+          "unknown"
+        ]
+      },
+      "WorkspaceStackTaskNode": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "depends_on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "task"
+            ]
+          },
+          "run_on": {
+            "$ref": "#/components/schemas/WorkspaceStackTaskRunOn"
+          },
+          "command": {
+            "nullable": true,
+            "type": "string"
+          },
+          "write_files_count": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "workspace_id",
+          "name",
+          "depends_on",
+          "kind",
+          "run_on",
+          "command",
+          "write_files_count"
+        ],
+        "additionalProperties": false
+      },
+      "WorkspaceStackTaskRunOn": {
+        "nullable": true,
+        "type": "string",
+        "enum": [
+          "create",
+          "start"
+        ]
+      },
+      "BridgeWorkspaceStackMutationResponse": {
+        "type": "object",
+        "properties": {
+          "stack": {
+            "$ref": "#/components/schemas/WorkspaceStackSummary"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "startedServices": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stoppedServices": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "stack",
+          "workspaceId"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceStackResponse": {
+        "type": "object",
+        "properties": {
+          "stack": {
+            "$ref": "#/components/schemas/WorkspaceStackSummary"
+          }
+        },
+        "required": [
+          "stack"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceShellRuntime": {
+        "type": "object",
+        "properties": {
+          "backend_label": {
+            "type": "string"
+          },
+          "launch_error": {
+            "nullable": true,
+            "type": "string"
+          },
+          "persistent": {
+            "type": "boolean"
+          },
+          "session_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "prepare": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BridgeShellLaunchSpec"
+              }
+            ]
+          },
+          "spec": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BridgeShellLaunchSpec"
+              }
+            ]
+          }
+        },
+        "required": [
+          "backend_label",
+          "launch_error",
+          "persistent",
+          "session_name",
+          "prepare",
+          "spec"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceShellEnvelope": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/BridgeWorkspaceScope"
+          },
+          "shell": {
+            "$ref": "#/components/schemas/BridgeWorkspaceShellRuntime"
+          }
+        },
+        "required": [
+          "workspace",
+          "shell"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceArchiveResponse": {
+        "type": "object",
+        "properties": {
+          "archived": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "archived",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "WorkspaceRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "repository_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "checkout_type": {
+            "$ref": "#/components/schemas/WorkspaceCheckoutType"
+          },
+          "source_ref": {
+            "type": "string"
+          },
+          "git_sha": {
+            "nullable": true,
+            "type": "string"
+          },
+          "workspace_root": {
+            "nullable": true,
+            "type": "string"
+          },
+          "host": {
+            "$ref": "#/components/schemas/WorkspaceHost"
+          },
+          "manifest_fingerprint": {
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "last_active_at": {
+            "type": "string"
+          },
+          "prepared_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkspaceStatus"
+          },
+          "failure_reason": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkspaceFailureReason"
+              }
+            ]
+          },
+          "failed_at": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "repository_id",
+          "name",
+          "slug",
+          "checkout_type",
+          "source_ref",
+          "git_sha",
+          "workspace_root",
+          "host",
+          "created_at",
+          "updated_at",
+          "last_active_at",
+          "status",
+          "failure_reason",
+          "failed_at"
+        ],
+        "additionalProperties": false
+      },
+      "WorkspaceCheckoutType": {
+        "type": "string",
+        "enum": [
+          "root",
+          "worktree"
+        ]
+      },
+      "WorkspaceHost": {
+        "type": "string",
+        "enum": [
+          "local",
+          "docker",
+          "remote",
+          "cloud"
+        ]
+      },
+      "WorkspaceStatus": {
+        "type": "string",
+        "enum": [
+          "provisioning",
+          "active",
+          "archiving",
+          "archived",
+          "failed"
+        ]
+      },
+      "WorkspaceFailureReason": {
+        "type": "string",
+        "enum": [
+          "capacity_unavailable",
+          "environment_task_failed",
+          "manifest_invalid",
+          "repo_clone_failed",
+          "repository_disconnected",
+          "prepare_step_failed",
+          "service_start_failed",
+          "service_healthcheck_failed",
+          "sandbox_unreachable",
+          "local_docker_unavailable",
+          "local_port_conflict",
+          "local_app_not_running",
+          "operation_timeout",
+          "unknown"
+        ]
+      },
+      "BridgeWorkspaceDetailResponse": {
+        "type": "object",
+        "properties": {
+          "stack": {
+            "$ref": "#/components/schemas/WorkspaceStackSummary"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceRecord"
+          }
+        },
+        "required": [
+          "stack",
+          "workspace"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceCreateResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "repositoryId": {
+            "type": "string"
+          },
+          "host": {
+            "$ref": "#/components/schemas/WorkspaceHost"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sourceRef": {
+            "type": "string"
+          },
+          "workspaceRoot": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "repositoryId",
+          "host",
+          "name",
+          "sourceRef"
+        ],
+        "additionalProperties": false
+      },
+      "LifecycleSettings": {
+        "type": "object",
+        "properties": {
+          "appearance": {
+            "default": {
+              "theme": "dark"
+            },
+            "type": "object",
+            "properties": {
+              "theme": {
+                "default": "dark",
+                "type": "string",
+                "enum": [
+                  "system",
+                  "light",
+                  "dark",
+                  "github-light",
+                  "github-dark",
+                  "nord",
+                  "monokai",
+                  "catppuccin",
+                  "dracula",
+                  "rose-pine"
+                ]
+              }
+            },
+            "required": [
+              "theme"
+            ],
+            "additionalProperties": false
+          },
+          "providers": {
+            "default": {
+              "claude": {
+                "loginMethod": "claudeai"
+              }
+            },
+            "type": "object",
+            "properties": {
+              "claude": {
+                "default": {
+                  "loginMethod": "claudeai"
+                },
+                "type": "object",
+                "properties": {
+                  "loginMethod": {
+                    "default": "claudeai",
+                    "type": "string",
+                    "enum": [
+                      "claudeai",
+                      "console"
+                    ]
+                  }
+                },
+                "required": [
+                  "loginMethod"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "claude"
+            ],
+            "additionalProperties": false
+          },
+          "terminal": {
+            "default": {
+              "command": {
+                "program": null
+              },
+              "persistence": {
+                "backend": "tmux",
+                "mode": "managed",
+                "executablePath": null
+              },
+              "defaultProfile": "shell",
+              "profiles": {
+                "shell": {
+                  "launcher": "shell",
+                  "label": "Shell"
+                },
+                "claude": {
+                  "launcher": "claude",
+                  "label": "Claude",
+                  "settings": {
+                    "model": null,
+                    "permissionMode": null,
+                    "effort": null
+                  }
+                },
+                "codex": {
+                  "launcher": "codex",
+                  "label": "Codex",
+                  "settings": {
+                    "model": null,
+                    "configProfile": null,
+                    "approvalPolicy": null,
+                    "sandboxMode": null,
+                    "reasoningEffort": null,
+                    "webSearch": null
+                  }
+                }
+              }
+            },
+            "type": "object",
+            "properties": {
+              "command": {
+                "default": {
+                  "program": null
+                },
+                "type": "object",
+                "properties": {
+                  "program": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "program"
+                ],
+                "additionalProperties": false
+              },
+              "persistence": {
+                "default": {
+                  "backend": "tmux",
+                  "mode": "managed",
+                  "executablePath": null
+                },
+                "type": "object",
+                "properties": {
+                  "backend": {
+                    "default": "tmux",
+                    "type": "string",
+                    "enum": [
+                      "tmux",
+                      "zellij"
+                    ]
+                  },
+                  "mode": {
+                    "default": "managed",
+                    "type": "string",
+                    "enum": [
+                      "managed",
+                      "inherit"
+                    ]
+                  },
+                  "executablePath": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "backend",
+                  "mode",
+                  "executablePath"
+                ],
+                "additionalProperties": false
+              },
+              "defaultProfile": {
+                "default": "shell",
+                "type": "string",
+                "minLength": 1
+              },
+              "profiles": {
+                "default": {
+                  "shell": {
+                    "launcher": "shell",
+                    "label": "Shell"
+                  },
+                  "claude": {
+                    "launcher": "claude",
+                    "label": "Claude",
+                    "settings": {
+                      "model": null,
+                      "permissionMode": null,
+                      "effort": null
+                    }
+                  },
+                  "codex": {
+                    "launcher": "codex",
+                    "label": "Codex",
+                    "settings": {
+                      "model": null,
+                      "configProfile": null,
+                      "approvalPolicy": null,
+                      "sandboxMode": null,
+                      "reasoningEffort": null,
+                      "webSearch": null
+                    }
+                  }
+                },
+                "type": "object",
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "launcher": {
+                          "type": "string",
+                          "enum": [
+                            "shell"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "launcher"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "launcher": {
+                          "type": "string",
+                          "enum": [
+                            "command"
+                          ]
+                        },
+                        "command": {
+                          "type": "object",
+                          "properties": {
+                            "program": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "args": {
+                              "default": [],
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "env": {
+                              "default": {},
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "program",
+                            "args",
+                            "env"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "launcher",
+                        "command"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "launcher": {
+                          "type": "string",
+                          "enum": [
+                            "claude"
+                          ]
+                        },
+                        "settings": {
+                          "default": {
+                            "model": null,
+                            "permissionMode": null,
+                            "effort": null
+                          },
+                          "type": "object",
+                          "properties": {
+                            "model": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "permissionMode": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "enum": [
+                                "acceptEdits",
+                                "auto",
+                                "bypassPermissions",
+                                "default",
+                                "dontAsk",
+                                "plan"
+                              ]
+                            },
+                            "effort": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "enum": [
+                                "low",
+                                "medium",
+                                "high",
+                                "max"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "model",
+                            "permissionMode",
+                            "effort"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "launcher",
+                        "settings"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "launcher": {
+                          "type": "string",
+                          "enum": [
+                            "codex"
+                          ]
+                        },
+                        "settings": {
+                          "default": {
+                            "model": null,
+                            "configProfile": null,
+                            "approvalPolicy": null,
+                            "sandboxMode": null,
+                            "reasoningEffort": null,
+                            "webSearch": null
+                          },
+                          "type": "object",
+                          "properties": {
+                            "model": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "configProfile": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "approvalPolicy": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "enum": [
+                                "untrusted",
+                                "on-request",
+                                "never"
+                              ]
+                            },
+                            "sandboxMode": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "enum": [
+                                "read-only",
+                                "workspace-write",
+                                "danger-full-access"
+                              ]
+                            },
+                            "reasoningEffort": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "enum": [
+                                "minimal",
+                                "low",
+                                "medium",
+                                "high",
+                                "xhigh"
+                              ]
+                            },
+                            "webSearch": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "enum": [
+                                "disabled",
+                                "cached",
+                                "live"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "model",
+                            "configProfile",
+                            "approvalPolicy",
+                            "sandboxMode",
+                            "reasoningEffort",
+                            "webSearch"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "launcher",
+                        "settings"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "command",
+              "persistence",
+              "defaultProfile",
+              "profiles"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "appearance",
+          "providers",
+          "terminal"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeSettingsEnvelope": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/LifecycleSettings"
+          },
+          "settings_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "settings",
+          "settings_path"
+        ],
+        "additionalProperties": false
+      },
+      "LifecycleSettingsUpdate": {
+        "type": "object",
+        "properties": {
+          "appearance": {
+            "type": "object",
+            "properties": {
+              "theme": {
+                "default": "dark",
+                "type": "string",
+                "enum": [
+                  "system",
+                  "light",
+                  "dark",
+                  "github-light",
+                  "github-dark",
+                  "nord",
+                  "monokai",
+                  "catppuccin",
+                  "dracula",
+                  "rose-pine"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "providers": {
+            "type": "object",
+            "properties": {
+              "claude": {
+                "type": "object",
+                "properties": {
+                  "loginMethod": {
+                    "default": "claudeai",
+                    "type": "string",
+                    "enum": [
+                      "claudeai",
+                      "console"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "terminal": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "object",
+                "properties": {
+                  "program": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              },
+              "persistence": {
+                "type": "object",
+                "properties": {
+                  "backend": {
+                    "default": "tmux",
+                    "type": "string",
+                    "enum": [
+                      "tmux",
+                      "zellij"
+                    ]
+                  },
+                  "mode": {
+                    "default": "managed",
+                    "type": "string",
+                    "enum": [
+                      "managed",
+                      "inherit"
+                    ]
+                  },
+                  "executablePath": {
+                    "default": null,
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              },
+              "defaultProfile": {
+                "type": "string",
+                "minLength": 1
+              },
+              "profiles": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true,
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "launcher": {
+                          "type": "string",
+                          "enum": [
+                            "shell"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "launcher"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "launcher": {
+                          "type": "string",
+                          "enum": [
+                            "command"
+                          ]
+                        },
+                        "command": {
+                          "type": "object",
+                          "properties": {
+                            "program": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "args": {
+                              "default": [],
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "env": {
+                              "default": {},
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "program",
+                            "args",
+                            "env"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "launcher",
+                        "command"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "launcher": {
+                          "type": "string",
+                          "enum": [
+                            "claude"
+                          ]
+                        },
+                        "settings": {
+                          "default": {
+                            "model": null,
+                            "permissionMode": null,
+                            "effort": null
+                          },
+                          "type": "object",
+                          "properties": {
+                            "model": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "permissionMode": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "enum": [
+                                "acceptEdits",
+                                "auto",
+                                "bypassPermissions",
+                                "default",
+                                "dontAsk",
+                                "plan"
+                              ]
+                            },
+                            "effort": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "enum": [
+                                "low",
+                                "medium",
+                                "high",
+                                "max"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "model",
+                            "permissionMode",
+                            "effort"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "launcher",
+                        "settings"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "launcher": {
+                          "type": "string",
+                          "enum": [
+                            "codex"
+                          ]
+                        },
+                        "settings": {
+                          "default": {
+                            "model": null,
+                            "configProfile": null,
+                            "approvalPolicy": null,
+                            "sandboxMode": null,
+                            "reasoningEffort": null,
+                            "webSearch": null
+                          },
+                          "type": "object",
+                          "properties": {
+                            "model": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "configProfile": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "approvalPolicy": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "enum": [
+                                "untrusted",
+                                "on-request",
+                                "never"
+                              ]
+                            },
+                            "sandboxMode": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "enum": [
+                                "read-only",
+                                "workspace-write",
+                                "danger-full-access"
+                              ]
+                            },
+                            "reasoningEffort": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "enum": [
+                                "minimal",
+                                "low",
+                                "medium",
+                                "high",
+                                "xhigh"
+                              ]
+                            },
+                            "webSearch": {
+                              "default": null,
+                              "nullable": true,
+                              "type": "string",
+                              "enum": [
+                                "disabled",
+                                "cached",
+                                "live"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "model",
+                            "configProfile",
+                            "approvalPolicy",
+                            "sandboxMode",
+                            "reasoningEffort",
+                            "webSearch"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "launcher",
+                        "settings"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "BridgeHealthResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "healthy": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "healthy"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeRepositoryDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeRepositorySummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "local"
+            ]
+          },
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BridgeRepositoryWorkspaceSummary"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "path",
+          "source",
+          "workspaces"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeRepositoryWorkspaceSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "host": {
+            "$ref": "#/components/schemas/WorkspaceHost"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkspaceStatus"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "host",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeRepositoriesResponse": {
+        "type": "object",
+        "properties": {
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BridgeRepositorySummary"
+            }
+          }
+        },
+        "required": [
+          "repositories"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeRepositoryCreateResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "created": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "created"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeGitProfile": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "login": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "BridgeAuthState": {
+        "type": "object",
+        "properties": {
+          "authenticated": {
+            "type": "boolean"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "activeOrgId": {
+            "type": "string"
+          },
+          "activeOrgSlug": {
+            "type": "string"
+          },
+          "gitProfile": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BridgeGitProfile"
+              }
+            ]
+          }
+        },
+        "required": [
+          "authenticated"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

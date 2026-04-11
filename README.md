@@ -54,14 +54,14 @@ Lifecycle clients do not invent their own authority paths.
 
 ## What Exists Today
 
-1. **CLI** (`packages/cli`) — workspace lifecycle, stack/service commands, bridge launcher, shell/runtime control, context dump
+1. **CLI** (`apps/cli`) — workspace lifecycle, stack/service commands, bridge launcher, shell/runtime control, context dump
 2. **TUI** (`apps/tui`) — Rust terminal UI with tmux-backed shell attach, workspace sidebar, host-aware activity
-3. **Bridge workspace runtime** (`packages/bridge/src/workspace`) — host-aware workspace client with `local`, `cloud`, `docker`, `remote` implementations
-4. **Bridge stack runtime** (`packages/bridge/src/stack`) — process supervisor, graph lowering, health checks, logs, port management
+3. **Bridge workspace runtime** (`apps/cli/src/bridge/domains/workspace`) — host-aware workspace client with `local`, `cloud`, `docker`, `remote` implementations
+4. **Bridge stack runtime** (`apps/cli/src/bridge/domains/stack`) — process supervisor, graph lowering, health checks, logs, port management
 5. **Contracts package** (`packages/contracts`) — shared domain types, manifest parsing, Zod validation
 6. **DB package** (`packages/db`) — control-plane persistence (Turso/SQLite)
 7. **API scaffold** (`apps/control-plane`) — Hono-based backend
-8. **Bridge package** (`packages/bridge`) — bridge runtime, authority routing, routes, registration, client bootstrap
+8. **Bridge runtime** (`apps/cli/src/bridge`) — bridge runtime, authority routing, routes, registration, client bootstrap
 9. **Native desktop app** (`apps/desktop-mac`) — Swift/AppKit client
 10. **Landing page** (`apps/www`)
 
@@ -148,16 +148,12 @@ From repo root:
 
 ```text
 apps/
+  cli/          lifecycle CLI + bundled bridge runtime (`apps/cli/src/bridge`)
   control-plane/ Hosted Hono control plane
   desktop-mac/  Native Swift desktop app
   tui/          Rust TUI — tmux-backed workspace shell
   www/          Landing page
 packages/
-  agents/       Routed OpenCode/provider integration helpers
-  auth/         Auth helpers and contracts
-  bridge/       Runnable bridge package + server library
-  cli/          lifecycle CLI
-  cmd/          Filesystem-based command framework
   config/       Shared TypeScript config
   contracts/    Domain contracts, manifest parsing, validation
   db/           Control-plane persistence

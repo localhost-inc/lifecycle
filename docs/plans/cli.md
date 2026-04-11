@@ -1,221 +1,320 @@
 # Plan: CLI
 
 > Status: active plan
-> Depends on: [Architecture](../reference/architecture.md), [TUI](../reference/tui.md), [Cloud](./cloud.md), [Terminals](./terminals.md)
+> Depends on: [Architecture](../reference/architecture.md), [Runtime Boundaries](./runtime-boundaries.md), [Cloud](./cloud.md), [Terminals](./terminals.md)
 > Plan index: [docs/plans/README.md](./README.md)
 
-This document owns the user-facing CLI contract. It defines the noun model, command families, output rules, and runtime authority boundaries for `lifecycle`.
+This document defines the CLI we would choose if we were designing `lifecycle` from scratch for the product we are actually shipping now.
 
-It does not own desktop window management, browser surfaces, or app-local RPC details. Those belong to client-specific docs.
+That product is:
+
+1. a CLI-first runtime surface
+2. a bundled local bridge owned by the CLI distribution
+3. a desktop app that launches that bundled CLI helper
+4. no first-party custom-agent runtime in the active CLI contract
+5. no desktop-specific RPC path in the core CLI contract
 
 ## Goal
 
-The `lifecycle` CLI is the canonical control surface for Lifecycle.
+`lifecycle` is both:
 
-It should work for:
+1. the primary operator interface for local and cloud workflows
+2. the single Lifecycle-owned executable shipped inside `Lifecycle.app`
 
-1. developers in a terminal
-2. scripts and automation
-3. tools and harnesses running inside a workspace
-4. cloud and local workflows using the same grammar
+The CLI should be small, scriptable, authority-driven, and easy to bundle.
 
-The CLI must stay small, scriptable, and bridge-first.
+## Core Product Decisions
 
-## Principles
+If we were choosing again now, these would be the non-negotiable rules:
 
-1. The CLI is the primary product surface.
-2. Runtime reads and mutations are bridge-first.
-3. Local workflows do not require auth or network.
-4. Singular nouns stay stable across local and cloud.
-5. Default output is human-readable; `--json` is the stable machine contract.
-6. The CLI should not grow app-specific UI verbs.
-7. Cloud extends the same CLI grammar instead of inventing a second control surface.
-8. Terminal operations are first-class and layer onto the same workspace model. See [Terminals](./terminals.md).
+1. `lifecycle` is the only Lifecycle-owned executable artifact.
+2. The bridge is a CLI-owned runtime, not a separate package boundary and not a second user-facing executable.
+3. The desktop app launches the bundled CLI by absolute path and asks it to start the bridge with `lifecycle bridge start`.
+4. Bare `lifecycle` should print help by default. It should not implicitly launch a TUI or another product surface.
+5. The CLI does not own a first-party custom-agent UX, provider-auth UX, transcript UX, or agent-worker orchestration surface.
+6. Runtime operations are bridge-first.
+7. Local file and repo setup operations stay local to the CLI process.
+8. Cloud commands extend the same noun model instead of introducing a second grammar.
 
-## Canonical Noun Model
+## What The CLI Is
 
-1. `project` — the durable checked-in contract on disk; owns `lifecycle.json`
-2. `repo` — repository-scoped setup and repository linkage
-3. `workspace` — a concrete working instance of a project
-4. `terminal` — one interactive terminal inside a workspace runtime
-5. `stack` — the live runnable graph inside a workspace
-6. `service` — one named node inside the stack
-7. `context` — one-shot aggregate machine-readable view
+The CLI has three jobs.
 
-Rules:
+### 1. Bootstrap
 
-1. Namespaces stay singular: `project`, `repo`, `workspace`, `terminal`, `stack`, `service`.
-2. Plurality lives in verbs or arguments: `service list`, `terminal list`, `service start api web`.
-3. Use `environment` for the declarative graph in `lifecycle.json`; use `stack` for the live operational surface.
-4. Use `workspace` for materialization and durable identity; do not overload it with stack or service verbs.
-5. Use `repo` for repository-scoped setup and VCS/provider linkage, not for runtime reads that belong to the workspace or terminal.
-6. `workspace shell` is a convenience attach path into the workspace's default terminal, not a separate product model.
+Machine-local startup and discovery for the bridge runtime.
 
-## Bridge-First Rule
+Examples:
 
-The CLI is a bridge client for runtime operations.
+1. `bridge start`
+2. `bridge status`
+3. `bridge stop`
+4. `context`
 
-Rules:
+### 2. Operate
 
-1. `workspace`, `terminal`, `stack`, `service`, and `context` commands ask the bridge for authoritative runtime state.
-2. The CLI does not reimplement host-runtime authority in leaf commands when the bridge is available.
-3. The bridge returns authoritative responses and streams lifecycle events for long-running changes.
-4. Project-local manifest commands may run directly in the CLI process when no workspace runtime owner is required.
-5. Cloud commands may talk to the control plane, but they still preserve the same noun model.
+Human and automation-facing commands for repos, workspaces, terminals, stacks, and services.
 
-## Resolution Rules
+Examples:
 
-Commands resolve workspace context in this order:
+1. `project init`
+2. `repo install`
+3. `workspace create`
+4. `workspace shell`
+5. `stack status`
+6. `service logs`
 
-1. explicit flags such as `--workspace`
-2. injected Lifecycle environment variables
-3. cwd-based workspace detection
+### 3. Package
 
-Required runtime environment for tools running inside a workspace:
-
-1. `LIFECYCLE_WORKSPACE_ID`
-2. `LIFECYCLE_PROJECT_ID`
-3. `LIFECYCLE_TERMINAL_ID` for tools and hooks running inside a Lifecycle-managed terminal
-4. `LIFECYCLE_WORKSPACE_PATH`
-5. `LIFECYCLE_WORKSPACE_HOST`
+Produce one helper payload that the desktop app can embed and run without a repo checkout.
 
 Rules:
 
-1. Common flows should not require raw ids when the caller is already inside a workspace.
-2. IDs are escape hatches, not the default path.
-3. Runtime activity signals emitted from inside a terminal should resolve workspace and terminal scope from injected env by default.
-4. When no workspace can be resolved, the CLI fails with a typed error instead of guessing.
+1. The release artifact may bundle a JS payload, Bun runtime, and required native addons.
+2. That bundling detail is invisible to users; the contract remains `lifecycle`.
 
-## Command Families
+## What The CLI Is Not
 
-### Global
+The CLI should not be:
 
-1. `lifecycle`
-   - launches the TUI when no subcommand is provided
-2. `lifecycle bridge start`
-   - starts the bridge for the current host context
-3. `lifecycle context [--json]`
-   - returns a one-shot aggregate view of project, workspace, terminal, stack, service, and git facts
+1. a desktop RPC shim
+2. a TUI launcher by default
+3. a home for first-party custom-agent commands
+4. a pile of dev-only subcommands mixed into the public product grammar
+5. a second runtime authority that bypasses the bridge
+
+## Execution Modes
+
+Every command should fit exactly one of these modes.
+
+### Local Mode
+
+Pure filesystem or repo setup work. No bridge required.
+
+Examples:
+
+1. `project init`
+2. `project inspect`
+3. `repo install`
+
+### Runtime Mode
+
+Bridge-backed runtime reads and mutations.
+
+Examples:
+
+1. `workspace *`
+2. `terminal *`
+3. `stack *`
+4. `service *`
+5. `context`
+
+Rules:
+
+1. Runtime mode always goes through the bridge client.
+2. Commands may `ensureBridge()` first, but they do not reimplement host-runtime logic.
+
+### Cloud Mode
+
+Control-plane-backed commands that preserve the same noun model.
+
+Examples:
+
+1. `auth *`
+2. `org *`
+3. `pr *`
+
+## Canonical Nouns
+
+The CLI should only center a small stable noun set.
+
+1. `project` — checked-in contract on disk
+2. `repo` — repository-scoped install and linkage
+3. `workspace` — concrete runtime instance
+4. `terminal` — interactive terminal inside a workspace
+5. `stack` — live runnable graph inside a workspace
+6. `service` — one node inside the stack
+7. `context` — one-shot aggregate read
+8. `bridge` — bootstrap and health of the local runtime authority
+
+Rules:
+
+1. Namespaces stay singular.
+2. Runtime activity belongs under `workspace`, `terminal`, `stack`, or `service`, not under ad hoc nouns.
+3. `bridge` is an infrastructure noun, not a second product.
+
+## Public Command Surface
+
+If we were choosing today, the public surface would be this.
+
+### Bootstrap
+
+1. `lifecycle bridge start`
+2. `lifecycle bridge status`
+3. `lifecycle bridge stop`
+4. `lifecycle context [--json]`
 
 ### Project
 
 1. `lifecycle project init`
-   - scaffold or repair `lifecycle.json`
 2. `lifecycle project inspect [--json]`
-   - read manifest and project-level metadata
 
 ### Repo
 
 1. `lifecycle repo install [--check] [--json]`
-   - install merge-only Lifecycle repo integrations for the current repository
-   - current shipped scope: project-scoped MCP config plus project-scoped hook integration for supported harnesses
-   - interactive mode prompts for the providers to configure, then installs the managed surfaces for each selected provider
-2. `lifecycle repo link --project-id <id>`
-   - link the repository to provider-backed collaboration authority when needed
-3. `lifecycle repo status [--json]`
-   - read repository linkage and install status
-
-Rules:
-
-1. `repo install` is the user-facing repo setup path for harness integrations.
-2. `repo install` should be idempotent and safe to rerun.
-3. Repo install writes repo-scoped integration files without deleting unrelated harness config; runtime activity signaling stays under `workspace activity`.
-4. Repo install merges managed hook entries into project config and may add repo-local helper scripts under `.lifecycle/` when a harness needs a stable project-relative adapter.
-5. Repo install should ask which providers to configure in interactive mode rather than exposing raw file targets.
-
-### Proxy
-
-1. `lifecycle proxy install [--dry-run] [--json]`
-   - install machine-scoped clean HTTP routing for `*.lifecycle.localhost`
-   - redirects local port 80 preview traffic into the Lifecycle preview proxy port
-2. `lifecycle proxy status [--json]`
-   - read machine-scoped preview proxy install status
-3. `lifecycle proxy uninstall [--dry-run] [--json]`
-   - remove machine-scoped clean HTTP preview routing
-
-Rules:
-
-1. `proxy install` is machine-scoped runtime setup, not repository setup.
-2. `proxy install` and `proxy uninstall` may require root privileges because they modify local redirect rules.
-3. `proxy status` reports whether clean HTTP is installed; preview routing should still work with an explicit proxy port when clean HTTP is absent.
-4. `repo install` remains the repo-scoped harness integration path; do not overload it with machine-level preview setup.
+2. `lifecycle repo status [--json]`
+3. `lifecycle repo link [--json]`
 
 ### Workspace
 
-1. `lifecycle workspace create [--project <id>] [--ref <branch>] [--host <local|docker|remote|cloud>]`
+1. `lifecycle workspace create`
 2. `lifecycle workspace list [--json]`
 3. `lifecycle workspace status [--json]`
-4. `lifecycle workspace prepare`
-5. `lifecycle workspace shell [--workspace <id>]`
-6. `lifecycle workspace destroy`
-7. `lifecycle workspace activity emit <event> [--workspace <id>] [--terminal <id>] [--turn-id <id>] [--name <name>] [--kind <kind>] [--metadata <json>] [--json]`
-8. `lifecycle workspace activity status [--json]`
-
-Rules:
-
-1. `workspace activity emit` is the runtime signaling path used by hook scripts and managed terminal wrappers.
-2. `workspace activity emit` resolves `workspace_id` and `terminal_id` from injected env by default and only needs explicit overrides for tests or debugging.
-3. `provider` may be attached as metadata, but it is not required for routing or reducer authority.
-4. Event names stay semantic and dot-scoped, for example `turn.started`, `turn.completed`, `tool.started`, `tool.completed`, `waiting.started`, and `waiting.completed`.
-5. `workspace activity status` is the read path for the bridge-derived terminal and workspace activity view.
+4. `lifecycle workspace shell [--json]`
+5. `lifecycle workspace destroy [--json]`
+6. `lifecycle workspace reset [--json]`
+7. `lifecycle workspace logs [--json]`
+8. `lifecycle workspace health [--json]`
+9. `lifecycle workspace activity emit ...`
+10. `lifecycle workspace activity status [--json]`
 
 ### Terminal
 
 1. `lifecycle terminal list [--json]`
-2. `lifecycle terminal open [--kind <shell|claude|codex|custom>] [--title <title>]`
-3. `lifecycle terminal attach [<terminal>]`
-4. `lifecycle terminal close <terminal>`
-
-Rules:
-
-1. `workspace shell` attaches the default workspace terminal.
-2. `terminal attach` targets a specific terminal record.
-3. Terminal transport details stay behind the bridge/runtime contract.
+2. `lifecycle terminal open [--json]`
+3. `lifecycle terminal attach [--json]`
+4. `lifecycle terminal close [--json]`
 
 ### Stack
 
-1. `lifecycle stack run`
-2. `lifecycle stack stop`
-3. `lifecycle stack reset`
-4. `lifecycle stack status [--json]`
-5. `lifecycle stack logs [--tail <n>] [--since <duration>] [--grep <pattern>] [--follow] [--json]`
-6. `lifecycle stack health [--json]`
+1. `lifecycle stack start [--json]`
+2. `lifecycle stack stop [--json]`
+3. `lifecycle stack status [--json]`
+4. `lifecycle stack logs [--json]`
+5. `lifecycle stack health [--json]`
 
 ### Service
 
 1. `lifecycle service list [--json]`
-2. `lifecycle service info <service> [--json]`
-3. `lifecycle service start [service...]`
-4. `lifecycle service stop [service...]`
-5. `lifecycle service logs <service> [--tail <n>] [--since <duration>] [--grep <pattern>] [--follow] [--json]`
-6. `lifecycle service health [service...] [--json]`
+2. `lifecycle service info [--json]`
+3. `lifecycle service start [--json]`
+4. `lifecycle service stop [--json]`
+5. `lifecycle service logs [--json]`
+6. `lifecycle service health [--json]`
 
-### Cloud Extensions
+### Cloud
 
-Cloud-specific families are defined in [Cloud](./cloud.md):
+1. `lifecycle auth *`
+2. `lifecycle org *`
+3. `lifecycle pr *`
 
-1. `auth`
-2. `org`
-3. `pr`
+## Commands We Would Not Keep
 
-Cloud-linked repo operations are defined in [Cloud](./cloud.md), but `repo` is still a general CLI namespace because repo-local install/setup is not cloud-only.
+These are the commands or patterns we should treat as migration targets, not durable architecture.
 
-Those families must reuse the same noun model rather than introducing a second CLI grammar.
+1. bare `lifecycle` launching the TUI
+2. `context` routed through desktop RPC
+3. duplicate workspace deletion verbs like `archive`, `destroy`, and `remove`
+4. `workspace run` when stack lifecycle already exists as its own noun
+5. `project create` when `project init` is the clearer contract
+6. public dev-only commands like `db server`, `logs bridge`, and `tmux clean`
+7. any command family under `agent`
 
-## Output Contract
+## Internal Code Architecture
+
+From scratch, the CLI code should be split by responsibility, not by history.
+
+Recommended shape:
+
+```text
+apps/cli/
+  src/
+    index.ts                 # entrypoint; help-first default
+    cli/
+      registry.ts            # command registry only
+      runner.ts              # parse, dispatch, help, errors
+      output.ts              # human/json/stream rendering helpers
+      errors.ts              # typed CLI-facing errors
+    clients/
+      bridge/
+        ensure.ts            # registration, startup, health
+        client.ts            # typed HTTP client construction
+        resolve.ts           # workspace/terminal scope resolution
+      control-plane/
+        client.ts
+    commands/
+      bridge/*
+      context.ts
+      project/*
+      repo/*
+      workspace/*
+      terminal/*
+      stack/*
+      service/*
+      auth/*
+      org/*
+      pr/*
+    local/
+      manifest/*
+      repo-install/*
+      hooks/*
+    support/
+      env.ts
+      paths.ts
+      json.ts
+      process.ts
+  bridge/
+    src/
+      domains/
+        auth/*
+        workspace/*
+        terminal/*
+        stack/*
+      lib/*
+    routes/*
+```
 
 Rules:
 
-1. Every read command supports `--json`.
-2. Default output is compact, quiet, and human-readable.
-3. `--json` shapes are public contracts and should evolve additively only.
-4. Log commands may use NDJSON when streaming is needed.
-5. `context --json` is the preferred one-shot orientation read for tools and harnesses.
-6. `workspace activity emit` should be quiet by default and return an accepted envelope when `--json` is requested.
+1. `src/commands/*` should stay thin.
+2. Commands parse input, resolve scope, call one authority client, and render output.
+3. Bridge bootstrap/discovery should live in one bridge client layer, not in random commands.
+4. Desktop-specific transports should not live in the core CLI architecture.
+5. Internal bridge re-export shims should disappear once imports point directly at the correct internal boundary.
 
-## Error Contract
+## Resolution Architecture
 
-All command failures should resolve to typed errors with:
+One shared resolver should own runtime scope resolution.
+
+Resolution order:
+
+1. explicit flags
+2. injected Lifecycle env vars
+3. cwd-based repo/workspace detection
+
+Rules:
+
+1. Every command should use the same resolution helpers.
+2. Commands should not each invent their own workspace lookup logic.
+3. Failure to resolve scope should produce one typed error shape.
+
+## Output Architecture
+
+Every command should support one of two stable output modes.
+
+1. human
+2. `--json`
+
+Rules:
+
+1. Human output is compact and quiet.
+2. JSON output is the automation contract.
+3. Streamed logs may use line-oriented JSON or NDJSON when necessary.
+4. Commands should not mix prose and machine output on stdout.
+
+## Error Architecture
+
+Every failure should collapse into a typed user-facing error with:
 
 1. `code`
 2. `message`
@@ -227,46 +326,46 @@ Rules:
 
 1. No silent fallbacks.
 2. No hidden host switching.
-3. No app-specific recovery instructions in core CLI flows.
+3. No desktop-app-specific recovery text in core CLI flows.
 
-## Explicit Non-Goals
+## Packaging Architecture
 
-This plan does not define:
+The CLI packaging boundary should be explicit.
 
-1. desktop window, tab, or browser control
-2. browser screenshots or visual capture commands
-3. client-specific RPC transports
-4. provider-specific harness launchers
-5. a second local API that competes with the CLI
+Rules:
+
+1. The release build emits one runnable `lifecycle` helper payload.
+2. The desktop app embeds that payload wholesale under `Contents/Helpers`.
+3. Any native addons required by bridge-backed commands must be staged inside the helper payload.
+4. Packaged CLI execution must not depend on repo-relative source layout.
+
+## Current Mismatches
+
+These are the concrete mismatches between the current repo and the architecture above.
+
+1. `apps/cli/src/index.ts` still launches the TUI on bare invocation.
+2. `apps/cli/src/commands/context.ts` still uses `src/desktop/rpc.ts` instead of the bridge client.
+3. The public command set still includes duplicate or historical verbs.
+4. Public and dev-only commands are still mixed together under one visible registry.
+5. Bridge import boundaries still rely on source re-export shims under `src/bridge/*`.
+
+## Next Implementation Slices
+
+If we wanted to converge the current codebase onto this architecture, I would do it in this order:
+
+1. Make bare `lifecycle` print help instead of launching the TUI.
+2. Move `context` off desktop RPC and onto the bridge.
+3. Hide or delete dev-only public commands that are not part of the product grammar.
+4. Collapse duplicate command families to one canonical noun and one canonical verb.
+5. Move shared resolution, bridge bootstrap, and output code under dedicated internal folders.
+6. Keep the bridge-owned runtime under `apps/cli/src/bridge` and keep trimming stale custom-agent-era codepaths.
 
 ## Exit Gate
 
-This plan is successful when all of the following are true:
+This plan is successful when:
 
-1. `project`, `repo`, `workspace`, `terminal`, `stack`, `service`, and `context` form one coherent CLI grammar.
-2. Common workspace commands resolve context automatically from cwd or injected env.
-3. Runtime operations are bridge-first across local and cloud.
-4. `workspace shell` and `terminal attach` compose cleanly instead of representing different models.
-5. Repo-scoped harness setup has one primary entry point in `repo install`.
-6. `--json` reads are stable enough for tools and harnesses to consume directly.
-
-## Test Scenarios
-
-```text
-cd into worktree -> lifecycle workspace status -> resolves workspace without --workspace
-cd into worktree -> lifecycle stack status --json -> returns structured stack state
-cd into worktree -> lifecycle terminal list --json -> returns terminal records for the workspace
-lifecycle project init -> creates or repairs lifecycle.json
-lifecycle repo install -> installs repo-scoped MCP and hook integration for supported harnesses
-lifecycle proxy install -> installs clean HTTP lifecycle.localhost routing for this machine
-lifecycle workspace prepare -> runs prepare for the current workspace
-lifecycle workspace shell -> attaches the default workspace terminal
-lifecycle terminal open --kind shell -> creates another terminal in the same workspace
-lifecycle terminal attach <terminal> -> attaches the requested terminal without leaking transport details
-lifecycle workspace activity emit turn.started -> resolves workspace and terminal from env and records terminal activity without requiring provider flags
-lifecycle workspace activity status --json -> returns terminal-scoped activity plus the derived workspace aggregate
-lifecycle stack logs --tail 20 -> returns readable aggregate logs
-lifecycle service info api --json -> returns structured service facts
-lifecycle context --json -> returns one-shot orientation payload
-not inside a workspace -> lifecycle stack status -> typed workspace resolution error
-```
+1. `lifecycle` has one coherent public grammar
+2. runtime operations are bridge-first
+3. the desktop app depends on the CLI helper, not on a separate bridge helper or desktop RPC surface
+4. the public CLI contract contains no first-party custom-agent namespace
+5. the code layout mirrors the shipped boundary instead of the repo’s historical package churn

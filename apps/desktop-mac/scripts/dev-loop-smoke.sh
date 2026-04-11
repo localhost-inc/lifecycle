@@ -5,9 +5,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 DEV_SCRIPT="$REPO_ROOT/scripts/dev"
-DEV_STATE_ROOT="${LIFECYCLE_DEV_STATE_ROOT:-$REPO_ROOT/.lifecycle-runtime-dev/dev}"
+DEV_RUNTIME_ROOT="${LIFECYCLE_RUNTIME_ROOT:-$("$REPO_ROOT/scripts/dev-runtime-root")}"
+DEV_STATE_ROOT="${LIFECYCLE_DEV_STATE_ROOT:-$DEV_RUNTIME_ROOT/dev}"
 DEV_PID_DIR="$DEV_STATE_ROOT/pids"
-LOG_FILE="$(mktemp -t lifecycle-macos-dev-loop.XXXXXX.log)"
+LOG_FILE="$(mktemp -t lifecycle-desktop-dev-loop.XXXXXX.log)"
 
 SUPERVISOR_PID=""
 
@@ -79,7 +80,7 @@ wait_for_command() {
 }
 
 current_bridge_pid() {
-  local registration_path="$REPO_ROOT/.lifecycle-runtime-dev/bridge.json"
+  local registration_path="$DEV_RUNTIME_ROOT/bridge.json"
   [[ -f "$registration_path" ]] || return 1
   sed -nE 's/.*"pid"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' "$registration_path" | head -n 1
 }
@@ -139,6 +140,6 @@ DESKTOP_PID_BEFORE="$(current_desktop_pid)"
 [[ -n "$DESKTOP_PID_BEFORE" ]] || fail "could not resolve desktop pid before hot reload"
 step "triggering desktop hot reload"
 touch "$REPO_ROOT/apps/desktop-mac/Package.swift"
-wait_for_command "desktop hot reload relaunch" 60 bash -lc 'NEW_PID="$(pgrep -n -f '"'"'dist/Lifecycle.app/Contents/MacOS/lifecycle-macos'"'"' || true)"; [[ -n "$NEW_PID" && "$NEW_PID" != "'"$DESKTOP_PID_BEFORE"'" ]]'
+wait_for_command "desktop hot reload relaunch" 60 bash -lc 'NEW_PID="$(pgrep -n -f '"'"'dist/Lifecycle.app/Contents/MacOS/Lifecycle'"'"' || true)"; [[ -n "$NEW_PID" && "$NEW_PID" != "'"$DESKTOP_PID_BEFORE"'" ]]'
 
 echo "desktop dev loop smoke passed"

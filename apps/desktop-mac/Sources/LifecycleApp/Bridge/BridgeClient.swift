@@ -39,53 +39,15 @@ struct BridgeClient {
   func providerAuthStatus(
     for provider: BridgeAgentProvider
   ) async throws -> BridgeProviderAuthStatus {
-    let output = try await perform(method: "GET", path: "auth/providers/\(provider.rawValue)") {
-      try await client.getAuthProvidersByProvider(
-        path: .init(provider: openAPIProvider(for: provider))
-      )
-    }
-
-    switch output {
-    case let .ok(ok):
-      let envelope = try decodePayload(try ok.body.json, as: BridgeProviderAuthEnvelope.self)
-      return envelope.status
-    case let .undocumented(statusCode, payload):
-      throw try await bridgeResponseError(
-        statusCode: statusCode,
-        payload: payload,
-        method: "GET",
-        path: "auth/providers/\(provider.rawValue)"
-      )
-    }
+    let _ = provider
+    return .error("Custom agent integrations are disabled in this build.")
   }
 
   func loginProvider(
     _ provider: BridgeAgentProvider
   ) async throws -> BridgeProviderAuthStatus {
-    let requestBody = try decodeJSONObject(
-      [:],
-      as: Operations.PostAuthProvidersByProviderLogin.Input.Body.JsonPayload.self
-    )
-    let path = "auth/providers/\(provider.rawValue)/login"
-    let output = try await perform(method: "POST", path: path) {
-      try await longRunningClient.postAuthProvidersByProviderLogin(
-        path: .init(provider: openAPIProvider(for: provider)),
-        body: .json(requestBody)
-      )
-    }
-
-    switch output {
-    case let .ok(ok):
-      let envelope = try decodePayload(try ok.body.json, as: BridgeProviderAuthEnvelope.self)
-      return envelope.status
-    case let .undocumented(statusCode, payload):
-      throw try await bridgeResponseError(
-        statusCode: statusCode,
-        payload: payload,
-        method: "POST",
-        path: path
-      )
-    }
+    let _ = provider
+    throw unsupportedCustomAgentError()
   }
 
   func organizations() async throws -> [BridgeOrganization] {
@@ -385,71 +347,22 @@ struct BridgeClient {
   }
 
   func agents(for workspaceID: String) async throws -> [BridgeAgentRecord] {
-    let path = "workspaces/\(workspaceID)/agents"
-    let output = try await perform(method: "GET", path: path) {
-      try await client.getWorkspacesByIdAgents(path: .init(id: workspaceID))
-    }
-
-    switch output {
-    case let .ok(ok):
-      let response = try decodePayload(try ok.body.json, as: BridgeAgentsResponse.self)
-      return response.agents
-    case let .undocumented(statusCode, payload):
-      throw try await bridgeResponseError(
-        statusCode: statusCode,
-        payload: payload,
-        method: "GET",
-        path: path
-      )
-    }
+    let _ = workspaceID
+    return []
   }
 
   func agentSnapshot(_ agentID: String) async throws -> BridgeAgentSnapshotEnvelope {
-    let path = "agents/\(agentID)"
-    let output = try await perform(method: "GET", path: path) {
-      try await client.getAgentsByAgentId(path: .init(agentId: agentID))
-    }
-
-    switch output {
-    case let .ok(ok):
-      return try decodePayload(try ok.body.json, as: BridgeAgentSnapshotEnvelope.self)
-    case let .undocumented(statusCode, payload):
-      throw try await bridgeResponseError(
-        statusCode: statusCode,
-        payload: payload,
-        method: "GET",
-        path: path
-      )
-    }
+    let _ = agentID
+    throw unsupportedCustomAgentError()
   }
 
   func startAgent(
     for workspaceID: String,
     provider: BridgeAgentProvider
   ) async throws -> BridgeAgentRecord {
-    let requestBody = try decodeJSONObject(
-      [
-        "provider": provider.rawValue,
-        "workspaceId": workspaceID,
-      ],
-      as: Operations.PostAgents.Input.Body.JsonPayload.self
-    )
-    let output = try await perform(method: "POST", path: "agents") {
-      try await client.postAgents(body: .json(requestBody))
-    }
-
-    switch output {
-    case let .created(created):
-      let response = try decodePayload(try created.body.json, as: BridgeAgentCreateResponse.self)
-      return response.agent
-    case let .undocumented(statusCode, payload):
-      throw try await bridgeResponseError(
-        statusCode: statusCode,
-        payload: payload,
-        method: "POST",
-        path: "agents"
-      )
-    }
+    let _ = workspaceID
+    let _ = provider
+    throw unsupportedCustomAgentError()
   }
 
   func sendAgentTurn(
@@ -457,68 +370,16 @@ struct BridgeClient {
     turnID: String,
     text: String
   ) async throws {
-    let path = "agents/\(agentID)/turns"
-    let requestBody = try decodeJSONObject(
-      [
-        "turnId": turnID,
-        "input": [
-          [
-            "type": "text",
-            "text": text,
-          ],
-        ],
-      ],
-      as: Operations.PostAgentsByAgentIdTurns.Input.Body.JsonPayload.self
-    )
-    let output = try await perform(method: "POST", path: path) {
-      try await client.postAgentsByAgentIdTurns(
-        path: .init(agentId: agentID),
-        body: .json(requestBody)
-      )
-    }
-
-    switch output {
-    case .accepted:
-      return
-    case let .undocumented(statusCode, payload):
-      throw try await bridgeResponseError(
-        statusCode: statusCode,
-        payload: payload,
-        method: "POST",
-        path: path
-      )
-    }
+    let _ = agentID
+    let _ = turnID
+    let _ = text
+    throw unsupportedCustomAgentError()
   }
 
   func cancelAgentTurn(agentID: String, turnID: String? = nil) async throws {
-    var requestObject: [String: Any] = [:]
-    if let turnID {
-      requestObject["turnId"] = turnID
-    }
-
-    let path = "agents/\(agentID)/cancel"
-    let requestBody = try decodeJSONObject(
-      requestObject,
-      as: Operations.PostAgentsByAgentIdCancel.Input.Body.JsonPayload.self
-    )
-    let output = try await perform(method: "POST", path: path) {
-      try await client.postAgentsByAgentIdCancel(
-        path: .init(agentId: agentID),
-        body: .json(requestBody)
-      )
-    }
-
-    switch output {
-    case .accepted:
-      return
-    case let .undocumented(statusCode, payload):
-      throw try await bridgeResponseError(
-        statusCode: statusCode,
-        payload: payload,
-        method: "POST",
-        path: path
-      )
-    }
+    let _ = agentID
+    let _ = turnID
+    throw unsupportedCustomAgentError()
   }
 
   func resolveAgentApproval(
@@ -526,32 +387,10 @@ struct BridgeClient {
     approvalID: String,
     decision: BridgeAgentApprovalDecision
   ) async throws {
-    let path = "agents/\(agentID)/approval"
-    let requestBody = try decodeJSONObject(
-      [
-        "approvalId": approvalID,
-        "decision": decision.rawValue,
-      ],
-      as: Operations.PostAgentsByAgentIdApproval.Input.Body.JsonPayload.self
-    )
-    let output = try await perform(method: "POST", path: path) {
-      try await client.postAgentsByAgentIdApproval(
-        path: .init(agentId: agentID),
-        body: .json(requestBody)
-      )
-    }
-
-    switch output {
-    case .accepted:
-      return
-    case let .undocumented(statusCode, payload):
-      throw try await bridgeResponseError(
-        statusCode: statusCode,
-        payload: payload,
-        method: "POST",
-        path: path
-      )
-    }
+    let _ = agentID
+    let _ = approvalID
+    let _ = decision
+    throw unsupportedCustomAgentError()
   }
 
   func terminal(for workspaceID: String, terminalID: String) async throws -> BridgeWorkspaceTerminalEnvelope {
@@ -806,15 +645,14 @@ struct BridgeClient {
     return try await Data(collecting: body, upTo: .max)
   }
 
-  private func openAPIProvider(
-    for provider: BridgeAgentProvider
-  ) -> Components.Schemas.BridgeAgentProvider {
-    switch provider {
-    case .claude:
-      .claude
-    case .codex:
-      .codex
-    }
+  private func unsupportedCustomAgentError() -> NSError {
+    NSError(
+      domain: "LifecycleApp.Bridge",
+      code: 501,
+      userInfo: [
+        NSLocalizedDescriptionKey: "Custom agent actions are disabled in this build."
+      ]
+    )
   }
 }
 

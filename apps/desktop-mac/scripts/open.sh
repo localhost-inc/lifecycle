@@ -5,10 +5,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 APP_BUNDLE="$("$SCRIPT_DIR/build.sh")"
-EXECUTABLE_NAME="lifecycle-macos"
+EXECUTABLE_NAME="Lifecycle"
 EXECUTABLE_PATH="$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
 DEV_ENV_SCRIPT="$SCRIPT_DIR/xcode-env.sh"
-DEV_STATE_ROOT="${LIFECYCLE_DEV_STATE_ROOT:-$REPO_ROOT/.lifecycle-runtime-dev/dev}"
+DEV_RUNTIME_ROOT="${LIFECYCLE_RUNTIME_ROOT:-$("$REPO_ROOT/scripts/dev-runtime-root")}"
+DEV_STATE_ROOT="${LIFECYCLE_DEV_STATE_ROOT:-$DEV_RUNTIME_ROOT/dev}"
 DEV_LOG_DIR="$DEV_STATE_ROOT/logs"
 DEV_PID_DIR="$DEV_STATE_ROOT/pids"
 APP_LOG_PATH="$DEV_LOG_DIR/desktop-mac-app.log"
@@ -139,7 +140,7 @@ stop_existing_app
 APP_PID="$(launch_app_directly)"
 
 if ! wait_for_pid_start "$APP_PID"; then
-  echo "Failed to launch lifecycle-macos. See $APP_LOG_PATH" >&2
+  echo "Failed to launch Lifecycle. See $APP_LOG_PATH" >&2
   exit 1
 fi
 

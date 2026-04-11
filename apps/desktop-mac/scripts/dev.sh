@@ -8,8 +8,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 OPEN_SCRIPT="$SCRIPT_DIR/open.sh"
 ENV_SCRIPT="$SCRIPT_DIR/xcode-env.sh"
 WATCH_DIR="$APP_DIR"
-WATCH_NAME="lifecycle-macos-dev"
-DEV_STATE_ROOT="${LIFECYCLE_DEV_STATE_ROOT:-$REPO_ROOT/.lifecycle-runtime-dev/dev}"
+WATCH_NAME="lifecycle-desktop-dev"
+DEV_RUNTIME_ROOT="${LIFECYCLE_RUNTIME_ROOT:-$("$REPO_ROOT/scripts/dev-runtime-root")}"
+DEV_STATE_ROOT="${LIFECYCLE_DEV_STATE_ROOT:-$DEV_RUNTIME_ROOT/dev}"
 DEV_LOG_DIR="$DEV_STATE_ROOT/logs"
 DEV_PID_DIR="$DEV_STATE_ROOT/pids"
 ROOT_SUPERVISOR_PID_FILE="$DEV_PID_DIR/root-supervisor.pid"
@@ -300,8 +301,8 @@ run_monorepo() {
   echo "Dev runtime: $DEV_STATE_ROOT"
   echo "Logs: $DEV_LOG_DIR"
 
-  start_service "bridge" "@lifecycle/bridge:dev:" \
-    "cd \"$REPO_ROOT/packages/bridge\" && exec env LIFECYCLE_DEV_SUPERVISOR=monorepo ./scripts/dev.sh"
+  start_service "bridge" "lifecycle bridge:" \
+    "cd \"$REPO_ROOT/apps/cli\" && exec env LIFECYCLE_DEV_SUPERVISOR=monorepo ./scripts/bridge-dev.sh"
   launch_service_wrapper 0
 
   start_service "control-plane" "@lifecycle/control-plane:dev:" \

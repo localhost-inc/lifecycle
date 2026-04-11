@@ -9,7 +9,7 @@ let package = Package(
   ],
   products: [
     .executable(
-      name: "lifecycle-macos",
+      name: "Lifecycle",
       targets: ["LifecycleApp"]
     ),
   ],

@@ -1,4 +1,4 @@
-import { ensureBridge, readBridgeRegistration } from "@lifecycle/bridge";
+import { ensureBridge, readBridgeRegistration } from "../../cli/src/bridge";
 import { watch } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
@@ -7,7 +7,7 @@ import path from "node:path";
 
 const projectRoot = path.resolve(import.meta.dir, "..", "..", "..");
 const tuiRoot = path.resolve(import.meta.dir, "..");
-const cliEntrypoint = path.join(projectRoot, "packages", "cli", "src", "index.ts");
+const cliEntrypoint = path.join(projectRoot, "apps", "cli", "src", "index.ts");
 const binaryPath = path.join(projectRoot, "target", "debug", "lifecycle-tui");
 const pidFilePath = path.join(os.tmpdir(), "lifecycle-tui-dev.pid");
 const watchTargets = [
@@ -19,7 +19,7 @@ const bridgeWatchTargets = [
   path.join(projectRoot, "packages", "bridge", "src"),
   path.join(projectRoot, "packages", "bridge", "routes"),
   path.join(projectRoot, "packages", "bridge", "routed.gen.ts"),
-  path.join(projectRoot, "packages", "cli", "src", "commands", "bridge"),
+  path.join(projectRoot, "apps", "cli", "src", "commands", "bridge"),
   path.join(projectRoot, "packages", "workspace", "src"),
   path.join(projectRoot, "packages", "stack", "src"),
   path.join(projectRoot, "packages", "db", "src"),

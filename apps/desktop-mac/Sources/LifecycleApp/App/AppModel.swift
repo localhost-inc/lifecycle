@@ -188,6 +188,7 @@ private struct UnresolvedCanvasSurfaceView: View {
 
 @MainActor
 final class AppModel: ObservableObject {
+  let customAgentActionsEnabled = false
   @Published var bridgeURL: URL?
   @Published var bridgeClient: BridgeClient?
   @Published var authState: BridgeAuthState?
@@ -242,7 +243,6 @@ final class AppModel: ObservableObject {
   }
 
   private func registerSurfaces() {
-    SurfaceRegistry.shared.register(AgentSurfaceDefinition())
     SurfaceRegistry.shared.register(TerminalSurfaceDefinition())
   }
 
@@ -372,16 +372,25 @@ final class AppModel: ObservableObject {
   }
 
   func providerAuthStatus(for provider: BridgeAgentProvider) -> BridgeProviderAuthStatus {
-    providerAuthStatusByProvider[provider] ?? .notChecked
+    guard customAgentActionsEnabled else {
+      return .error("Custom agent actions are disabled in this build.")
+    }
+    return providerAuthStatusByProvider[provider] ?? .notChecked
   }
 
   func refreshProviderAuthStatus(for provider: BridgeAgentProvider, force: Bool = false) {
+    guard customAgentActionsEnabled else {
+      return
+    }
     Task {
       await loadProviderAuthStatus(for: provider, force: force)
     }
   }
 
   func loginProviderAuth(_ provider: BridgeAgentProvider) {
+    guard customAgentActionsEnabled else {
+      return
+    }
     Task {
       await loginProviderAuth(for: provider)
     }
@@ -392,6 +401,15 @@ final class AppModel: ObservableObject {
     workspaceID: String? = nil,
     groupID: String? = nil
   ) {
+    guard customAgentActionsEnabled else {
+      reportError(
+        disabledCustomAgentActionError(),
+        category: .agent,
+        message: "Custom agent actions are disabled"
+      )
+      return
+    }
+
     guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID else {
       return
     }
@@ -406,6 +424,15 @@ final class AppModel: ObservableObject {
     workspaceID: String? = nil,
     groupID: String? = nil
   ) {
+    guard customAgentActionsEnabled else {
+      reportError(
+        disabledCustomAgentActionError(),
+        category: .agent,
+        message: "Custom agent actions are disabled"
+      )
+      return
+    }
+
     guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID else {
       return
     }
@@ -418,6 +445,10 @@ final class AppModel: ObservableObject {
     workspaceID: String,
     text: String
   ) async throws {
+    guard customAgentActionsEnabled else {
+      throw disabledCustomAgentActionError()
+    }
+
     let turnID = "turn-\(UUID().uuidString.lowercased())"
     try await AppSignpost.withInterval(.agent, "Send Agent Prompt") {
       try await withBridgeRequest { client in
@@ -436,6 +467,10 @@ final class AppModel: ObservableObject {
   }
 
   func cancelAgentTurn(agentID: String) async throws {
+    guard customAgentActionsEnabled else {
+      throw disabledCustomAgentActionError()
+    }
+
     try await AppSignpost.withInterval(.agent, "Cancel Agent Turn") {
       try await withBridgeRequest { client in
         try await client.cancelAgentTurn(agentID: agentID)
@@ -449,6 +484,10 @@ final class AppModel: ObservableObject {
     approvalID: String,
     decision: BridgeAgentApprovalDecision
   ) async throws {
+    guard customAgentActionsEnabled else {
+      throw disabledCustomAgentActionError()
+    }
+
     try await AppSignpost.withInterval(.agent, "Resolve Agent Approval") {
       try await withBridgeRequest { client in
         try await client.resolveAgentApproval(
@@ -994,6 +1033,10 @@ final class AppModel: ObservableObject {
   }
 
   private func loadProviderAuthStatuses(force: Bool) async {
+    guard customAgentActionsEnabled else {
+      return
+    }
+
     for provider in BridgeAgentProvider.allCases {
       await loadProviderAuthStatus(for: provider, force: force)
     }
@@ -1322,6 +1365,10 @@ final class AppModel: ObservableObject {
   }
 
   private func enterVisibleAgentIfPresent(for workspaceID: String) {
+    guard customAgentActionsEnabled else {
+      return
+    }
+
     guard let document = canvasDocumentsByWorkspaceID[workspaceID],
           let activeGroupID = document.activeGroupID,
           let activeGroup = document.groupsByID[activeGroupID],
@@ -1384,9 +1431,11 @@ final class AppModel: ObservableObject {
   private func handleSocketEvent(_ event: BridgeSocket.Event) {
     switch event {
     case .connected:
-      bridgeSocket.subscribe(topics: ["agent"])
+      break
     case .agent(let event):
-      applyAgentEvent(event)
+      if customAgentActionsEnabled {
+        applyAgentEvent(event)
+      }
     case .serviceStarted(let workspaceID, _),
       .serviceFailed(let workspaceID, _, _),
       .serviceStopped(let workspaceID, _):
@@ -1438,6 +1487,12 @@ final class AppModel: ObservableObject {
   }
 
   private func loadAgents(for workspaceID: String, force: Bool) async {
+    guard customAgentActionsEnabled else {
+      agentsByWorkspaceID[workspaceID] = []
+      syncCanvasDocument(for: workspaceID)
+      return
+    }
+
     if agentsByWorkspaceID[workspaceID] != nil && !force {
       return
     }
@@ -1583,6 +1638,10 @@ final class AppModel: ObservableObject {
     agentID: String,
     workspaceID: String
   ) async {
+    guard customAgentActionsEnabled else {
+      return
+    }
+
     let handle = ensureAgentHandle(agentID: agentID, workspaceID: workspaceID)
     await handle.load {
       try await AppSignpost.withInterval(.agent, "Load Agent Snapshot") {
@@ -1616,6 +1675,16 @@ final class AppModel: ObservableObject {
     provider: BridgeAgentProvider,
     groupID: String?
   ) async {
+    guard customAgentActionsEnabled else {
+      reportError(
+        disabledCustomAgentActionError(),
+        category: .agent,
+        message: "Custom agent actions are disabled",
+        workspaceID: workspaceID
+      )
+      return
+    }
+
     do {
       let agent = try await AppSignpost.withInterval(.agent, "Create Agent") {
         try await withBridgeRequest { client in
@@ -1651,6 +1720,10 @@ final class AppModel: ObservableObject {
     groupID: String?,
     preferredSurfaceID: String? = nil
   ) {
+    guard customAgentActionsEnabled else {
+      return
+    }
+
     AppLog.info(
       .agent,
       "Entering agent",
@@ -2028,7 +2101,10 @@ final class AppModel: ObservableObject {
   }
 
   private func syncCanvasDocument(for workspaceID: String) {
-    let baseDocument = canvasDocumentsByWorkspaceID[workspaceID] ?? defaultCanvasDocument(for: workspaceID)
+    let baseDocument = sanitizedCanvasDocument(
+      canvasDocumentsByWorkspaceID[workspaceID] ?? defaultCanvasDocument(for: workspaceID),
+      workspaceID: workspaceID
+    )
     let envelope = terminalEnvelopeByWorkspaceID[workspaceID]
     let terminalSurfaceRecords: [CanvasSurfaceRecord] =
       if let envelope, envelope.runtime.launchError == nil {
@@ -2040,7 +2116,7 @@ final class AppModel: ObservableObject {
       baseDocument,
       workspaceID: workspaceID,
       terminalSurfaceRecords: terminalSurfaceRecords,
-      liveAgentIDs: agentsByWorkspaceID[workspaceID].map { Set($0.map(\.id)) },
+      liveAgentIDs: Set(agentsByWorkspaceID[workspaceID]?.map(\.id) ?? []),
       surfaceOrderPreference: surfaceOrderPreference(for: workspaceID)
     )
 
@@ -2057,9 +2133,12 @@ final class AppModel: ObservableObject {
     for workspaceID: String,
     _ transform: (WorkspaceCanvasDocument) -> WorkspaceCanvasDocument
   ) {
-    let document = canvasDocumentsByWorkspaceID[workspaceID] ?? defaultCanvasDocument(for: workspaceID)
+    let document = sanitizedCanvasDocument(
+      canvasDocumentsByWorkspaceID[workspaceID] ?? defaultCanvasDocument(for: workspaceID),
+      workspaceID: workspaceID
+    )
     canvasDocumentsByWorkspaceID[workspaceID] = normalizeCanvasDocument(
-      transform(document),
+      sanitizedCanvasDocument(transform(document), workspaceID: workspaceID),
       workspaceID: workspaceID,
       surfaceOrderPreference: surfaceOrderPreference(for: workspaceID)
     )
@@ -2070,7 +2149,12 @@ final class AppModel: ObservableObject {
     if !didRestorePersistedCanvasDocuments {
       do {
         let persistedDocuments = try WorkspaceCanvasDocumentStore.read()
-        canvasDocumentsByWorkspaceID = persistedDocuments.filter { validWorkspaceIDs.contains($0.key) }
+        canvasDocumentsByWorkspaceID = persistedDocuments.reduce(into: [:]) { partialResult, entry in
+          guard validWorkspaceIDs.contains(entry.key) else {
+            return
+          }
+          partialResult[entry.key] = sanitizedCanvasDocument(entry.value, workspaceID: entry.key)
+        }
         openedWorkspaceIDs.formUnion(canvasDocumentsByWorkspaceID.keys)
         didRestorePersistedCanvasDocuments = true
 
@@ -2084,7 +2168,14 @@ final class AppModel: ObservableObject {
       return
     }
 
-    let filteredDocuments = canvasDocumentsByWorkspaceID.filter { validWorkspaceIDs.contains($0.key) }
+    let filteredDocuments: [String: WorkspaceCanvasDocument] = canvasDocumentsByWorkspaceID.reduce(
+      into: [:]
+    ) { partialResult, entry in
+      guard validWorkspaceIDs.contains(entry.key) else {
+        return
+      }
+      partialResult[entry.key] = sanitizedCanvasDocument(entry.value, workspaceID: entry.key)
+    }
     guard filteredDocuments.count != canvasDocumentsByWorkspaceID.count else {
       return
     }
@@ -2100,6 +2191,29 @@ final class AppModel: ObservableObject {
     } catch {
       AppLog.error(.workspace, "Failed to persist canvas documents", error: error)
     }
+  }
+
+  private func sanitizedCanvasDocument(
+    _ document: WorkspaceCanvasDocument,
+    workspaceID: String
+  ) -> WorkspaceCanvasDocument {
+    guard !customAgentActionsEnabled else {
+      return document
+    }
+
+    let surfacesByID = document.surfacesByID.filter { $0.value.surfaceKind != .agent }
+    return normalizeCanvasDocument(
+      WorkspaceCanvasDocument(
+        activeGroupID: document.activeGroupID,
+        groupsByID: document.groupsByID,
+        surfacesByID: surfacesByID,
+        activeLayoutMode: document.activeLayoutMode,
+        tiledLayout: document.tiledLayout,
+        spatialLayout: document.spatialLayout
+      ),
+      workspaceID: workspaceID,
+      surfaceOrderPreference: surfaceOrderPreference(for: workspaceID)
+    )
   }
 
   private func resolveCanvasSurfaces(
@@ -2565,6 +2679,16 @@ final class AppModel: ObservableObject {
     }
 
     errorMessage = error.localizedDescription
+  }
+
+  private func disabledCustomAgentActionError() -> NSError {
+    NSError(
+      domain: "LifecycleApp.Agent",
+      code: 501,
+      userInfo: [
+        NSLocalizedDescriptionKey: "Custom agent actions are disabled in this build."
+      ]
+    )
   }
 
   private func groupIDContainingSurface(

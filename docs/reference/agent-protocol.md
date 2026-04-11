@@ -1,5 +1,7 @@
 # Agent Protocol
 
+> Historical reference: Lifecycle no longer ships a first-party custom-agent runtime in the active CLI + desktop product path.
+
 Canonical contract for Lifecycle's normalized agent event layer.
 
 ## Scope
@@ -134,7 +136,7 @@ Rules:
 
 ## Consumer API
 
-`@lifecycle/agents` exports `reduceAgentProtocolEvent`, `AgentProtocolStore`, and `createAgentProtocolStore`.
+Lifecycle does not currently ship a dedicated shared reducer package for this protocol.
 
 Use that reducer/store when a consumer needs:
 
@@ -149,8 +151,8 @@ The transcript projection remains a separate derived view. Do not force transcri
 
 Lifecycle exposes two builder-friendly entry points:
 
-1. Stream/bridge consumers can reduce incoming agent events with `createAgentProtocolStore()` instead of hand-rolling per-provider reducers.
-2. Hosts can answer generic provider callbacks through `agent.resolve_request` on the session stream or `POST /agent/sessions/:sessionId/request` on the bridge.
+1. Stream consumers that still work with this protocol should keep their reducer/store local to that surface instead of depending on a dedicated shared package.
+2. Hosts that still expose these callbacks should keep the transport explicit and surface-specific.
 
 Rules:
 

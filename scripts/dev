@@ -6,7 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DESKTOP_DEV_SCRIPT="$REPO_ROOT/apps/desktop-mac/scripts/dev.sh"
 DESKTOP_SMOKE_SCRIPT="$REPO_ROOT/apps/desktop-mac/scripts/dev-loop-smoke.sh"
-DEV_STATE_ROOT="${LIFECYCLE_DEV_STATE_ROOT:-$REPO_ROOT/.lifecycle-runtime-dev/dev}"
+DEV_RUNTIME_ROOT="${LIFECYCLE_RUNTIME_ROOT:-$("$REPO_ROOT/scripts/dev-runtime-root")}"
+DEV_STATE_ROOT="${LIFECYCLE_DEV_STATE_ROOT:-$DEV_RUNTIME_ROOT/dev}"
 DEV_LOG_DIR="$DEV_STATE_ROOT/logs"
 DEV_PID_DIR="$DEV_STATE_ROOT/pids"
 ROOT_SUPERVISOR_PID_FILE="$DEV_PID_DIR/root-supervisor.pid"
@@ -95,7 +96,7 @@ stop_dev() {
   stop_service bridge
   stop_service control-plane
 
-  watchman trigger-del "$REPO_ROOT/apps/desktop-mac" "lifecycle-macos-dev" >/dev/null 2>&1 || true
+  watchman trigger-del "$REPO_ROOT/apps/desktop-mac" "lifecycle-desktop-dev" >/dev/null 2>&1 || true
   watchman watch-del "$REPO_ROOT/apps/desktop-mac" >/dev/null 2>&1 || true
   pkill -TERM -f "$REPO_ROOT/apps/desktop-mac/scripts/dev.sh --monorepo" >/dev/null 2>&1 || true
   pkill -TERM -f "$REPO_ROOT/apps/desktop-mac/scripts/dev.sh --services-only" >/dev/null 2>&1 || true

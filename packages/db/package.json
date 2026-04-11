@@ -20,6 +20,10 @@
       "types": "./src/local.ts",
       "default": "./src/local.ts"
     },
+    "./paths": {
+      "types": "./src/paths.ts",
+      "default": "./src/paths.ts"
+    },
     "./turso": {
       "types": "./src/turso.ts",
       "default": "./src/turso.ts"

@@ -18,28 +18,45 @@ enum BridgeConfiguration {
     environment.string(for: LifecycleEnvironmentKey.bridgeStartCommand)
   }
 
+  private static func bundledCliPath() -> String {
+    Bundle.main.bundleURL
+      .appendingPathComponent("Contents/Helpers/lifecycle")
+      .path
+  }
+
+  private static func resolvedCliPath(environment: LifecycleEnvironment) -> String {
+    environment.string(for: LifecycleEnvironmentKey.cliPath) ?? bundledCliPath()
+  }
+
   static func defaultStartProcess(environment: LifecycleEnvironment) -> Process {
     let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     process.standardOutput = FileHandle(forWritingAtPath: "/dev/null")
     process.standardError = FileHandle(forWritingAtPath: "/dev/null")
+    process.environment = environment.values
 
     if let repoRoot = environment.string(for: LifecycleEnvironmentKey.repoRoot),
        environment.string(for: LifecycleEnvironmentKey.dev) == "1"
     {
+      process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
       var arguments = [
         "bun",
         "--cwd",
-        "\(repoRoot)/packages/bridge",
+        "\(repoRoot)/apps/cli",
         "run",
-        "src/app.ts",
+        "src/bridge/app.ts",
       ]
       if let port = requestedPort(environment: environment) {
         arguments.append(contentsOf: ["--port", port])
       }
       process.arguments = arguments
     } else {
-      process.arguments = ["lifecycle", "bridge", "start"]
+      let cliPath = resolvedCliPath(environment: environment)
+      process.executableURL = URL(fileURLWithPath: cliPath)
+      process.arguments = ["bridge", "start"]
+      process.environment?[LifecycleEnvironmentKey.cliPath] = cliPath
+      if let port = requestedPort(environment: environment) {
+        process.arguments?.append(contentsOf: ["--port", port])
+      }
     }
 
     return process

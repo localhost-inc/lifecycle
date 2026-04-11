@@ -8,10 +8,11 @@ BUILD_DIR="$APP_DIR/.build/arm64-apple-macosx/debug"
 DIST_DIR="$APP_DIR/dist"
 APP_NAME="Lifecycle"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
-EXECUTABLE_NAME="lifecycle-macos"
+EXECUTABLE_NAME="Lifecycle"
 RESOURCE_BUNDLE_NAME="LifecycleMac_LifecycleApp.bundle"
 APP_ICON_PATH="$APP_DIR/Resources/AppIcon.icns"
-BRIDGE_OPENAPI_PATH="$ROOT_DIR/packages/bridge/openapi.json"
+CLI_HELPER_DIR="$ROOT_DIR/apps/cli/dist/release"
+BRIDGE_OPENAPI_PATH="$ROOT_DIR/apps/cli/src/bridge/openapi.json"
 APP_OPENAPI_PATH="$APP_DIR/Sources/LifecycleApp/openapi.json"
 
 assert_bridge_openapi_symlink() {
@@ -40,8 +41,9 @@ assert_bridge_openapi_symlink() {
 
 "$APP_DIR/scripts/prepare-ghosttykit.sh" >/dev/null
 (
-  cd "$ROOT_DIR/packages/bridge"
-  bun run generate:openapi >/dev/null
+  cd "$ROOT_DIR/apps/cli"
+  bunx routedjs generate >/dev/null
+  bun ./scripts/build-release.ts >/dev/null
 )
 assert_bridge_openapi_symlink
 
@@ -49,11 +51,12 @@ cd "$APP_DIR"
 swift build >/dev/null
 
 rm -rf "$APP_BUNDLE"
-mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
+mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources" "$APP_BUNDLE/Contents/Helpers"
 
 cp "$BUILD_DIR/$EXECUTABLE_NAME" "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
 cp -R "$BUILD_DIR/$RESOURCE_BUNDLE_NAME" "$APP_BUNDLE/Contents/Resources/$RESOURCE_BUNDLE_NAME"
 cp "$APP_ICON_PATH" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+cp -R "$CLI_HELPER_DIR/." "$APP_BUNDLE/Contents/Helpers/"
 
 cat >"$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -63,7 +66,7 @@ cat >"$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleExecutable</key>
-  <string>lifecycle-macos</string>
+  <string>Lifecycle</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleIdentifier</key>

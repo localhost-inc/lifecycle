@@ -12,7 +12,6 @@ struct DebugExtensionView: View {
         resolutionSection
         issuesSection
         terminalsSection
-        agentsSection
         canvasSection
       }
       .padding(12)
@@ -147,51 +146,6 @@ struct DebugExtensionView: View {
 
             if terminal.busy {
               LCBadge(label: "busy", color: theme.successColor)
-            }
-          }
-          .padding(.vertical, 3)
-        }
-      }
-    }
-  }
-
-  // MARK: - Agent Sessions
-
-  @ViewBuilder
-  private var agentsSection: some View {
-    let agents = context.model.agentsByWorkspaceID[context.workspace.id] ?? []
-
-    if !agents.isEmpty {
-      debugSection("Agents (\(agents.count))") {
-        ForEach(agents) { agent in
-          VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-              Circle()
-                .fill(agentColor(agent.status))
-                .frame(width: 6, height: 6)
-
-              Text(agent.title)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(theme.primaryTextColor)
-                .lineLimit(1)
-
-              Spacer(minLength: 0)
-
-              LCBadge(label: agent.status, color: agentColor(agent.status))
-            }
-
-            HStack(spacing: 6) {
-              Text(agent.provider)
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(theme.mutedColor)
-
-              if let lastMessage = agent.lastMessageAt {
-                Text(relativeTimestamp(lastMessage))
-                  .font(.system(size: 10, weight: .medium, design: .monospaced))
-                  .foregroundStyle(theme.mutedColor.opacity(0.6))
-              }
-
-              Spacer(minLength: 0)
             }
           }
           .padding(.vertical, 3)

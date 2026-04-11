@@ -111,7 +111,7 @@ Bridge behavior:
 5. After startup, the app keeps monitoring bridge discovery and automatically reconnects when the bridge registration URL or PID changes, which lets it survive TUI-driven bridge restarts.
 6. In repo development mode, `LIFECYCLE_BRIDGE_URL=http://127.0.0.1:52222` means the app treats the bridge as externally owned and waits/reconnects instead of trying to supervise it itself.
 7. The bridge publishes `GET /openapi.json`, and the Swift package builds its generated client from `Sources/LifecycleApp/openapi.json`.
-8. `Sources/LifecycleApp/openapi.json` is a symlink to the canonical bridge artifact at `packages/bridge/openapi.json`, so the bridge route and the Swift generator read the same document.
+8. `Sources/LifecycleApp/openapi.json` is a symlink to the canonical bridge artifact at `apps/cli/src/bridge/openapi.json`, so the bridge route and the Swift generator read the same document.
 
 Debugging:
 
@@ -121,8 +121,8 @@ Debugging:
 4. Paste the output of `bun run desktop:mac:xcode-env` into the scheme's Run environment variables so Xcode uses the same bridge/runtime contract as `bun run dev:desktop`.
 5. Treat Xcode as the canonical path for breakpoints, sanitizers, Instruments, and crash debugging.
 6. Use `bun run desktop:mac:smoke` or `./scripts/dev desktop-smoke` to verify the desktop dev loop contract end to end: startup, bridge restart, control-plane restart, and desktop hot reload.
-7. The monorepo dev supervisor writes stable state and logs under `.lifecycle-runtime-dev/dev`, so `./scripts/dev status` and `./scripts/dev logs <service>` always point at the live runtime.
-8. When bridge route contracts change, regenerate `packages/bridge/openapi.json` with `bun --cwd packages/bridge run generate:openapi` before building directly in Xcode outside the repo scripts.
+7. The monorepo dev supervisor writes stable state and logs under the per-repo runtime root returned by `scripts/dev-runtime-root` (with supervisor state in `<runtime-root>/dev`), so `./scripts/dev status` and `./scripts/dev logs <service>` always point at the live runtime.
+8. When bridge route contracts change, regenerate `apps/cli/src/bridge/routed.gen.ts` from `apps/cli` with `bunx routedjs generate` and keep `apps/cli/src/bridge/openapi.json` in sync before building directly in Xcode outside the repo scripts.
 9. Do not create a second copy of `openapi.json` under the app target. The app target should keep pointing at the bridge artifact via symlink so SwiftPM sees exactly one source of truth.
 
 Diagnostics:

@@ -5,6 +5,7 @@ enum LifecycleEnvironmentKey {
   static let bridgeRegistration = "LIFECYCLE_BRIDGE_REGISTRATION"
   static let bridgeStartCommand = "LIFECYCLE_BRIDGE_START_COMMAND"
   static let bridgeURL = "LIFECYCLE_BRIDGE_URL"
+  static let cliPath = "LIFECYCLE_CLI_PATH"
   static let dev = "LIFECYCLE_DEV"
   static let home = "HOME"
   static let lifecycleRoot = "LIFECYCLE_ROOT"
