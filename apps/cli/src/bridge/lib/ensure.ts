@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { hc } from "hono/client";
 import type { AppType } from "../routed.gen";
+import { resolveBridgePort } from "../domains/stack";
 import { resolveCurrentCliInvocation } from "../../runtime/self";
-import { readBridgeRegistration } from "./registration";
 
 const STARTUP_ATTEMPTS = 120;
 const STARTUP_WAIT_MS = 100;
@@ -156,21 +156,18 @@ export async function ensureBridge(): Promise<{ port: number; client: BridgeClie
     };
   }
 
-  const existing = await readBridgeRegistration();
-  if (existing && (await isHealthy(existing.port))) {
-    return { port: existing.port, client: createBridgeClient(`http://127.0.0.1:${existing.port}`) };
+  const port = resolveBridgePort();
+  const bridgeUrl = `http://127.0.0.1:${port}`;
+  if (await isHealthy(port)) {
+    return { port, client: createBridgeClient(bridgeUrl) };
   }
 
   spawnBridge();
 
   for (let attempt = 0; attempt < STARTUP_ATTEMPTS; attempt++) {
     await sleep(STARTUP_WAIT_MS);
-    const registration = await readBridgeRegistration();
-    if (registration && (await isHealthy(registration.port))) {
-      return {
-        port: registration.port,
-        client: createBridgeClient(`http://127.0.0.1:${registration.port}`),
-      };
+    if (await isHealthy(port)) {
+      return { port, client: createBridgeClient(bridgeUrl) };
     }
   }
 

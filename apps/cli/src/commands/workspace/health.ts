@@ -32,6 +32,11 @@ export default defineCommand({
 
       const allHealthy = checks.every((check) => check.healthy);
 
+      if (checks.length === 0) {
+        context.stdout("No managed services configured for this workspace.");
+        return 0;
+      }
+
       for (const check of checks) {
         printHealthCheck(check, context.stdout);
       }

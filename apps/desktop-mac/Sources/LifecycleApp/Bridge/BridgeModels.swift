@@ -33,6 +33,18 @@ struct BridgeWorkspaceStackMutationResponse: Decodable {
   let stoppedServices: [String]?
 }
 
+struct BridgeWorkspaceLogsResponse: Decodable, Equatable {
+  let cursor: String
+  let lines: [BridgeWorkspaceLogLine]
+}
+
+struct BridgeWorkspaceLogLine: Decodable, Equatable {
+  let service: String
+  let stream: String
+  let text: String
+  let timestamp: String
+}
+
 struct BridgeWorkspaceStackSummary: Decodable, Equatable {
   let workspaceID: String
   let state: String
@@ -52,7 +64,6 @@ struct BridgeStackNode: Decodable, Equatable, Identifiable {
   let name: String
   let kind: String
   let dependsOn: [String]
-  let runtime: String?
   let status: String?
   let statusReason: String?
   let assignedPort: Int?
@@ -67,12 +78,15 @@ struct BridgeStackNode: Decodable, Equatable, Identifiable {
     "\(workspaceID):\(name)"
   }
 
+  var isManagedNode: Bool {
+    kind == "process" || kind == "image"
+  }
+
   enum CodingKeys: String, CodingKey {
     case workspaceID = "workspace_id"
     case name
     case kind
     case dependsOn = "depends_on"
-    case runtime
     case status
     case statusReason = "status_reason"
     case assignedPort = "assigned_port"
@@ -620,6 +634,45 @@ struct BridgeTerminalRuntime: Decodable, Hashable {
     case supportsClose = "supports_close"
     case supportsConnect = "supports_connect"
     case supportsRename = "supports_rename"
+  }
+}
+
+enum BridgeTerminalKind: String, CaseIterable, Identifiable {
+  case shell
+  case claude
+  case codex
+  case custom
+
+  var id: String { rawValue }
+
+  static var creatableCases: [BridgeTerminalKind] {
+    [.shell, .claude, .codex]
+  }
+
+  var displayTitle: String {
+    switch self {
+    case .shell:
+      return "Shell"
+    case .claude:
+      return "Claude"
+    case .codex:
+      return "Codex"
+    case .custom:
+      return "Custom"
+    }
+  }
+
+  var systemImage: String {
+    switch self {
+    case .shell:
+      return "terminal"
+    case .claude:
+      return "sparkles"
+    case .codex:
+      return "chevron.left.forwardslash.chevron.right"
+    case .custom:
+      return "slider.horizontal.3"
+    }
   }
 }
 

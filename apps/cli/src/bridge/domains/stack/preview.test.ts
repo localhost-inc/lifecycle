@@ -11,7 +11,7 @@ import { createTursoDb } from "@lifecycle/db/turso";
 import { upsertStackRuntimeService } from "../stack";
 
 import { workspaceHostLabel } from "../workspace";
-import { startPreviewProxyServer } from "./preview";
+import { createPreviewRequestRouter, type PreviewSocketData } from "./preview";
 
 const tempDirs: string[] = [];
 
@@ -22,7 +22,6 @@ afterEach(async () => {
       await rm(dir, { force: true, recursive: true });
     }
   }
-  delete process.env.LIFECYCLE_PREVIEW_PROXY_PORT;
 });
 
 async function reservePort(): Promise<number> {
@@ -54,8 +53,6 @@ describe("preview proxy", () => {
     tempDirs.push(dir);
 
     const previewPort = await reservePort();
-    process.env.LIFECYCLE_PREVIEW_PROXY_PORT = String(previewPort);
-
     const upstream = createHttpServer((request, response) => {
       const url = new URL(request.url ?? "/", "http://127.0.0.1");
       response.writeHead(200, { "content-type": "application/json" });
@@ -114,18 +111,46 @@ describe("preview proxy", () => {
     await upsertStackRuntimeService(workspace.id, {
       assigned_port: upstreamAddress.port,
       created_at: now,
+      kind: "process",
       name: "web",
       pid: process.pid,
-      runtime: "process",
       status: "ready",
       status_reason: null,
       updated_at: now,
     });
 
-    const preview = await startPreviewProxyServer(db);
+    const preview = createPreviewRequestRouter(db);
+    const server = Bun.serve<PreviewSocketData>({
+      hostname: "127.0.0.1",
+      port: previewPort,
+      async fetch(request, bunServer) {
+        return (
+          (await preview.handleRequest(request, bunServer)) ??
+          new Response("unexpected non-preview request", { status: 404 })
+        );
+      },
+      websocket: {
+        close(ws) {
+          preview.close(ws);
+        },
+        message(ws, message) {
+          preview.message(
+            ws,
+            typeof message === "string"
+              ? message
+              : message instanceof Uint8Array
+                ? message
+                : new Uint8Array(message),
+          );
+        },
+        open(ws) {
+          preview.open(ws);
+        },
+      },
+    });
     try {
       const host = `web.${workspaceHostLabel(workspace)}.lifecycle.localhost:${previewPort}`;
-      const response = await fetch(`http://127.0.0.1:${preview.port}/hello?via=preview`, {
+      const response = await fetch(`http://127.0.0.1:${server.port}/hello?via=preview`, {
         headers: { host },
       });
 
@@ -137,6 +162,7 @@ describe("preview proxy", () => {
       });
     } finally {
       preview.stop();
+      server.stop(true);
       await db.close();
       await new Promise<void>((resolve, reject) => {
         upstream.close((error) => {

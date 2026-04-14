@@ -9,6 +9,7 @@ import {
   type WorkspaceScope,
 } from "../workspace/resolve";
 import { readBridgeSettings } from "../auth/settings";
+import { resolveTerminalLaunch } from "./launch-profile";
 import { buildTmuxSessionName } from "./tmux";
 
 export async function readWorkspaceShell(
@@ -116,6 +117,8 @@ export async function createWorkspaceTerminal(
   },
 ) {
   const context = await requireWorkspaceTerminalContext(db, workspaceHosts, workspaceId);
+  const { settings } = await readBridgeSettings();
+  const terminalLaunch = resolveTerminalLaunch(settings, input.kind);
   const runtime = await context.host.resolveTerminalRuntime(context.record, context.runtimeInput);
   if (runtime.launchError) {
     throw new Error(runtime.launchError);
@@ -123,7 +126,8 @@ export async function createWorkspaceTerminal(
 
   const terminal = await context.host.createTerminal(context.record, {
     ...context.runtimeInput,
-    ...(input.kind ? { kind: input.kind } : {}),
+    kind: terminalLaunch.kind,
+    launchSpec: terminalLaunch.launchSpec,
     ...(input.title !== undefined ? { title: input.title } : {}),
   });
 

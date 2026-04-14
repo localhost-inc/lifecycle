@@ -14,9 +14,7 @@ pub enum BridgeEvent {
         client_id: String,
     },
     #[serde(rename = "activity")]
-    Activity {
-        workspaces: Vec<ActivityWorkspace>,
-    },
+    Activity { workspaces: Vec<ActivityWorkspace> },
     #[serde(rename = "service.started")]
     ServiceStarted {
         workspace_id: String,
@@ -115,9 +113,7 @@ impl BridgeEventStream {
 
                             match socket.read() {
                                 Ok(tungstenite::Message::Text(text)) => {
-                                    if let Ok(event) =
-                                        serde_json::from_str::<BridgeEvent>(&text)
-                                    {
+                                    if let Ok(event) = serde_json::from_str::<BridgeEvent>(&text) {
                                         if tx.send(event).is_err() {
                                             return;
                                         }

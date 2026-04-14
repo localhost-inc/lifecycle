@@ -264,7 +264,7 @@ export function stackServices<
   status_reason: string | null;
 }> {
   return stack.nodes.flatMap((node) => {
-    if (node.kind !== "service") {
+    if (node.kind === "task") {
       return [];
     }
 

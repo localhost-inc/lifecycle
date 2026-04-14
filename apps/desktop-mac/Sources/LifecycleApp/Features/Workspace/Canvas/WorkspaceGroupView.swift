@@ -23,7 +23,7 @@ private struct GroupControlButton: View {
   var body: some View {
     Button(action: action) {
       Image(systemName: systemImage)
-        .font(.system(size: 11, weight: .semibold))
+        .font(.lc(size: 11, weight: .semibold))
         .foregroundStyle(theme.mutedColor)
         .frame(width: 28, height: 28)
         .contentShape(Rectangle())
@@ -43,7 +43,8 @@ struct WorkspaceGroupRenderedSurface: Identifiable {
 func renderedSurfaces(
   for surfaces: [CanvasSurface],
   activeSurfaceID: String?,
-  groupIsActive: Bool
+  groupIsActive: Bool,
+  presentationScale: CGFloat = 1
 ) -> [WorkspaceGroupRenderedSurface] {
   guard let selectedSurface =
     surfaces.first(where: { $0.id == activeSurfaceID }) ?? surfaces.first
@@ -56,7 +57,8 @@ func renderedSurfaces(
       id: selectedSurface.id,
       renderState: SurfaceRenderState(
         isFocused: groupIsActive,
-        isVisible: true
+        isVisible: true,
+        presentationScale: presentationScale
       ),
       surface: selectedSurface
     )
@@ -84,27 +86,21 @@ struct WorkspaceGroupView: View {
               ForEach(surfaces) { surface in
                 surfaceTab(surface)
               }
+
+              if !surfaces.isEmpty {
+                TerminalCreationMenuButton(style: .iconOnly) { kind in
+                  model.createTerminalTab(kind: kind, workspaceID: workspaceID, groupID: group.id)
+                }
+                .padding(.horizontal, 10)
+              }
             }
           }
-          .frame(height: 40)
+          .frame(height: theme.sizing.workspaceTabRailHeight)
 
           if !surfaces.isEmpty {
             Rectangle()
               .fill(theme.borderColor.opacity(0.85))
               .frame(width: 1, height: 18)
-
-            Button {
-              model.createTerminalTab(workspaceID: workspaceID, groupID: group.id)
-            } label: {
-              Image(systemName: "plus")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(theme.mutedColor)
-                .frame(width: 28, height: 28)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .lcPointerCursor()
-            .help("Create terminal")
             GroupControlButton(
               systemImage: "rectangle.split.2x1",
               helpText: "Split Right"
@@ -126,18 +122,19 @@ struct WorkspaceGroupView: View {
         .padding(.trailing, 8)
         .padding(.top, 0)
         .padding(.bottom, 0)
-        .background(theme.panelBackground)
+        .frame(height: theme.sizing.workspaceTabRailHeight)
+        .background(theme.shellBackground)
         .coordinateSpace(name: "workspaceGroupRail")
 
         if let runtimeError = model.selectedTerminalEnvelope?.runtime.launchError {
           Text(runtimeError)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .font(.lc(size: 11, weight: .medium, design: .monospaced))
             .foregroundStyle(theme.errorColor.opacity(0.92))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.bottom, 10)
             .padding(.top, 2)
-            .background(theme.panelBackground)
+            .background(theme.shellBackground)
         }
       }
       .overlay(alignment: .bottomLeading) {
@@ -243,8 +240,8 @@ struct WorkspaceGroupView: View {
     let tab = surface.tabPresentation
 
     let tabView = WorkspaceRailTabView(
-      title: tab.title,
-      subtitle: tab.subtitle,
+      label: tab.label,
+      icon: tab.icon,
       isSelected: isSelected,
       trailingContentInset: surface.isClosable ? 40 : 14
     ) {
@@ -361,7 +358,7 @@ private struct WorkspaceTabCloseButton: View {
   var body: some View {
     Button(action: action) {
       Image(systemName: "xmark")
-        .font(.system(size: 9, weight: .bold))
+        .font(.lc(size: 9, weight: .bold))
         .foregroundStyle(iconColor)
         .frame(width: 14, height: 14)
         .padding(5)

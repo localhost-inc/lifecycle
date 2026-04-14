@@ -12,11 +12,15 @@ import {
   buildStackEnv,
   expandRuntimeTemplates,
   injectAssignedPortsIntoManifest,
-  resolvePreviewProxyPort,
+  resolveBridgePort,
   resolveServiceEnv,
 } from "../../runtime";
 import { stackServiceContainerName, stackServiceProcessID } from "../../runtime-ids";
 import { ProcessSupervisor } from "../../supervisor";
+
+type StackNodes = NonNullable<LifecycleConfig["stack"]>["nodes"];
+type ManagedNodeConfig = Extract<StackNodes[string], { kind: "process" | "image" }>;
+type ImageNodeConfig = Extract<StackNodes[string], { kind: "image" }>;
 
 function lifecycleRootPath(): string {
   if (process.env.LIFECYCLE_ROOT) {
@@ -57,7 +61,7 @@ export class LocalStackClient {
       satisfiedServices: new Set(input.readyServiceNames),
     });
 
-    const serviceNames = sorted.filter((n) => n.kind === "service").map((n) => n.name);
+    const serviceNames = sorted.filter((n) => n.kind !== "task").map((n) => n.name);
 
     if (prepareSteps.length === 0 && serviceNames.length === 0) {
       return { preparedAt: null, startedServices: [] };
@@ -81,17 +85,17 @@ export class LocalStackClient {
 
     const logDir = stackLogDir(lifecycleRootPath(), input.logScope);
     const runtimeConfig = injectAssignedPortsIntoManifest(config, assignedPorts);
-    const configByName = new Map(Object.entries(runtimeConfig.stack));
+    const configByName = new Map(Object.entries(runtimeConfig.stack?.nodes ?? {}));
 
-    // The bridge owns a dedicated preview proxy listener for stable
-    // lifecycle.localhost routing.
-    const previewProxyPort = resolvePreviewProxyPort();
+    // The bridge owns the fixed local listener for both API traffic and
+    // lifecycle.localhost preview routing.
+    const bridgePort = resolveBridgePort();
 
     const runtimeEnv = buildStackEnv({
+      bridgePort,
       stackId: input.stackId,
       hostLabel: input.hostLabel,
       name: input.name,
-      previewProxyPort,
       rootPath: input.rootPath,
       services: nextServices,
       sourceRef: input.sourceRef,
@@ -109,7 +113,7 @@ export class LocalStackClient {
     const startedServiceNames: string[] = [];
     for (const node of sorted) {
       if (node.kind === "task") {
-        const taskConfig = config.stack[node.name];
+        const taskConfig = config.stack?.nodes?.[node.name];
         if (taskConfig && taskConfig.kind === "task") {
           this.runStep(input.rootPath, runtimeEnv, taskConfig);
         }
@@ -220,20 +224,20 @@ export class LocalStackClient {
   private async startService(
     stackId: string,
     serviceName: string,
-    configByName: Map<string, LifecycleConfig["stack"][string]>,
+    configByName: Map<string, StackNodes[string]>,
     assignedPorts: Record<string, number>,
     input: StartStackInput,
     runtimeEnv: Record<string, string>,
     logDir: string,
   ): Promise<number | null> {
     const serviceConfig = configByName.get(serviceName);
-    if (!serviceConfig || serviceConfig.kind !== "service") {
+    if (!serviceConfig || serviceConfig.kind === "task") {
       throw new Error(`"${serviceName}" is not a service in the manifest.`);
     }
 
     const id = stackServiceProcessID(stackId, serviceName);
 
-    if (serviceConfig.runtime === "process") {
+    if (serviceConfig.kind === "process") {
       const cwd = serviceConfig.cwd
         ? resolvePath(input.rootPath, serviceConfig.cwd)
         : input.rootPath;
@@ -251,7 +255,7 @@ export class LocalStackClient {
         await waitForHealth(check, serviceConfig.startup_timeout_seconds ?? 60, null);
       }
       return pid;
-    } else if (serviceConfig.runtime === "image") {
+    } else if (serviceConfig.kind === "image") {
       await this.startImageService(
         id,
         stackId,
@@ -276,7 +280,7 @@ export class LocalStackClient {
     id: string,
     stackId: string,
     serviceName: string,
-    serviceConfig: Extract<LifecycleConfig["stack"][string], { kind: "service"; runtime: "image" }>,
+    serviceConfig: ImageNodeConfig,
     input: StartStackInput,
     runtimeEnv: Record<string, string>,
     assignedPorts: Record<string, number>,
@@ -355,7 +359,7 @@ export class LocalStackClient {
   }
 
   private buildHealthCheck(
-    hc: NonNullable<Extract<LifecycleConfig["stack"][string], { kind: "service" }>["health_check"]>,
+    hc: NonNullable<ManagedNodeConfig["health_check"]>,
     runtimeEnv: Record<string, string>,
   ): HealthCheck {
     if (hc.kind === "tcp") {

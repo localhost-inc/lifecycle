@@ -83,15 +83,19 @@ private struct LCHoverCursorModifier: ViewModifier {
 }
 
 extension View {
+  func lcCursor(_ cursor: NSCursor) -> some View {
+    modifier(LCHoverCursorModifier(cursor: cursor))
+  }
+
   func lcPointerCursor() -> some View {
-    modifier(LCHoverCursorModifier(cursor: .pointingHand))
+    lcCursor(.pointingHand)
+  }
+
+  func lcOpenHandCursor() -> some View {
+    lcCursor(.openHand)
   }
 
   func lcResizeCursor(horizontal: Bool) -> some View {
-    modifier(
-      LCHoverCursorModifier(
-        cursor: horizontal ? .resizeLeftRight : .resizeUpDown
-      )
-    )
+    lcCursor(horizontal ? .resizeLeftRight : .resizeUpDown)
   }
 }

@@ -19,8 +19,10 @@ final class BridgeSocket {
   enum Event {
     case connected(clientId: String)
     case agent(BridgeAgentSocketEvent)
+    case serviceStarting(workspaceID: String, service: String)
     case serviceStarted(workspaceID: String, service: String)
     case serviceFailed(workspaceID: String, service: String, error: String)
+    case serviceStopping(workspaceID: String, service: String)
     case serviceStopped(workspaceID: String, service: String)
     case pong
     case unknown(type: String, raw: [String: Any])
@@ -231,6 +233,11 @@ func decodeBridgeSocketEvent(from data: Data) -> BridgeSocket.Event? {
     }
     return .unknown(type: type, raw: object)
 
+  case "service.starting":
+    let workspaceID = object["workspace_id"] as? String ?? ""
+    let service = object["service"] as? String ?? ""
+    return .serviceStarting(workspaceID: workspaceID, service: service)
+
   case "service.started":
     let workspaceID = object["workspace_id"] as? String ?? ""
     let service = object["service"] as? String ?? ""
@@ -241,6 +248,11 @@ func decodeBridgeSocketEvent(from data: Data) -> BridgeSocket.Event? {
     let service = object["service"] as? String ?? ""
     let error = object["error"] as? String ?? ""
     return .serviceFailed(workspaceID: workspaceID, service: service, error: error)
+
+  case "service.stopping":
+    let workspaceID = object["workspace_id"] as? String ?? ""
+    let service = object["service"] as? String ?? ""
+    return .serviceStopping(workspaceID: workspaceID, service: service)
 
   case "service.stopped":
     let workspaceID = object["workspace_id"] as? String ?? ""

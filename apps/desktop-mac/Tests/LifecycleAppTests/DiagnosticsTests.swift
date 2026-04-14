@@ -43,7 +43,7 @@ final class DiagnosticsTests: XCTestCase {
     let filtered = FeedbackExporter.filteredEnvironment(
       from: [
         "HOME": "/Users/test",
-        "LIFECYCLE_BRIDGE_URL": "http://127.0.0.1:52222",
+        "LIFECYCLE_BRIDGE_URL": "http://127.0.0.1:52300",
         "LIFECYCLE_GIT_SHA": "abc123",
       ]
     )
@@ -51,7 +51,7 @@ final class DiagnosticsTests: XCTestCase {
     XCTAssertEqual(
       filtered,
       [
-        "LIFECYCLE_BRIDGE_URL": "http://127.0.0.1:52222",
+        "LIFECYCLE_BRIDGE_URL": "http://127.0.0.1:52300",
         "LIFECYCLE_GIT_SHA": "abc123",
       ]
     )
@@ -78,9 +78,9 @@ final class DiagnosticsTests: XCTestCase {
         macOSVersion: "macOS 14",
         processID: 123
       ),
-      environment: ["LIFECYCLE_BRIDGE_URL": "http://127.0.0.1:52222"],
+      environment: ["LIFECYCLE_BRIDGE_URL": "http://127.0.0.1:52300"],
       bridge: FeedbackBridgeDiagnostics(
-        baseURL: "http://127.0.0.1:52222",
+        baseURL: "http://127.0.0.1:52300",
         pid: 4821,
         registrationPath: "/Users/test/.lifecycle/bridge.json",
         healthStatusCode: 200,

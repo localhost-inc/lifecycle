@@ -22,14 +22,14 @@ export {
   topologicalSort,
 } from "./graph";
 export {
-  DEFAULT_PREVIEW_PROXY_PORT,
+  DEFAULT_BRIDGE_PORT,
   buildStackEnv,
   expandRuntimeTemplates,
   injectAssignedPortsIntoManifest,
   parsePreviewHost,
   previewHostnameForService,
   previewUrlForService,
-  resolvePreviewProxyPort,
+  resolveBridgePort,
   resolveServiceEnv,
   slugify,
   uppercaseEnvKey,

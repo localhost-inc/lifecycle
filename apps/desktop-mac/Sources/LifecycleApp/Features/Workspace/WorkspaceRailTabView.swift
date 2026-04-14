@@ -3,23 +3,23 @@ import SwiftUI
 struct WorkspaceRailTabView<TrailingAccessory: View>: View {
   @Environment(\.appTheme) private var theme
 
-  let title: String
-  let subtitle: String?
+  let label: String
+  let icon: String
   let isSelected: Bool
   let trailingContentInset: CGFloat
   let action: () -> Void
   let trailingAccessory: TrailingAccessory
 
   init(
-    title: String,
-    subtitle: String?,
+    label: String,
+    icon: String,
     isSelected: Bool,
     trailingContentInset: CGFloat = 14,
     action: @escaping () -> Void,
     @ViewBuilder trailingAccessory: () -> TrailingAccessory
   ) {
-    self.title = title
-    self.subtitle = subtitle
+    self.label = label
+    self.icon = icon
     self.isSelected = isSelected
     self.trailingContentInset = trailingContentInset
     self.action = action
@@ -27,33 +27,40 @@ struct WorkspaceRailTabView<TrailingAccessory: View>: View {
   }
 
   var body: some View {
+    let tabMaximumWidth = theme.sizing.workspaceTabMaximumWidth
+    let railHeight = theme.sizing.workspaceTabRailHeight
+    let labelMaxWidth = max(
+      0,
+      tabMaximumWidth - theme.sizing.workspaceTabLeadingInset - trailingContentInset - theme.spacing.xxxl
+    )
+
     ZStack(alignment: .trailing) {
       Button(action: action) {
-        VStack(alignment: .leading, spacing: 2) {
-          Text(title)
-            .font(.system(size: 12, weight: .semibold))
+        HStack(spacing: 8) {
+          Image(systemName: icon)
+            .font(.lc(size: 11, weight: .semibold))
             .foregroundStyle(isSelected ? theme.primaryTextColor : theme.mutedColor)
 
-          if let subtitle {
-            Text(subtitle)
-              .font(.system(size: 10, weight: .medium, design: .monospaced))
-              .foregroundStyle(isSelected ? theme.mutedColor : theme.mutedColor.opacity(0.78))
-          }
+          Text(label)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .font(.lc(size: 12, weight: .semibold))
+            .foregroundStyle(isSelected ? theme.primaryTextColor : theme.mutedColor)
+            .frame(maxWidth: labelMaxWidth, alignment: .leading)
         }
-        .frame(minWidth: 112, alignment: .leading)
-        .padding(.leading, 18)
+        .padding(.leading, theme.sizing.workspaceTabLeadingInset)
         .padding(.trailing, trailingContentInset)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: railHeight, alignment: .leading)
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .lcPointerCursor()
-      .frame(maxWidth: .infinity, alignment: .leading)
+      .frame(maxWidth: tabMaximumWidth, alignment: .leading)
 
       trailingAccessory
     }
-    .frame(minWidth: 126, alignment: .leading)
+    .frame(maxWidth: tabMaximumWidth, alignment: .leading)
+    .frame(height: railHeight, alignment: .leading)
     .background(
       Rectangle()
         .fill(isSelected ? theme.surfaceBackground : Color.clear)
@@ -68,14 +75,14 @@ struct WorkspaceRailTabView<TrailingAccessory: View>: View {
 
 extension WorkspaceRailTabView where TrailingAccessory == EmptyView {
   init(
-    title: String,
-    subtitle: String?,
+    label: String,
+    icon: String,
     isSelected: Bool,
     action: @escaping () -> Void
   ) {
     self.init(
-      title: title,
-      subtitle: subtitle,
+      label: label,
+      icon: icon,
       isSelected: isSelected,
       action: action
     ) {

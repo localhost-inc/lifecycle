@@ -70,9 +70,12 @@ pub fn render(frame: &mut Frame, area: Rect, state: &GitDialogState) {
     lines.push(Line::from(""));
 
     // Message label
-    lines.push(Line::from(vec![
-        Span::styled(" Message", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-    ]));
+    lines.push(Line::from(vec![Span::styled(
+        " Message",
+        Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
+    )]));
 
     // Message input (show cursor)
     let msg_display = if state.commit_message.is_empty() {

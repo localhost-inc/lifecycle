@@ -10,7 +10,7 @@ struct ContentView: View {
   var body: some View {
     ZStack(alignment: .top) {
       NavigationStack(path: $navigationPath) {
-        WorkspaceShellView(model: model) {
+        WorkspaceShellView(model: model, settingsStore: settingsStore) {
           navigate(to: .settings)
         }
         .frame(minWidth: 1280, minHeight: 820)

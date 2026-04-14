@@ -3,7 +3,6 @@ import LifecyclePresentation
 
 struct CanvasSurface: Identifiable {
   let id: String
-  let title: String
   let surfaceKind: SurfaceKind
   let record: CanvasSurfaceRecord
   let content: AnySurfaceContent

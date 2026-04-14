@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 WATCH_DIR="$PACKAGE_DIR"
 WATCH_NAME="lifecycle-bridge-dev"
-BRIDGE_PORT="${LIFECYCLE_BRIDGE_PORT:-52222}"
+BRIDGE_PORT="${LIFECYCLE_BRIDGE_PORT:-52300}"
 
 RUNTIME_DIR="$(mktemp -d -t lifecycle-bridge-dev.XXXXXX)"
 RESTART_FILE="$RUNTIME_DIR/restart"

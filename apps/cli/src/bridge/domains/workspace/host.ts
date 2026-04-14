@@ -154,6 +154,7 @@ export interface WorkspaceTerminalRecord {
 
 export interface CreateWorkspaceTerminalInput extends ResolveWorkspaceTerminalRuntimeInput {
   kind?: WorkspaceTerminalKind;
+  launchSpec?: WorkspaceShellLaunchSpec | null;
   title?: string | null;
 }
 

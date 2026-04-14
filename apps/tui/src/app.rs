@@ -14,7 +14,10 @@ use crate::events::{ActivityWorkspace, BridgeEvent, BridgeEventStream};
 use crate::panels::environment::{load_services, EnvironmentPanel, ServiceEntry};
 use crate::panels::version_control::{load_git_state, GitState, VersionControlPanel};
 use crate::selection::{load_workspace_selection, save_workspace_selection};
-use crate::shell::{build_workspace_shell, INITIAL_WORKSPACE_ID_ENV, ShellPlan, WorkspaceBinding, WorkspaceHost, WorkspaceScope, WorkspaceShell};
+use crate::shell::{
+    build_workspace_shell, ShellPlan, WorkspaceBinding, WorkspaceHost, WorkspaceScope,
+    WorkspaceShell, INITIAL_WORKSPACE_ID_ENV,
+};
 use crate::sidebar::SidebarState;
 use crate::terminal::PtySession;
 use crate::vt::{ActiveBackend, VtGrid, VtMouseEvent};
@@ -123,7 +126,6 @@ pub enum WorkspaceActivity {
     Busy,
     Attention,
 }
-
 
 /// Composite key for a workspace: "repo_name\tws_name".
 fn ws_key(repo_name: &str, ws_name: &str) -> String {
@@ -374,7 +376,10 @@ impl App {
                     }
                     changed = true;
                 }
-                BridgeEvent::WorkspaceFailed { workspace_id, error } => {
+                BridgeEvent::WorkspaceFailed {
+                    workspace_id,
+                    error,
+                } => {
                     let detail = error
                         .map(|message| format!("workspace failed: {workspace_id} ({message})"))
                         .unwrap_or_else(|| format!("workspace failed: {workspace_id}"));
@@ -445,7 +450,9 @@ impl App {
         if self.pending_workspace_switch.as_deref() == Some(workspace_id.as_str()) {
             return;
         }
-        if self.workspace.workspace_id.as_deref() == Some(workspace_id.as_str()) && self.pty.is_some() {
+        if self.workspace.workspace_id.as_deref() == Some(workspace_id.as_str())
+            && self.pty.is_some()
+        {
             self.focus = Focus::Canvas;
             return;
         }
@@ -486,7 +493,10 @@ impl App {
         if matches!(workspace_scope.host, WorkspaceHost::Local) {
             workspace_scope.resolution_note = None;
             self.pending_workspace_switch = None;
-            self.apply_workspace_shell(repo_name, build_workspace_shell(workspace_scope, self.tmux_available));
+            self.apply_workspace_shell(
+                repo_name,
+                build_workspace_shell(workspace_scope, self.tmux_available),
+            );
         } else {
             self.pending_workspace_switch = Some(workspace_id.to_string());
             self.workspace = workspace_scope;
@@ -641,9 +651,8 @@ impl App {
             let workspace_name = self.workspace.workspace_name.clone();
             self.pty = None;
             self.cached_grid = None;
-            self.shell.launch_error = Some(format!(
-                "Shell exited for workspace \"{workspace_name}\"."
-            ));
+            self.shell.launch_error =
+                Some(format!("Shell exited for workspace \"{workspace_name}\"."));
             self.shell.spec = None;
             if let Some(key) = self.active_workspace_key.clone() {
                 self.workspace_activity.insert(key, WorkspaceActivity::Idle);
@@ -657,7 +666,10 @@ impl App {
 
     /// Advance the spinner animation. Returns true if the frame changed.
     pub fn tick_spinner(&mut self) -> bool {
-        let any_busy = self.workspace_activity.values().any(|a| *a == WorkspaceActivity::Busy);
+        let any_busy = self
+            .workspace_activity
+            .values()
+            .any(|a| *a == WorkspaceActivity::Busy);
         if !any_busy {
             return false;
         }
@@ -692,7 +704,10 @@ impl App {
 
     /// Current spinner character (if any workspace is busy).
     pub fn spinner_char(&self) -> Option<char> {
-        let any_busy = self.workspace_activity.values().any(|a| *a == WorkspaceActivity::Busy);
+        let any_busy = self
+            .workspace_activity
+            .values()
+            .any(|a| *a == WorkspaceActivity::Busy);
         if any_busy {
             Some(SPINNER_FRAMES[self.spinner_frame])
         } else {
@@ -702,7 +717,9 @@ impl App {
 
     pub fn ensure_canvas_pty(&mut self, rows: u16, cols: u16) {
         if rows == 0 || cols == 0 {
-            crate::debug::log(format!("ensure_canvas_pty ignored zero size rows={rows} cols={cols}"));
+            crate::debug::log(format!(
+                "ensure_canvas_pty ignored zero size rows={rows} cols={cols}"
+            ));
             return;
         }
 
@@ -826,7 +843,10 @@ impl App {
             if pty.is_dirty() {
                 crate::debug::log("pty_snapshot dirty");
                 let grid = pty.snapshot();
-                crate::debug::log(format!("pty_snapshot rows={} cols={}", grid.rows, grid.cols));
+                crate::debug::log(format!(
+                    "pty_snapshot rows={} cols={}",
+                    grid.rows, grid.cols
+                ));
                 self.cached_grid = Some(grid);
             }
             if let Some(ref grid) = self.cached_grid {
@@ -876,7 +896,8 @@ impl App {
         match border {
             DragBorder::Left => {
                 let new_sidebar = x.max(MIN_COLUMN_WIDTH);
-                let remaining = total_width.saturating_sub(new_sidebar + self.extensions_width + dividers);
+                let remaining =
+                    total_width.saturating_sub(new_sidebar + self.extensions_width + dividers);
                 if remaining >= MIN_CANVAS_WIDTH {
                     self.sidebar_width = new_sidebar;
                 }
@@ -1058,7 +1079,8 @@ impl App {
                         }
                     } else {
                         // Commit succeeded — refresh VC panel
-                        self.vc_panel.refresh(self.workspace.workspace_id.as_deref());
+                        self.vc_panel
+                            .refresh(self.workspace.workspace_id.as_deref());
                         // If not pushing, close the dialog
                         if let AppDialog::GitCommit(ref state) = self.dialog {
                             if !state.push_after_commit {
@@ -1119,7 +1141,7 @@ impl App {
                     .stack
                     .nodes
                     .into_iter()
-                    .filter(|node| node.kind == "service")
+                    .filter(|node| node.kind != "task")
                     .map(|service| ServiceEntry {
                         name: service.name,
                         status: service.status.unwrap_or_else(|| "stopped".to_string()),
@@ -1128,7 +1150,10 @@ impl App {
                     })
                     .collect::<Vec<_>>()
             });
-            let _ = tx.send(StackActionMessage::Finished { workspace_id, result });
+            let _ = tx.send(StackActionMessage::Finished {
+                workspace_id,
+                result,
+            });
         });
     }
 
@@ -1137,7 +1162,10 @@ impl App {
 
         while let Ok(message) = self.stack_action_rx.try_recv() {
             match message {
-                StackActionMessage::Finished { workspace_id, result } => {
+                StackActionMessage::Finished {
+                    workspace_id,
+                    result,
+                } => {
                     if self.workspace.workspace_id.as_deref() != Some(workspace_id.as_str()) {
                         continue;
                     }
@@ -1175,7 +1203,7 @@ impl App {
     pub fn render(&mut self, frame: &mut Frame) {
         let rows = Layout::vertical([
             Constraint::Length(2), // header + bottom border
-            Constraint::Min(0),   // main body
+            Constraint::Min(0),    // main body
             Constraint::Length(2), // status bar + top border
         ])
         .split(frame.area());
@@ -1189,17 +1217,16 @@ impl App {
         .split(rows[0]);
 
         crate::ui::header::render_org(frame, header_cols[0], self);
-        let (git_rect, stack_rect) =
-            crate::ui::header::render_route(frame, header_cols[2], self);
+        let (git_rect, stack_rect) = crate::ui::header::render_route(frame, header_cols[2], self);
         self.git_button_rect = git_rect;
         self.stack_button_rect = stack_rect;
 
         // Main body — 5 columns: sidebar | divider | canvas | divider | extensions
         let columns = Layout::horizontal([
             Constraint::Length(self.sidebar_width),
-            Constraint::Length(1),  // left divider
+            Constraint::Length(1), // left divider
             Constraint::Min(MIN_CANVAS_WIDTH),
-            Constraint::Length(1),  // right divider
+            Constraint::Length(1), // right divider
             Constraint::Length(self.extensions_width),
         ])
         .split(rows[1]);
@@ -1208,8 +1235,23 @@ impl App {
         self.divider_rects = [columns[1], columns[3]];
 
         let divider_xs = [columns[1].x, columns[3].x];
-        render_horizontal_rule(frame, Rect::new(rows[0].x, rows[0].bottom().saturating_sub(1), rows[0].width, 1), &divider_xs, '┬');
-        render_horizontal_rule(frame, Rect::new(rows[2].x, rows[2].y, rows[2].width, 1), &divider_xs, '┴');
+        render_horizontal_rule(
+            frame,
+            Rect::new(
+                rows[0].x,
+                rows[0].bottom().saturating_sub(1),
+                rows[0].width,
+                1,
+            ),
+            &divider_xs,
+            '┬',
+        );
+        render_horizontal_rule(
+            frame,
+            Rect::new(rows[2].x, rows[2].y, rows[2].width, 1),
+            &divider_xs,
+            '┴',
+        );
 
         // Render dividers
         render_divider(frame, columns[1], self.dragging == Some(DragBorder::Left));
@@ -1220,30 +1262,50 @@ impl App {
         let sidebar_focused = self.focus == Focus::Sidebar;
         let hover_row = self.mouse_row;
         let spinner = self.spinner_char();
-        crate::ui::sidebar::render(frame, columns[0], &mut self.sidebar_state, sidebar_focused, hover_row, spinner, &self.workspace_activity);
+        crate::ui::sidebar::render(
+            frame,
+            columns[0],
+            &mut self.sidebar_state,
+            sidebar_focused,
+            hover_row,
+            spinner,
+            &self.workspace_activity,
+        );
         crate::ui::canvas::render(frame, columns[2], self, &grid, self.canvas_notice());
 
         // Right column — split between VC and Environment panels
         let ext_focused = self.focus == Focus::Extensions;
         let right_sections = if self.vc_panel.collapsed && self.env_panel.collapsed {
-            Layout::vertical([Constraint::Length(2), Constraint::Length(2), Constraint::Min(0)])
-                .split(columns[4])
+            Layout::vertical([
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Min(0),
+            ])
+            .split(columns[4])
         } else if self.vc_panel.collapsed {
-            Layout::vertical([Constraint::Length(2), Constraint::Min(0)])
-                .split(columns[4])
+            Layout::vertical([Constraint::Length(2), Constraint::Min(0)]).split(columns[4])
         } else if self.env_panel.collapsed {
-            Layout::vertical([Constraint::Min(0), Constraint::Length(2)])
-                .split(columns[4])
+            Layout::vertical([Constraint::Min(0), Constraint::Length(2)]).split(columns[4])
         } else {
             Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(columns[4])
         };
 
         self.vc_panel_rect = right_sections[0];
-        crate::panels::version_control::render::render(frame, right_sections[0], &self.vc_panel, ext_focused);
+        crate::panels::version_control::render::render(
+            frame,
+            right_sections[0],
+            &self.vc_panel,
+            ext_focused,
+        );
         if right_sections.len() > 1 {
             self.env_panel_rect = right_sections[1];
-            crate::panels::environment::render::render(frame, right_sections[1], &self.env_panel, ext_focused);
+            crate::panels::environment::render::render(
+                frame,
+                right_sections[1],
+                &self.env_panel,
+                ext_focused,
+            );
         }
 
         // Status bar

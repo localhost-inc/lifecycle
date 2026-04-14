@@ -14,6 +14,8 @@ DEV_STATE_ROOT="${LIFECYCLE_DEV_STATE_ROOT:-$DEV_RUNTIME_ROOT/dev}"
 DEV_LOG_DIR="$DEV_STATE_ROOT/logs"
 DEV_PID_DIR="$DEV_STATE_ROOT/pids"
 ROOT_SUPERVISOR_PID_FILE="$DEV_PID_DIR/root-supervisor.pid"
+RELOAD_REQUEST_SCRIPT="$SCRIPT_DIR/request-reload.sh"
+RELOAD_SEQUENCE_FILE="$DEV_STATE_ROOT/desktop-mac-reload.seq"
 
 MODE="monorepo"
 case "${1:-}" in
@@ -103,12 +105,51 @@ kill_exact_pid() {
   fi
 }
 
+kill_process_tree() {
+  local pid="$1"
+  [[ -n "$pid" ]] || return 0
+  process_alive "$pid" || return 0
+
+  local child=""
+  while IFS= read -r child; do
+    [[ -n "$child" ]] || continue
+    kill_process_tree "$child"
+  done < <(pgrep -P "$pid" 2>/dev/null || true)
+
+  kill_exact_pid "$pid"
+}
+
+process_command() {
+  local pid="$1"
+  ps -p "$pid" -o command= 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
+is_lifecycle_bridge_command() {
+  local command="$1"
+  [[ "$command" == *"lifecycle bridge start"* ]] ||
+    [[ "$command" == *"/src/bridge/app.ts"* ]] ||
+    [[ "$command" == *"\\src\\bridge\\app.ts"* ]]
+}
+
 kill_listeners_on_port() {
   local port="$1"
   local pid=""
   while IFS= read -r pid; do
     [[ -n "$pid" ]] || continue
     kill_exact_pid "$pid"
+  done < <(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+}
+
+kill_lifecycle_bridge_listeners_on_port() {
+  local port="$1"
+  local pid=""
+  local command=""
+  while IFS= read -r pid; do
+    [[ -n "$pid" ]] || continue
+    command="$(process_command "$pid")"
+    if [[ -n "$command" ]] && is_lifecycle_bridge_command "$command"; then
+      kill_exact_pid "$pid"
+    fi
   done < <(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
 }
 
@@ -134,13 +175,18 @@ cleanup_known_dev_state() {
     clear_pid_file "$service"
   done
 
+  if pid="$(read_pid_file "$(service_pid_file "desktop-mac-build")" 2>/dev/null || true)"; then
+    kill_process_tree "$pid"
+  fi
+  clear_pid_file "desktop-mac-build"
+
   if pid="$(read_pid_file "$(service_pid_file "desktop-mac-app")" 2>/dev/null || true)"; then
     kill_exact_pid "$pid"
   fi
   clear_pid_file "desktop-mac-app"
 
   remove_watchman_state
-  kill_listeners_on_port "${LIFECYCLE_BRIDGE_PORT:-52222}"
+  kill_lifecycle_bridge_listeners_on_port "${LIFECYCLE_BRIDGE_PORT:-52300}"
   kill_listeners_on_port "${LIFECYCLE_API_PORT:-18787}"
 }
 
@@ -156,6 +202,11 @@ load_default_dev_environment() {
 run_app_only() {
   cleanup() {
     remove_watchman_state
+    local build_pid=""
+    if build_pid="$(read_pid_file "$(service_pid_file "desktop-mac-build")" 2>/dev/null || true)"; then
+      kill_process_tree "$build_pid"
+    fi
+    clear_pid_file "desktop-mac-build"
     local app_pid=""
     if app_pid="$(read_pid_file "$(service_pid_file "desktop-mac-app")" 2>/dev/null || true)"; then
       kill_exact_pid "$app_pid"
@@ -164,8 +215,30 @@ run_app_only() {
   }
   trap cleanup EXIT
 
-  echo "Building and launching…"
-  "$OPEN_SCRIPT"
+  read_reload_sequence() {
+    local current="0"
+    if [[ -f "$RELOAD_SEQUENCE_FILE" ]]; then
+      current="$(tr -dc '0-9' <"$RELOAD_SEQUENCE_FILE")"
+    fi
+    if [[ -z "$current" ]]; then
+      current="0"
+    fi
+    printf '%s\n' "$current"
+  }
+
+  start_build() {
+    "$OPEN_SCRIPT" &
+    local build_pid="$!"
+    write_pid_file "desktop-mac-build" "$build_pid"
+    printf '%s\n' "$build_pid"
+  }
+
+  local last_handled_request=0
+  local active_build_request=0
+  local build_pid=""
+  local build_status=0
+  local build_was_canceled=0
+
   echo "Watching for changes in apps/desktop-mac…"
 
   watchman watch-del "$WATCH_DIR" >/dev/null 2>&1 || true
@@ -194,7 +267,7 @@ run_app_only() {
       ["suffix", "config"]
     ]
   ],
-  "command": ["$OPEN_SCRIPT"]
+  "command": ["$RELOAD_REQUEST_SCRIPT"]
 }]
 EOF
 
@@ -203,11 +276,56 @@ EOF
     exit 1
   fi
 
+  "$RELOAD_REQUEST_SCRIPT"
+  echo "Building and launching…"
+
+  build_pid="$(start_build)"
+  active_build_request="$(read_reload_sequence)"
+
   echo "Hot reload active. Edit any Swift/ObjC file to rebuild."
   echo "Press Ctrl+C to stop."
 
   while true; do
-    sleep 86400
+    local current_request
+    current_request="$(read_reload_sequence)"
+
+    if [[ -n "$build_pid" ]] && process_alive "$build_pid"; then
+      if (( current_request > active_build_request )); then
+        echo "New desktop change detected; canceling stale build."
+        build_was_canceled=1
+        kill_process_tree "$build_pid"
+      fi
+      sleep 0.1
+      continue
+    fi
+
+    if [[ -n "$build_pid" ]]; then
+      build_status=0
+      wait "$build_pid" >/dev/null 2>&1 || build_status=$?
+      clear_pid_file "desktop-mac-build"
+
+      if (( active_build_request > last_handled_request )); then
+        last_handled_request="$active_build_request"
+      fi
+
+      if (( build_status != 0 && build_was_canceled == 0 )); then
+        echo "Desktop build exited with code $build_status."
+      fi
+
+      build_pid=""
+      active_build_request=0
+      build_was_canceled=0
+    fi
+
+    if (( current_request > last_handled_request )); then
+      build_pid="$(start_build)"
+      active_build_request="$current_request"
+      build_was_canceled=0
+      echo "Starting desktop rebuild for request $active_build_request."
+      continue
+    fi
+
+    sleep 0.1
   done
 }
 

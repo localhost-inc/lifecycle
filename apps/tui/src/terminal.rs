@@ -266,35 +266,50 @@ mod tests {
     fn detects_command_started() {
         // OSC 133;B terminated with BEL
         let bytes = b"\x1b]133;B\x07";
-        assert_eq!(scan_shell_activity(bytes), Some(ShellActivity::CommandStarted));
+        assert_eq!(
+            scan_shell_activity(bytes),
+            Some(ShellActivity::CommandStarted)
+        );
     }
 
     #[test]
     fn detects_command_finished() {
         // OSC 133;D terminated with BEL
         let bytes = b"\x1b]133;D\x07";
-        assert_eq!(scan_shell_activity(bytes), Some(ShellActivity::CommandFinished));
+        assert_eq!(
+            scan_shell_activity(bytes),
+            Some(ShellActivity::CommandFinished)
+        );
     }
 
     #[test]
     fn detects_command_finished_with_exit_code() {
         // OSC 133;D;0 — includes exit code
         let bytes = b"\x1b]133;D;0\x07";
-        assert_eq!(scan_shell_activity(bytes), Some(ShellActivity::CommandFinished));
+        assert_eq!(
+            scan_shell_activity(bytes),
+            Some(ShellActivity::CommandFinished)
+        );
     }
 
     #[test]
     fn detects_st_terminator() {
         // OSC 133;B terminated with ESC backslash (ST)
         let bytes = b"\x1b]133;B\x1b\\";
-        assert_eq!(scan_shell_activity(bytes), Some(ShellActivity::CommandStarted));
+        assert_eq!(
+            scan_shell_activity(bytes),
+            Some(ShellActivity::CommandStarted)
+        );
     }
 
     #[test]
     fn last_event_wins_in_chunk() {
         // A prompt sequence: D then A then B — last is B (command started)
         let bytes = b"\x1b]133;D\x07\x1b]133;A\x07\x1b]133;B\x07";
-        assert_eq!(scan_shell_activity(bytes), Some(ShellActivity::CommandStarted));
+        assert_eq!(
+            scan_shell_activity(bytes),
+            Some(ShellActivity::CommandStarted)
+        );
     }
 
     #[test]
@@ -302,7 +317,10 @@ mod tests {
         // Typical PROMPT_COMMAND output: D then A — last is A (prompt), but we
         // only track B and D, so the last recognized event is D.
         let bytes = b"\x1b]133;D\x07\x1b]133;A\x07";
-        assert_eq!(scan_shell_activity(bytes), Some(ShellActivity::CommandFinished));
+        assert_eq!(
+            scan_shell_activity(bytes),
+            Some(ShellActivity::CommandFinished)
+        );
     }
 
     #[test]
@@ -320,6 +338,9 @@ mod tests {
     #[test]
     fn mixed_with_regular_output() {
         let bytes = b"building...\x1b]133;B\x07cargo build\r\n";
-        assert_eq!(scan_shell_activity(bytes), Some(ShellActivity::CommandStarted));
+        assert_eq!(
+            scan_shell_activity(bytes),
+            Some(ShellActivity::CommandStarted)
+        );
     }
 }

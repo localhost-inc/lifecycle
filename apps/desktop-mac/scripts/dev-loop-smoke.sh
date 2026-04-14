@@ -98,7 +98,7 @@ current_desktop_pid() {
 }
 
 bridge_healthy() {
-  curl -sf http://127.0.0.1:52222/health >/dev/null
+  curl -sf http://127.0.0.1:52300/health >/dev/null
 }
 
 control_plane_responding() {

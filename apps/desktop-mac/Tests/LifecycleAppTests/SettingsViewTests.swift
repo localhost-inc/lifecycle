@@ -3,6 +3,20 @@ import XCTest
 @testable import LifecycleApp
 
 final class SettingsViewTests: XCTestCase {
+  func testVisibleSettingsSectionsHidesDeveloperOutsideDev() {
+    XCTAssertEqual(
+      visibleSettingsSections(isDeveloperMode: false),
+      [.appearance, .terminal, .connection]
+    )
+  }
+
+  func testVisibleSettingsSectionsShowsDeveloperInDev() {
+    XCTAssertEqual(
+      visibleSettingsSections(isDeveloperMode: true),
+      [.appearance, .terminal, .connection, .developer]
+    )
+  }
+
   func testOrderedTerminalProfilesKeepsBuiltInsAheadOfCustomProfiles() {
     let profiles: [String: AppTerminalProfile] = [
       "dev-server": AppTerminalProfile(

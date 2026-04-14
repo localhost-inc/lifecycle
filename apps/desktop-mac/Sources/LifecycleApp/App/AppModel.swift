@@ -5,11 +5,18 @@ import LifecycleTerminalHost
 import LifecyclePresentation
 import SwiftUI
 
+let defaultAppSidebarWidth: CGFloat = 256
+let minimumAppSidebarWidth: CGFloat = 220
+let maximumAppSidebarWidth: CGFloat = 360
+let minimumWorkspaceShellContentWidth: CGFloat = 920
+let appSidebarDividerThickness: CGFloat = 1
+let appSidebarDividerHitThickness: CGFloat = 8
 let defaultWorkspaceExtensionSidebarWidth: CGFloat = 320
 let minimumWorkspaceExtensionSidebarWidth: CGFloat = 260
 let maximumWorkspaceExtensionSidebarWidth: CGFloat = 420
 let minimumWorkspaceCanvasWidth: CGFloat = 480
-let workspaceExtensionSidebarDividerThickness: CGFloat = 12
+let workspaceExtensionSidebarDividerThickness: CGFloat = 1
+let workspaceExtensionSidebarDividerHitThickness: CGFloat = 8
 let bridgeDiscoveryRetryNanosecondsWhenDisconnected: UInt64 = 500_000_000
 let bridgeDiscoveryRetryNanosecondsWhenConnected: UInt64 = 1_500_000_000
 
@@ -53,16 +60,25 @@ enum WorkspaceCreationHost: String, CaseIterable, Identifiable {
 }
 
 func clampedWorkspaceExtensionSidebarWidth(_ width: CGFloat, availableWidth: CGFloat) -> CGFloat {
-  guard availableWidth.isFinite, availableWidth > 0 else {
-    return min(max(width, minimumWorkspaceExtensionSidebarWidth), maximumWorkspaceExtensionSidebarWidth)
-  }
-
-  let upperBound = min(
-    maximumWorkspaceExtensionSidebarWidth,
-    max(availableWidth - minimumWorkspaceCanvasWidth, 0)
+  lcClampedFixedPaneWidth(
+    width,
+    totalWidth: availableWidth,
+    minimumFixedPaneWidth: minimumWorkspaceExtensionSidebarWidth,
+    maximumFixedPaneWidth: maximumWorkspaceExtensionSidebarWidth,
+    minimumFlexiblePaneWidth: minimumWorkspaceCanvasWidth,
+    dividerThickness: workspaceExtensionSidebarDividerThickness
   )
-  let lowerBound = min(minimumWorkspaceExtensionSidebarWidth, upperBound)
-  return min(max(width, lowerBound), upperBound)
+}
+
+func clampedAppSidebarWidth(_ width: CGFloat, availableWidth: CGFloat) -> CGFloat {
+  lcClampedFixedPaneWidth(
+    width,
+    totalWidth: availableWidth,
+    minimumFixedPaneWidth: minimumAppSidebarWidth,
+    maximumFixedPaneWidth: maximumAppSidebarWidth,
+    minimumFlexiblePaneWidth: minimumWorkspaceShellContentWidth,
+    dividerThickness: appSidebarDividerThickness
+  )
 }
 
 func workspaceCanvasDocumentContainsAgentSurface(_ document: WorkspaceCanvasDocument?) -> Bool {
@@ -71,6 +87,288 @@ func workspaceCanvasDocumentContainsAgentSurface(_ document: WorkspaceCanvasDocu
   }
 
   return document.surfacesByID.values.contains { $0.surfaceKind == .agent }
+}
+
+func shouldAutoCreateInitialTerminal(
+  isPendingInitialTerminal: Bool,
+  canvasDocument: WorkspaceCanvasDocument?,
+  terminalEnvelope: BridgeWorkspaceTerminalsEnvelope?
+) -> Bool {
+  guard isPendingInitialTerminal else {
+    return false
+  }
+
+  guard canvasDocument?.surfacesByID.isEmpty ?? true else {
+    return false
+  }
+
+  guard let terminalEnvelope else {
+    return false
+  }
+
+  guard terminalEnvelope.runtime.launchError == nil else {
+    return false
+  }
+
+  guard terminalEnvelope.runtime.supportsCreate else {
+    return false
+  }
+
+  return terminalEnvelope.terminals.isEmpty
+}
+
+func canvasDocumentAddingSurface(
+  _ surfaceRecord: CanvasSurfaceRecord,
+  to document: WorkspaceCanvasDocument,
+  workspaceID: String,
+  groupID: String? = nil
+) -> WorkspaceCanvasDocument {
+  if document.activeLayoutMode == .spatial, groupID == nil {
+    let anchorGroupID =
+      document.activeGroupID.flatMap { document.groupsByID[$0] != nil ? $0 : nil }
+      ?? canvasGroupIDs(in: document.tiledLayout).first(where: { document.groupsByID[$0] != nil })
+      ?? document.groupsByID.keys.sorted().first
+      ?? defaultCanvasGroupID(for: workspaceID)
+    let newGroupID = createCanvasGroupID(for: workspaceID)
+
+    var groups = document.groupsByID
+    var surfacesByID = document.surfacesByID
+    groups[newGroupID] = CanvasGroup(
+      id: newGroupID,
+      surfaceOrder: [surfaceRecord.id],
+      activeSurfaceID: surfaceRecord.id
+    )
+    surfacesByID[surfaceRecord.id] = surfaceRecord
+
+    return WorkspaceCanvasDocument(
+      activeGroupID: newGroupID,
+      groupsByID: groups,
+      surfacesByID: surfacesByID,
+      activeLayoutMode: document.activeLayoutMode,
+      tiledLayout: splitCanvasTiledLayout(
+        document.tiledLayout,
+        targetGroupID: anchorGroupID,
+        newGroupID: newGroupID,
+        direction: .row,
+        splitID: createCanvasSplitID(for: workspaceID)
+      ),
+      spatialLayout: canvasSpatialLayoutPlacingGroup(
+        document.spatialLayout,
+        groupID: newGroupID,
+        adjacentTo: anchorGroupID,
+        direction: .row,
+        placeBefore: false
+      )
+    )
+  }
+
+  let targetGroupID =
+    groupID
+    ?? document.activeGroupID
+    ?? canvasGroupIDs(in: document.layout).first
+    ?? defaultCanvasGroupID(for: workspaceID)
+  let targetGroup = document.groupsByID[targetGroupID] ?? CanvasGroup(
+    id: targetGroupID,
+    surfaceOrder: [],
+    activeSurfaceID: nil
+  )
+
+  var groups = document.groupsByID
+  var surfacesByID = document.surfacesByID
+  groups[targetGroupID] = CanvasGroup(
+    id: targetGroup.id,
+    surfaceOrder: targetGroup.surfaceOrder + [surfaceRecord.id],
+    activeSurfaceID: surfaceRecord.id
+  )
+  surfacesByID[surfaceRecord.id] = surfaceRecord
+
+  let nextSpatialLayout =
+    if document.activeLayoutMode == .spatial {
+      canvasSpatialLayoutBringingGroupToFront(document.spatialLayout, groupID: targetGroupID)
+    } else {
+      document.spatialLayout
+    }
+
+  return WorkspaceCanvasDocument(
+    activeGroupID: targetGroupID,
+    groupsByID: groups,
+    surfacesByID: surfacesByID,
+    activeLayoutMode: document.activeLayoutMode,
+    tiledLayout: document.tiledLayout,
+    spatialLayout: nextSpatialLayout
+  )
+}
+
+enum StackServicePhase: String, Equatable, Sendable {
+  case stopping
+}
+
+enum StackServiceLifecycleEvent: Equatable {
+  case starting(service: String)
+  case started(service: String)
+  case failed(service: String, error: String)
+  case stopping(service: String)
+  case stopped(service: String)
+}
+
+struct StackServiceLifecycleUpdate: Equatable {
+  let summary: BridgeWorkspaceStackSummary?
+  let phases: [String: StackServicePhase]
+  let shouldReload: Bool
+}
+
+func stackServiceLifecycleEvent(
+  from event: BridgeSocket.Event
+) -> (workspaceID: String, lifecycle: StackServiceLifecycleEvent)? {
+  switch event {
+  case .serviceStarting(let workspaceID, let service):
+    return (workspaceID, .starting(service: service))
+  case .serviceStarted(let workspaceID, let service):
+    return (workspaceID, .started(service: service))
+  case .serviceFailed(let workspaceID, let service, let error):
+    return (workspaceID, .failed(service: service, error: error))
+  case .serviceStopping(let workspaceID, let service):
+    return (workspaceID, .stopping(service: service))
+  case .serviceStopped(let workspaceID, let service):
+    return (workspaceID, .stopped(service: service))
+  default:
+    return nil
+  }
+}
+
+func applyStackServiceLifecycleEvent(
+  _ lifecycle: StackServiceLifecycleEvent,
+  summary: BridgeWorkspaceStackSummary?,
+  phases: [String: StackServicePhase]
+) -> StackServiceLifecycleUpdate {
+  var nextPhases = phases
+  var nextSummary = summary
+  var shouldReload = false
+
+  switch lifecycle {
+  case .starting(let service):
+    nextPhases.removeValue(forKey: service)
+    nextSummary = updatedStackSummary(summary, service: service) { node in
+      stackNode(node, status: "starting", statusReason: nil)
+    }
+  case .started(let service):
+    nextPhases.removeValue(forKey: service)
+    nextSummary = updatedStackSummary(summary, service: service) { node in
+      stackNode(node, status: "ready", statusReason: nil)
+    }
+    shouldReload = true
+  case .failed(let service, let error):
+    nextPhases.removeValue(forKey: service)
+    nextSummary = updatedStackSummary(summary, service: service) { node in
+      stackNode(node, status: "failed", statusReason: error)
+    }
+    shouldReload = true
+  case .stopping(let service):
+    nextPhases[service] = .stopping
+  case .stopped(let service):
+    nextPhases.removeValue(forKey: service)
+    nextSummary = updatedStackSummary(summary, service: service) { node in
+      stackNode(node, status: "stopped", statusReason: nil)
+    }
+    shouldReload = true
+  }
+
+  return StackServiceLifecycleUpdate(
+    summary: nextSummary,
+    phases: nextPhases,
+    shouldReload: shouldReload
+  )
+}
+
+private func updatedStackSummary(
+  _ summary: BridgeWorkspaceStackSummary?,
+  service: String,
+  transform: (BridgeStackNode) -> BridgeStackNode
+) -> BridgeWorkspaceStackSummary? {
+  guard let summary else {
+    return nil
+  }
+
+  return BridgeWorkspaceStackSummary(
+    workspaceID: summary.workspaceID,
+    state: summary.state,
+    errors: summary.errors,
+    nodes: summary.nodes.map { node in
+      guard node.name == service, node.isManagedNode else {
+        return node
+      }
+
+      return transform(node)
+    }
+  )
+}
+
+private func stackNode(
+  _ node: BridgeStackNode,
+  status: String?,
+  statusReason: String?
+) -> BridgeStackNode {
+  BridgeStackNode(
+    workspaceID: node.workspaceID,
+    name: node.name,
+    kind: node.kind,
+    dependsOn: node.dependsOn,
+    status: status,
+    statusReason: statusReason,
+    assignedPort: node.assignedPort,
+    previewURL: node.previewURL,
+    createdAt: node.createdAt,
+    updatedAt: node.updatedAt,
+    runOn: node.runOn,
+    command: node.command,
+    writeFilesCount: node.writeFilesCount
+  )
+}
+
+func nextTerminalCreationTitle(
+  from terminals: [BridgeTerminalRecord],
+  kind: BridgeTerminalKind
+) -> String {
+  switch kind {
+  case .claude, .codex, .custom:
+    return nextProfileTerminalTitle(from: terminals, kind: kind)
+  case .shell:
+    return nextShellTerminalTitle(from: terminals)
+  }
+}
+
+func nextShellTerminalTitle(from terminals: [BridgeTerminalRecord]) -> String {
+  let existingNames = Set(terminals.map(\.title))
+  var nextIndex = max(terminals.count + 1, 2)
+
+  while true {
+    let candidate = "Tab \(nextIndex)"
+    if !existingNames.contains(candidate) {
+      return candidate
+    }
+    nextIndex += 1
+  }
+}
+
+func nextProfileTerminalTitle(
+  from terminals: [BridgeTerminalRecord],
+  kind: BridgeTerminalKind
+) -> String {
+  let baseTitle = kind.displayTitle
+  let existingNames = Set(terminals.map(\.title))
+
+  if !existingNames.contains(baseTitle) {
+    return baseTitle
+  }
+
+  var nextIndex = 2
+  while true {
+    let candidate = "\(baseTitle) \(nextIndex)"
+    if !existingNames.contains(candidate) {
+      return candidate
+    }
+    nextIndex += 1
+  }
 }
 
 func repositoryName(from repositoryPath: String) -> String {
@@ -132,8 +430,7 @@ func workspaceBranchName(workspaceName: String, workspaceID: String) -> String {
 @MainActor
 private func unresolvedCanvasSurface(record: CanvasSurfaceRecord) -> ResolvedSurface {
   let tab = SurfaceTabPresentation(
-    title: record.title,
-    subtitle: record.surfaceKind.rawValue,
+    label: record.title,
     icon: unresolvedCanvasSurfaceIcon(for: record.surfaceKind)
   )
 
@@ -168,15 +465,15 @@ private struct UnresolvedCanvasSurfaceView: View {
   var body: some View {
     VStack(spacing: 12) {
       Image(systemName: unresolvedCanvasSurfaceIcon(for: record.surfaceKind))
-        .font(.system(size: 24, weight: .regular))
+        .font(.lc(size: 24, weight: .regular))
         .foregroundStyle(theme.mutedColor.opacity(0.7))
 
       Text(record.title)
-        .font(.system(size: 16, weight: .semibold))
+        .font(.lc(size: 16, weight: .semibold))
         .foregroundStyle(theme.primaryTextColor)
 
       Text("Resolving \(record.surfaceKind.rawValue) surface...")
-        .font(.system(size: 12, weight: .medium, design: .monospaced))
+        .font(.lc(size: 12, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.mutedColor)
         .multilineTextAlignment(.center)
     }
@@ -197,11 +494,13 @@ final class AppModel: ObservableObject {
   @Published var repositories: [BridgeRepository] = []
   @Published var terminalEnvelopeByWorkspaceID: [String: BridgeWorkspaceTerminalsEnvelope] = [:]
   @Published var stackSummaryByWorkspaceID: [String: BridgeWorkspaceStackSummary] = [:]
+  @Published private var stackServicePhasesByWorkspaceID: [String: [String: StackServicePhase]] = [:]
   @Published private(set) var stackLoadingWorkspaceIDs = Set<String>()
   @Published var terminalConnectionBySurfaceID: [String: BridgeTerminalConnection] = [:]
   @Published var agentsByWorkspaceID: [String: [BridgeAgentRecord]] = [:]
   @Published private var canvasDocumentsByWorkspaceID: [String: WorkspaceCanvasDocument] = [:]
   @Published private var activeExtensionKindByWorkspaceID: [String: WorkspaceExtensionKind] = [:]
+  @Published private var appSidebarWidthValue: CGFloat = defaultAppSidebarWidth
   @Published private var extensionSidebarWidthByWorkspaceID: [String: CGFloat] = [:]
   @Published private var selectedAgentIDByWorkspaceID: [String: String] = [:]
   @Published var terminalThemeContext: AppTerminalThemeContext = .fallback
@@ -221,6 +520,7 @@ final class AppModel: ObservableObject {
   private var didStart = false
   private var didRestorePersistedCanvasDocuments = false
   private var agentHandlesByID: [String: AgentHandle] = [:]
+  private var pendingInitialTerminalWorkspaceIDs = Set<String>()
   private var workspaceStoresByID: [String: WorkspaceStore] = [:]
 
   deinit {
@@ -282,10 +582,17 @@ final class AppModel: ObservableObject {
     }
   }
 
-  func select(repository: BridgeRepository, workspace: BridgeWorkspaceSummary) {
+  func select(
+    repository: BridgeRepository,
+    workspace: BridgeWorkspaceSummary,
+    autoCreateInitialTerminal: Bool = false
+  ) {
     selectedRepositoryID = repository.id
     selectedWorkspaceID = workspace.id
     openedWorkspaceIDs.insert(workspace.id)
+    if autoCreateInitialTerminal {
+      pendingInitialTerminalWorkspaceIDs.insert(workspace.id)
+    }
     Self.persistLastWorkspace(workspaceID: workspace.id, repositoryID: repository.id)
     AppLog.notice(
       .workspace,
@@ -531,6 +838,29 @@ final class AppModel: ObservableObject {
     syncWorkspaceStore(for: targetWorkspaceID)
   }
 
+  func appSidebarWidth(availableWidth: CGFloat? = nil) -> CGFloat {
+    guard let availableWidth else {
+      return appSidebarWidthValue
+    }
+
+    return clampedAppSidebarWidth(appSidebarWidthValue, availableWidth: availableWidth)
+  }
+
+  func setAppSidebarWidth(_ width: CGFloat, availableWidth: CGFloat? = nil) {
+    let nextWidth =
+      if let availableWidth {
+        clampedAppSidebarWidth(width, availableWidth: availableWidth)
+      } else {
+        min(max(width, minimumAppSidebarWidth), maximumAppSidebarWidth)
+      }
+
+    guard appSidebarWidthValue != nextWidth else {
+      return
+    }
+
+    appSidebarWidthValue = nextWidth
+  }
+
   func extensionSidebarWidth(for workspaceID: String? = nil, availableWidth: CGFloat? = nil) -> CGFloat {
     guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID else {
       return defaultWorkspaceExtensionSidebarWidth
@@ -598,6 +928,10 @@ final class AppModel: ObservableObject {
       tiledLayout: document.tiledLayout,
       spatialLayout: document.spatialLayout
     )
+  }
+
+  func canvasLayoutMode(for workspaceID: String) -> CanvasLayoutMode {
+    canvasDocumentsByWorkspaceID[workspaceID]?.activeLayoutMode ?? .tiled
   }
 
   func activeCanvasGroupID(for workspaceID: String? = nil) -> String? {
@@ -677,6 +1011,30 @@ final class AppModel: ObservableObject {
     stackSummaryByWorkspaceID[workspaceID]
   }
 
+  func stackServicePhase(for workspaceID: String, serviceName: String) -> StackServicePhase? {
+    stackServicePhasesByWorkspaceID[workspaceID]?[serviceName]
+  }
+
+  func hasStoppingServices(for workspaceID: String) -> Bool {
+    stackServicePhasesByWorkspaceID[workspaceID]?.values.contains(.stopping) ?? false
+  }
+
+  func stackLogs(
+    for workspaceID: String,
+    serviceName: String,
+    tail: Int = 120
+  ) async throws -> [BridgeWorkspaceLogLine] {
+    let response = try await withBridgeRequest { client in
+      try await client.workspaceLogs(
+        for: workspaceID,
+        service: serviceName,
+        tail: tail
+      )
+    }
+
+    return response.lines
+  }
+
   func isStackActionLoading(for workspaceID: String) -> Bool {
     stackLoadingWorkspaceIDs.contains(workspaceID)
   }
@@ -685,7 +1043,8 @@ final class AppModel: ObservableObject {
     guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID,
           let actionState = workspaceStackHeaderActionState(
             summary: stackSummaryByWorkspaceID[targetWorkspaceID],
-            isMutating: stackLoadingWorkspaceIDs.contains(targetWorkspaceID)
+            isMutating: stackLoadingWorkspaceIDs.contains(targetWorkspaceID),
+            hasStoppingServices: hasStoppingServices(for: targetWorkspaceID)
           ),
           actionState.isEnabled
     else {
@@ -729,14 +1088,18 @@ final class AppModel: ObservableObject {
     openedWorkspaceIDs.filter { canvasDocumentsByWorkspaceID[$0] != nil }.sorted()
   }
 
-  func createTerminalTab(workspaceID: String? = nil, groupID: String? = nil) {
+  func createTerminalTab(
+    kind: BridgeTerminalKind = .shell,
+    workspaceID: String? = nil,
+    groupID: String? = nil
+  ) {
     guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID else {
       return
     }
 
     beginTerminalLoading(for: targetWorkspaceID)
     Task {
-      await createTerminalTab(for: targetWorkspaceID, groupID: groupID)
+      await createTerminalTab(for: targetWorkspaceID, kind: kind, groupID: groupID)
     }
   }
 
@@ -778,13 +1141,20 @@ final class AppModel: ObservableObject {
         activeSurfaceID: surfaceID
       )
 
+      let nextSpatialLayout =
+        if document.activeLayoutMode == .spatial {
+          canvasSpatialLayoutBringingGroupToFront(document.spatialLayout, groupID: targetGroupID)
+        } else {
+          document.spatialLayout
+        }
+
       return WorkspaceCanvasDocument(
         activeGroupID: targetGroupID,
         groupsByID: groups,
         surfacesByID: document.surfacesByID,
         activeLayoutMode: document.activeLayoutMode,
         tiledLayout: document.tiledLayout,
-        spatialLayout: document.spatialLayout
+        spatialLayout: nextSpatialLayout
       )
     }
   }
@@ -805,13 +1175,80 @@ final class AppModel: ObservableObject {
     }
 
     updateCanvasDocument(for: targetWorkspaceID) { document in
-      WorkspaceCanvasDocument(
-        activeGroupID: document.groupsByID[groupID] == nil ? document.activeGroupID : groupID,
+      let resolvedGroupID = document.groupsByID[groupID] == nil ? document.activeGroupID : groupID
+      let nextSpatialLayout =
+        if document.activeLayoutMode == .spatial, let resolvedGroupID {
+          canvasSpatialLayoutBringingGroupToFront(document.spatialLayout, groupID: resolvedGroupID)
+        } else {
+          document.spatialLayout
+        }
+
+      return WorkspaceCanvasDocument(
+        activeGroupID: resolvedGroupID,
         groupsByID: document.groupsByID,
         surfacesByID: document.surfacesByID,
         activeLayoutMode: document.activeLayoutMode,
         tiledLayout: document.tiledLayout,
-        spatialLayout: document.spatialLayout
+        spatialLayout: nextSpatialLayout
+      )
+    }
+  }
+
+  func setCanvasLayoutMode(_ mode: CanvasLayoutMode, workspaceID: String? = nil) {
+    guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID else {
+      return
+    }
+
+    updateCanvasDocument(for: targetWorkspaceID) { document in
+      guard document.activeLayoutMode != mode else {
+        return document
+      }
+
+      let nextSpatialLayout =
+        if mode == .spatial,
+           let activeGroupID = document.activeGroupID ?? canvasGroupIDs(in: document.tiledLayout).first
+        {
+          canvasSpatialLayoutBringingGroupToFront(document.spatialLayout, groupID: activeGroupID)
+        } else {
+          document.spatialLayout
+        }
+
+      return WorkspaceCanvasDocument(
+        activeGroupID: document.activeGroupID,
+        groupsByID: document.groupsByID,
+        surfacesByID: document.surfacesByID,
+        activeLayoutMode: mode,
+        tiledLayout: document.tiledLayout,
+        spatialLayout: nextSpatialLayout
+      )
+    }
+  }
+
+  func setSpatialGroupFrame(
+    _ groupID: String,
+    frame: CanvasSpatialFrame,
+    workspaceID: String? = nil
+  ) {
+    guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID else {
+      return
+    }
+
+    updateCanvasDocument(for: targetWorkspaceID) { document in
+      guard document.groupsByID[groupID] != nil else {
+        return document
+      }
+
+      return WorkspaceCanvasDocument(
+        activeGroupID: groupID,
+        groupsByID: document.groupsByID,
+        surfacesByID: document.surfacesByID,
+        activeLayoutMode: document.activeLayoutMode,
+        tiledLayout: document.tiledLayout,
+        spatialLayout: canvasSpatialLayoutUpdatingFrame(
+          canvasSpatialLayoutBringingGroupToFront(document.spatialLayout, groupID: groupID),
+          groupID: groupID,
+          frame: frame
+        )
       )
     }
   }
@@ -986,6 +1423,7 @@ final class AppModel: ObservableObject {
   private func openWorkspace(_ workspaceID: String) async {
     await AppSignpost.withInterval(.workspace, "Open Workspace") {
       await loadTerminals(for: workspaceID, force: false)
+      await ensureInitialTerminalTabIfNeeded(for: workspaceID)
       await loadStack(for: workspaceID, force: false)
       if workspaceCanvasDocumentContainsAgentSurface(canvasDocumentsByWorkspaceID[workspaceID]) {
         await loadAgents(for: workspaceID, force: false)
@@ -1155,7 +1593,7 @@ final class AppModel: ObservableObject {
       clearError()
 
       if let repository = repositories.first(where: { $0.id == response.id }) {
-        selectRepository(repository)
+        selectRepository(repository, autoCreateInitialTerminal: true)
       }
 
       AppLog.notice(
@@ -1237,7 +1675,11 @@ final class AppModel: ObservableObject {
       if let refreshedRepository = repositories.first(where: { $0.id == repositoryID }),
         let workspace = refreshedRepository.workspaces.first(where: { $0.id == response.id })
       {
-        select(repository: refreshedRepository, workspace: workspace)
+        select(
+          repository: refreshedRepository,
+          workspace: workspace,
+          autoCreateInitialTerminal: true
+        )
       }
 
       AppLog.notice(
@@ -1397,6 +1839,34 @@ final class AppModel: ObservableObject {
     await refreshTerminals(for: workspaceID, showLoading: true)
   }
 
+  private func ensureInitialTerminalTabIfNeeded(for workspaceID: String) async {
+    guard pendingInitialTerminalWorkspaceIDs.contains(workspaceID) else {
+      return
+    }
+
+    let canvasDocument = canvasDocumentsByWorkspaceID[workspaceID]
+    let terminalEnvelope = terminalEnvelopeByWorkspaceID[workspaceID]
+
+    if shouldAutoCreateInitialTerminal(
+      isPendingInitialTerminal: true,
+      canvasDocument: canvasDocument,
+      terminalEnvelope: terminalEnvelope
+    ) {
+      beginTerminalLoading(for: workspaceID)
+      await createTerminalTab(for: workspaceID, kind: .shell, groupID: nil)
+    }
+
+    let hasCanvasSurfaces = !(canvasDocumentsByWorkspaceID[workspaceID]?.surfacesByID.isEmpty ?? true)
+    let hasTerminals = !(terminalEnvelopeByWorkspaceID[workspaceID]?.terminals.isEmpty ?? true)
+    let cannotCreateTerminal =
+      (terminalEnvelopeByWorkspaceID[workspaceID]?.runtime.launchError != nil) ||
+      (terminalEnvelopeByWorkspaceID[workspaceID]?.runtime.supportsCreate == false)
+
+    if hasCanvasSurfaces || hasTerminals || cannotCreateTerminal {
+      pendingInitialTerminalWorkspaceIDs.remove(workspaceID)
+    }
+  }
+
   private func startBridgeMonitoring() {
     bridgeMonitorTask?.cancel()
     bridgeMonitorTask = Task { [weak self] in
@@ -1436,16 +1906,45 @@ final class AppModel: ObservableObject {
       if customAgentActionsEnabled {
         applyAgentEvent(event)
       }
-    case .serviceStarted(let workspaceID, _),
-      .serviceFailed(let workspaceID, _, _),
-      .serviceStopped(let workspaceID, _):
-      Task {
-        await loadStack(for: workspaceID, force: true)
-      }
+    case .serviceStarting,
+      .serviceStarted,
+      .serviceFailed,
+      .serviceStopping,
+      .serviceStopped:
+      applyStackServiceSocketEvent(event)
     case .pong:
       break
     case .unknown:
       break
+    }
+  }
+
+  private func applyStackServiceSocketEvent(_ event: BridgeSocket.Event) {
+    guard let resolved = stackServiceLifecycleEvent(from: event) else {
+      return
+    }
+
+    let workspaceID = resolved.workspaceID
+    let update = applyStackServiceLifecycleEvent(
+      resolved.lifecycle,
+      summary: stackSummaryByWorkspaceID[workspaceID],
+      phases: stackServicePhasesByWorkspaceID[workspaceID] ?? [:]
+    )
+
+    stackSummaryByWorkspaceID[workspaceID] = update.summary
+    if update.phases.isEmpty {
+      stackServicePhasesByWorkspaceID.removeValue(forKey: workspaceID)
+    } else {
+      stackServicePhasesByWorkspaceID[workspaceID] = update.phases
+    }
+    syncWorkspaceStore(for: workspaceID)
+
+    guard update.shouldReload else {
+      return
+    }
+
+    Task {
+      await loadStack(for: workspaceID, force: true)
     }
   }
 
@@ -1834,19 +2333,23 @@ final class AppModel: ObservableObject {
     }
   }
 
-  private func createTerminalTab(for workspaceID: String, groupID: String?) async {
+  private func createTerminalTab(
+    for workspaceID: String,
+    kind: BridgeTerminalKind,
+    groupID: String?
+  ) async {
     defer {
       endTerminalLoading(for: workspaceID)
     }
 
     do {
+      let terminals = terminalEnvelopeByWorkspaceID[workspaceID]?.terminals ?? []
       let created = try await AppSignpost.withInterval(.terminal, "Create Terminal Tab") {
         try await withBridgeRequest { client in
           try await client.createTerminal(
             for: workspaceID,
-            title: self.nextTerminalName(
-              from: self.terminalEnvelopeByWorkspaceID[workspaceID]?.terminals ?? []
-            )
+            kind: kind,
+            title: nextTerminalCreationTitle(from: terminals, kind: kind)
           )
         }
       }
@@ -1854,33 +2357,11 @@ final class AppModel: ObservableObject {
 
       let surfaceRecord = terminalSurfaceRecord(for: workspaceID, terminal: created.terminal)
       updateCanvasDocument(for: workspaceID) { document in
-        let targetGroupID =
-          groupID ??
-          document.activeGroupID ??
-          canvasGroupIDs(in: document.layout).first ??
-          defaultCanvasGroupID(for: workspaceID)
-        let targetGroup = document.groupsByID[targetGroupID] ?? CanvasGroup(
-          id: targetGroupID,
-          surfaceOrder: [],
-          activeSurfaceID: nil
-        )
-
-        var groups = document.groupsByID
-        var surfacesByID = document.surfacesByID
-        groups[targetGroupID] = CanvasGroup(
-          id: targetGroup.id,
-          surfaceOrder: targetGroup.surfaceOrder + [surfaceRecord.id],
-          activeSurfaceID: surfaceRecord.id
-        )
-        surfacesByID[surfaceRecord.id] = surfaceRecord
-
-        return WorkspaceCanvasDocument(
-          activeGroupID: targetGroupID,
-          groupsByID: groups,
-          surfacesByID: surfacesByID,
-          activeLayoutMode: document.activeLayoutMode,
-          tiledLayout: document.tiledLayout,
-          spatialLayout: document.spatialLayout
+        canvasDocumentAddingSurface(
+          surfaceRecord,
+          to: document,
+          workspaceID: workspaceID,
+          groupID: groupID
         )
       }
 
@@ -1892,6 +2373,7 @@ final class AppModel: ObservableObject {
         metadata: [
           "workspaceID": workspaceID,
           "terminalID": created.terminal.id,
+          "kind": kind.rawValue,
         ]
       )
     } catch {
@@ -2035,7 +2517,8 @@ final class AppModel: ObservableObject {
         try await withBridgeRequest { client in
           try await client.createTerminal(
             for: workspaceID,
-            title: self.nextTerminalName(
+            kind: .shell,
+            title: nextShellTerminalTitle(
               from: self.terminalEnvelopeByWorkspaceID[workspaceID]?.terminals ?? []
             )
           )
@@ -2058,6 +2541,13 @@ final class AppModel: ObservableObject {
           activeSurfaceID: surfaceRecord.id
         )
         surfacesByID[surfaceRecord.id] = surfaceRecord
+        let nextSpatialLayout = canvasSpatialLayoutPlacingGroup(
+          document.spatialLayout,
+          groupID: newGroupID,
+          adjacentTo: groupID,
+          direction: direction,
+          placeBefore: false
+        )
 
         return WorkspaceCanvasDocument(
           activeGroupID: newGroupID,
@@ -2071,7 +2561,7 @@ final class AppModel: ObservableObject {
             direction: direction,
             splitID: createCanvasSplitID(for: workspaceID)
           ),
-          spatialLayout: document.spatialLayout
+          spatialLayout: nextSpatialLayout
         )
       }
 
@@ -2257,7 +2747,6 @@ final class AppModel: ObservableObject {
         record.id,
         CanvasSurface(
           id: record.id,
-          title: resolved.tab.title,
           surfaceKind: record.surfaceKind,
           record: record,
           content: resolved.content,
@@ -2616,7 +3105,7 @@ final class AppModel: ObservableObject {
       connectSocket()
       endBridgeRecovery()
       clearError()
-      AppLog.notice(.bridge, "Bridge rediscovered after registration or PID change")
+      AppLog.notice(.bridge, "Bridge rediscovered after fixed-port health or PID change")
     } catch {
       guard handleRecoverableBridgeFailure(
         error,
@@ -2697,19 +3186,6 @@ final class AppModel: ObservableObject {
   ) -> String? {
     canvasGroupIDs(in: document.layout).first { groupID in
       document.groupsByID[groupID]?.surfaceOrder.contains(surfaceID) == true
-    }
-  }
-
-  private func nextTerminalName(from terminals: [BridgeTerminalRecord]) -> String {
-    let existingNames = Set(terminals.map(\.title))
-    var nextIndex = max(terminals.count + 1, 2)
-
-    while true {
-      let candidate = "Tab \(nextIndex)"
-      if !existingNames.contains(candidate) {
-        return candidate
-      }
-      nextIndex += 1
     }
   }
 
@@ -2827,7 +3303,10 @@ final class AppModel: ObservableObject {
     return output?.stdout
   }
 
-  private func selectRepository(_ repository: BridgeRepository) {
+  private func selectRepository(
+    _ repository: BridgeRepository,
+    autoCreateInitialTerminal: Bool = false
+  ) {
     selectedRepositoryID = repository.id
 
     guard let workspace = preferredRepositoryWorkspace(repository) else {
@@ -2835,7 +3314,11 @@ final class AppModel: ObservableObject {
       return
     }
 
-    select(repository: repository, workspace: workspace)
+    select(
+      repository: repository,
+      workspace: workspace,
+      autoCreateInitialTerminal: autoCreateInitialTerminal
+    )
   }
 
   private static func persistLastWorkspace(workspaceID: String, repositoryID: String) {

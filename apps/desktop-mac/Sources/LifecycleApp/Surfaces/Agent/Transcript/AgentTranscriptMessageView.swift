@@ -20,7 +20,7 @@ struct AgentTranscriptMessageView: View {
   private var userRow: some View {
     HStack(alignment: .top, spacing: 8) {
       Text("▶")
-        .font(.system(size: 13, weight: .medium, design: .monospaced))
+        .font(.lc(size: 13, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.accentColor)
         .padding(.top, 3)
 

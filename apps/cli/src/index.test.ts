@@ -246,10 +246,9 @@ describe("lifecycle cli", () => {
                 assigned_port: 3000,
                 created_at: "2026-03-21T00:00:00.000Z",
                 depends_on: [],
-                kind: "service",
+                kind: "process",
                 name: "api",
                 preview_url: "http://control-plane.lifecycle.localhost",
-                runtime: "process",
                 status: "ready",
                 status_reason: null,
                 updated_at: "2026-03-21T00:00:00.000Z",
@@ -299,10 +298,9 @@ describe("lifecycle cli", () => {
                 assigned_port: 3000,
                 created_at: "2026-03-21T00:00:00.000Z",
                 depends_on: [],
-                kind: "service",
+                kind: "process",
                 name: "api",
                 preview_url: "http://control-plane.lifecycle.localhost",
-                runtime: "process",
                 status: "ready",
                 status_reason: null,
                 updated_at: "2026-03-21T00:00:00.000Z",
@@ -312,10 +310,9 @@ describe("lifecycle cli", () => {
                 assigned_port: 6379,
                 created_at: "2026-03-21T00:00:00.000Z",
                 depends_on: [],
-                kind: "service",
+                kind: "image",
                 name: "redis",
                 preview_url: null,
-                runtime: "image",
                 status: "starting",
                 status_reason: null,
                 updated_at: "2026-03-21T00:00:00.000Z",
@@ -367,10 +364,9 @@ describe("lifecycle cli", () => {
                 assigned_port: 3000,
                 created_at: "2026-03-21T00:00:00.000Z",
                 depends_on: [],
-                kind: "service",
+                kind: "process",
                 name: "api",
                 preview_url: "http://control-plane.lifecycle.localhost",
-                runtime: "process",
                 status: "ready",
                 status_reason: null,
                 updated_at: "2026-03-21T00:00:00.000Z",
@@ -428,10 +424,9 @@ describe("lifecycle cli", () => {
                 assigned_port: 3000,
                 created_at: "2026-03-21T00:00:00.000Z",
                 depends_on: [],
-                kind: "service",
+                kind: "process",
                 name: "api",
                 preview_url: "http://control-plane.lifecycle.localhost",
-                runtime: "process",
                 status: "ready",
                 status_reason: null,
                 updated_at: "2026-03-21T00:00:00.000Z",
@@ -492,10 +487,9 @@ describe("lifecycle cli", () => {
                 assigned_port: 3000,
                 created_at: "2026-03-21T00:00:00.000Z",
                 depends_on: [],
-                kind: "service",
+                kind: "process",
                 name: "api",
                 preview_url: "http://control-plane.lifecycle.localhost",
-                runtime: "process",
                 status: "ready",
                 status_reason: null,
                 updated_at: "2026-03-21T00:00:00.000Z",
@@ -505,10 +499,9 @@ describe("lifecycle cli", () => {
                 assigned_port: null,
                 created_at: "2026-03-21T00:00:00.000Z",
                 depends_on: [],
-                kind: "service",
+                kind: "image",
                 name: "redis",
                 preview_url: null,
-                runtime: "image",
                 status: "stopped",
                 status_reason: null,
                 updated_at: "2026-03-21T00:00:00.000Z",
@@ -536,6 +529,41 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual([]);
   });
 
+  test("prints unconfigured stack status through the bridge", async () => {
+    const sink = createIo();
+
+    await withHttpBridge(
+      async (request) => {
+        expect(request).toMatchObject({
+          method: "GET",
+          pathname: "/workspaces/ws_123/stack",
+        });
+
+        return {
+          stack: {
+            errors: [],
+            nodes: [],
+            state: "unconfigured",
+            workspace_id: "ws_123",
+          },
+        };
+      },
+      async () => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () => await main(["stack", "status"], sink.io),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(sink.stdout).toEqual(["No managed stack configured for this workspace."]);
+    expect(sink.stderr).toEqual([]);
+  });
+
   test("stops stack services through the bridge", async () => {
     const sink = createIo();
     let receivedRequest: unknown = null;
@@ -551,10 +579,9 @@ describe("lifecycle cli", () => {
                 assigned_port: null,
                 created_at: "2026-03-21T00:00:00.000Z",
                 depends_on: [],
-                kind: "service",
+                kind: "process",
                 name: "api",
                 preview_url: null,
-                runtime: "process",
                 status: "stopped",
                 status_reason: null,
                 updated_at: "2026-03-21T00:00:00.000Z",
@@ -771,10 +798,10 @@ describe("lifecycle cli", () => {
               git_sha: "abc123",
               id: "ws_123",
               last_active_at: "2026-03-21T00:00:00.000Z",
-	              manifest_fingerprint: "manifest_123",
-	              name: "Feature Workspace",
-	              slug: "feature-workspace",
-	              prepared_at: "2026-03-21T00:00:00.000Z",
+              manifest_fingerprint: "manifest_123",
+              name: "Feature Workspace",
+              slug: "feature-workspace",
+              prepared_at: "2026-03-21T00:00:00.000Z",
               repository_id: "project_123",
               source_ref: "feat/cli",
               status: "active",
@@ -848,10 +875,9 @@ describe("lifecycle cli", () => {
                 assigned_port: null,
                 created_at: "2026-03-21T00:00:00.000Z",
                 depends_on: [],
-                kind: "service",
+                kind: "process",
                 name: "api",
                 preview_url: null,
-                runtime: "process",
                 status: "stopped",
                 status_reason: null,
                 updated_at: "2026-03-21T00:00:00.000Z",
@@ -869,10 +895,10 @@ describe("lifecycle cli", () => {
             git_sha: "abc123",
             id: "ws_123",
             last_active_at: "2026-03-21T00:00:00.000Z",
-	            manifest_fingerprint: "manifest_123",
-	            name: "Feature Workspace",
-	            slug: "feature-workspace",
-	            prepared_at: "2026-03-21T00:00:00.000Z",
+            manifest_fingerprint: "manifest_123",
+            name: "Feature Workspace",
+            slug: "feature-workspace",
+            prepared_at: "2026-03-21T00:00:00.000Z",
             repository_id: "project_123",
             source_ref: "feat/cli",
             status: "idle",
@@ -1005,6 +1031,54 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual([]);
   });
 
+  test("prints workspace health as a no-op when no managed stack is configured", async () => {
+    const sink = createIo();
+    await withHttpBridge(
+      async (request) => {
+        expect(request).toMatchObject({
+          method: "GET",
+          pathname: "/workspaces/ws_123/health",
+        });
+
+        return {
+          checks: [],
+          workspace: {
+            checkout_type: "worktree",
+            created_at: "2026-03-21T00:00:00.000Z",
+            failed_at: null,
+            failure_reason: null,
+            git_sha: "abc123",
+            id: "ws_123",
+            last_active_at: "2026-03-21T00:00:00.000Z",
+            manifest_fingerprint: "manifest_123",
+            name: "Feature Workspace",
+            slug: "feature-workspace",
+            prepared_at: "2026-03-21T00:00:00.000Z",
+            repository_id: "project_123",
+            source_ref: "feat/cli",
+            status: "active",
+            host: "local",
+            updated_at: "2026-03-21T00:00:00.000Z",
+            workspace_root: "/repo/.worktrees/ws_123",
+          },
+        };
+      },
+      async () => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () => await main(["workspace", "health"], sink.io),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(sink.stdout).toEqual(["No managed services configured for this workspace."]);
+    expect(sink.stderr).toEqual([]);
+  });
+
   test("resets the workspace through the bridge", async () => {
     const sink = createIo();
     await withHttpBridge(
@@ -1076,11 +1150,21 @@ describe("lifecycle cli", () => {
         };
       },
       async () => {
-        const code = await withEnvironment({}, async () =>
-          await main(
-            ["workspace", "archive", "feature-workspace", "--repo-path", "/repo", "--force", "--json"],
-            sink.io,
-          ),
+        const code = await withEnvironment(
+          {},
+          async () =>
+            await main(
+              [
+                "workspace",
+                "archive",
+                "feature-workspace",
+                "--repo-path",
+                "/repo",
+                "--force",
+                "--json",
+              ],
+              sink.io,
+            ),
         );
 
         expect(code).toBe(0);
@@ -1313,7 +1397,15 @@ describe("lifecycle cli", () => {
       );
       await writeFile(
         join(repoPath, ".codex", "config.toml"),
-        ['[mcp_servers.lifecycle]', 'notes = "keep me"', 'command = "old-lifecycle"', "", "[features]", 'theme = "light"', ""].join("\n"),
+        [
+          "[mcp_servers.lifecycle]",
+          'notes = "keep me"',
+          'command = "old-lifecycle"',
+          "",
+          "[features]",
+          'theme = "light"',
+          "",
+        ].join("\n"),
       );
       await writeFile(
         join(repoPath, ".codex", "hooks.json"),
@@ -1359,13 +1451,22 @@ describe("lifecycle cli", () => {
         join(repoPath, ".lifecycle", "hooks", "activity.sh"),
         "utf8",
       );
-      const claudeAfterFirstInstall = await readFile(join(repoPath, ".claude", "settings.json"), "utf8");
+      const claudeAfterFirstInstall = await readFile(
+        join(repoPath, ".claude", "settings.json"),
+        "utf8",
+      );
       const jsonAfterFirstInstall = await readFile(join(repoPath, ".mcp.json"), "utf8");
       const tomlAfterFirstInstall = await readFile(join(repoPath, ".codex", "config.toml"), "utf8");
-      const codexHooksAfterFirstInstall = await readFile(join(repoPath, ".codex", "hooks.json"), "utf8");
+      const codexHooksAfterFirstInstall = await readFile(
+        join(repoPath, ".codex", "hooks.json"),
+        "utf8",
+      );
 
       const secondSink = createIo();
-      const secondCode = await main(["repo", "install", "--path", repoPath, "--json"], secondSink.io);
+      const secondCode = await main(
+        ["repo", "install", "--path", repoPath, "--json"],
+        secondSink.io,
+      );
       expect(secondCode).toBe(0);
       expect(JSON.parse(secondSink.stdout[0] ?? "null")).toMatchObject({
         results: [
@@ -1425,14 +1526,14 @@ describe("lifecycle cli", () => {
 
     try {
       const environment: Record<string, string> = {
-        LIFECYCLE_PREVIEW_PROXY_PORT: "52444",
+        LIFECYCLE_BRIDGE_PORT: "52444",
         LIFECYCLE_PROXY_INSTALL_STATE_PATH: join(dir, "install.json"),
       };
 
       let expectedActions: string[] = [];
       if (process.platform === "darwin") {
         const pfConfPath = join(dir, "pf.conf");
-        await writeFile(pfConfPath, "scrub-anchor \"com.apple/*\"\n");
+        await writeFile(pfConfPath, 'scrub-anchor "com.apple/*"\n');
         environment.LIFECYCLE_PROXY_DARWIN_PF_CONF = pfConfPath;
         environment.LIFECYCLE_PROXY_DARWIN_ANCHOR_PATH = join(dir, "anchor.conf");
         environment.LIFECYCLE_PROXY_DARWIN_LAUNCH_DAEMON_PATH = join(dir, "launchd.plist");
@@ -1549,18 +1650,16 @@ describe("lifecycle cli", () => {
           timeout_seconds: 300,
         },
       ]);
-      expect(parsed.config.stack).toMatchObject({
+      expect(parsed.config.stack?.nodes).toMatchObject({
         "control-plane": {
           command: "bun run dev",
           cwd: "apps/control-plane",
-          kind: "service",
-          runtime: "process",
+          kind: "process",
         },
         web: {
           command: "bun run dev",
           cwd: "apps/web",
-          kind: "service",
-          runtime: "process",
+          kind: "process",
         },
       });
 
@@ -1625,7 +1724,7 @@ describe("lifecycle cli", () => {
               },
             ],
           },
-          stack: {},
+          stack: { nodes: {} },
         }),
       );
 

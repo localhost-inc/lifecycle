@@ -21,7 +21,7 @@ struct LCBadge: View {
 
   var body: some View {
     Text(label)
-      .font(.system(size: fontSize, weight: fontWeight, design: .monospaced))
+      .font(.lc(size: fontSize, weight: fontWeight, design: .monospaced))
       .foregroundStyle(foregroundColor)
       .padding(.horizontal, horizontalPadding)
       .padding(.vertical, verticalPadding)

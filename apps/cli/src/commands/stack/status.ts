@@ -26,7 +26,12 @@ export default defineCommand({
       }
 
       if (result.stack.state === "missing") {
-        context.stdout("No services defined in lifecycle.json.");
+        context.stdout("No lifecycle.json found. Managed stack commands are unavailable.");
+        return 0;
+      }
+
+      if (result.stack.state === "unconfigured") {
+        context.stdout("No managed stack configured for this workspace.");
         return 0;
       }
 
@@ -35,6 +40,11 @@ export default defineCommand({
           context.stderr(error);
         }
         return 1;
+      }
+
+      if (services.length === 0) {
+        context.stdout("No managed services configured for this workspace.");
+        return 0;
       }
 
       for (const service of services) {

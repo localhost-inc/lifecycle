@@ -1,7 +1,8 @@
 import AppKit
 import SwiftUI
 
-struct WorkspaceSidebarView: View {
+/// Global application sidebar: organization context, repositories, workspaces, and user footer.
+struct AppSidebarView: View {
   @Environment(\.appTheme) private var theme
   @ObservedObject var model: AppModel
   let onOpenSettings: () -> Void
@@ -10,34 +11,30 @@ struct WorkspaceSidebarView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      // Traffic light spacer — acts as draggable titlebar region
       Color.clear.frame(height: 40)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
           NSApp.mainWindow?.zoom(nil)
         }
 
-      // Account / org picker
-      SidebarAccountView(model: model)
+      AppSidebarOrganizationHeaderView(model: model)
         .padding(.bottom, 4)
 
-      // Divider
       theme.borderColor.opacity(0.3)
         .frame(height: 1)
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
 
-      // Section header
       HStack(alignment: .center) {
         Text("Repositories")
-          .font(.system(size: 12, weight: .medium))
+          .font(.lc(size: 12, weight: .medium))
           .foregroundStyle(theme.sidebarMutedForegroundColor)
         Spacer()
         Button {
           model.addRepository()
         } label: {
           Image(systemName: "plus")
-            .font(.system(size: 11, weight: .medium))
+            .font(.lc(size: 11, weight: .medium))
             .foregroundStyle(theme.sidebarMutedForegroundColor)
         }
         .buttonStyle(.plain)
@@ -49,11 +46,10 @@ struct WorkspaceSidebarView: View {
       .padding(.trailing, 12)
       .padding(.bottom, 6)
 
-      // Repository + workspace list
       ScrollView {
         VStack(alignment: .leading, spacing: 2) {
           ForEach(model.repositories) { repository in
-            SidebarRepositorySection(
+            AppSidebarRepositorySection(
               model: model,
               repository: repository,
               isExpanded: expandedRepositoryIDs.contains(repository.id),
@@ -68,24 +64,21 @@ struct WorkspaceSidebarView: View {
 
       if let errorMessage = model.errorMessage {
         Text(errorMessage)
-          .font(.system(size: 11, weight: .medium, design: .monospaced))
+          .font(.lc(size: 11, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.errorColor.opacity(0.9))
           .lineLimit(2)
           .padding(.horizontal, 16)
           .padding(.bottom, 8)
       }
 
-      // Bottom bar
-      SidebarBottomBar(onOpenSettings: onOpenSettings)
+      AppSidebarBottomBar(model: model, onOpenSettings: onOpenSettings)
     }
     .onAppear {
-      // Auto-expand the selected repo
       if let selectedID = model.selectedRepositoryID {
         expandedRepositoryIDs.insert(selectedID)
       }
     }
     .onChange(of: model.selectedRepositoryID) { nextID in
-      // Auto-expand when selecting into a collapsed repo
       if let nextID {
         expandedRepositoryIDs.insert(nextID)
       }
@@ -101,9 +94,7 @@ struct WorkspaceSidebarView: View {
   }
 }
 
-// MARK: - Repository Section
-
-private struct SidebarRepositorySection: View {
+private struct AppSidebarRepositorySection: View {
   @Environment(\.appTheme) private var theme
   @ObservedObject var model: AppModel
   let repository: BridgeRepository
@@ -126,19 +117,18 @@ private struct SidebarRepositorySection: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 2) {
-      // Repository row
       ZStack(alignment: .trailing) {
         Button {
           onToggleExpanded()
         } label: {
           HStack(spacing: 6) {
             Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-              .font(.system(size: 9, weight: .semibold))
+              .font(.lc(size: 9, weight: .semibold))
               .foregroundStyle(theme.sidebarMutedForegroundColor)
               .frame(width: 12)
 
             Text(repository.name)
-              .font(.system(size: 13, weight: .medium))
+              .font(.lc(size: 13, weight: .medium))
               .foregroundStyle(isSelected ? theme.sidebarForegroundColor : theme.sidebarMutedForegroundColor)
               .lineLimit(1)
               .truncationMode(.tail)
@@ -161,7 +151,7 @@ private struct SidebarRepositorySection: View {
             isPresentingCreateWorkspacePopover = true
           } label: {
             Image(systemName: "plus")
-              .font(.system(size: 11, weight: .medium))
+              .font(.lc(size: 11, weight: .medium))
               .foregroundStyle(theme.sidebarMutedForegroundColor)
               .frame(width: 24, height: 24)
           }
@@ -173,7 +163,7 @@ private struct SidebarRepositorySection: View {
             attachmentAnchor: .rect(.bounds),
             arrowEdge: .trailing
           ) {
-            SidebarCreateWorkspacePopover(
+            AppSidebarCreateWorkspacePopover(
               repositoryName: repository.name,
               workspaceName: $draftWorkspaceName,
               selectedHost: $selectedWorkspaceHost,
@@ -195,7 +185,7 @@ private struct SidebarRepositorySection: View {
             isPresentingRemoveConfirmation = true
           } label: {
             Image(systemName: "archivebox")
-              .font(.system(size: 11, weight: .medium))
+              .font(.lc(size: 11, weight: .medium))
               .foregroundStyle(theme.sidebarMutedForegroundColor)
               .frame(width: 24, height: 24)
           }
@@ -229,11 +219,10 @@ private struct SidebarRepositorySection: View {
         Text("This removes the repository from Lifecycle. Files on disk are not deleted.")
       }
 
-      // Workspaces — shown when expanded
       if isExpanded && !repository.workspaces.isEmpty {
         VStack(alignment: .leading, spacing: 1) {
           ForEach(repository.workspaces) { workspace in
-            SidebarWorkspaceRow(
+            AppSidebarWorkspaceRow(
               model: model,
               repository: repository,
               workspace: workspace,
@@ -245,10 +234,9 @@ private struct SidebarRepositorySection: View {
       }
     }
   }
-
 }
 
-private struct SidebarCreateWorkspacePopover: View {
+private struct AppSidebarCreateWorkspacePopover: View {
   @Environment(\.appTheme) private var theme
 
   let repositoryName: String
@@ -267,17 +255,17 @@ private struct SidebarCreateWorkspacePopover: View {
     VStack(alignment: .leading, spacing: 14) {
       VStack(alignment: .leading, spacing: 4) {
         Text("New Workspace")
-          .font(.system(size: 14, weight: .semibold))
+          .font(.lc(size: 14, weight: .semibold))
           .foregroundStyle(theme.primaryTextColor)
 
         Text("Create a named workspace in \(repositoryName).")
-          .font(.system(size: 11, weight: .medium))
+          .font(.lc(size: 11, weight: .medium))
           .foregroundStyle(theme.mutedColor)
       }
 
       VStack(alignment: .leading, spacing: 6) {
         Text("Name")
-          .font(.system(size: 11, weight: .medium))
+          .font(.lc(size: 11, weight: .medium))
           .foregroundStyle(theme.sidebarMutedForegroundColor)
 
         TextField("Workspace name", text: $workspaceName)
@@ -288,10 +276,10 @@ private struct SidebarCreateWorkspacePopover: View {
           }
       }
 
-      SidebarWorkspaceHostPicker(selection: $selectedHost)
+      AppSidebarWorkspaceHostPicker(selection: $selectedHost)
 
       Text("Remote and cloud are coming soon.")
-        .font(.system(size: 10, weight: .medium))
+        .font(.lc(size: 10, weight: .medium))
         .foregroundStyle(theme.mutedColor)
 
       HStack(spacing: 8) {
@@ -329,7 +317,7 @@ private struct SidebarCreateWorkspacePopover: View {
   }
 }
 
-private struct SidebarWorkspaceHostPicker: View {
+private struct AppSidebarWorkspaceHostPicker: View {
   @Environment(\.appTheme) private var theme
 
   @Binding var selection: WorkspaceCreationHost
@@ -337,17 +325,17 @@ private struct SidebarWorkspaceHostPicker: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Host")
-        .font(.system(size: 11, weight: .medium))
+        .font(.lc(size: 11, weight: .medium))
         .foregroundStyle(theme.sidebarMutedForegroundColor)
 
-      WorkspaceHostSegmentedControl(selection: $selection)
+      AppSidebarHostSegmentedControl(selection: $selection)
         .frame(height: 24)
         .lcPointerCursor()
     }
   }
 }
 
-private struct WorkspaceHostSegmentedControl: NSViewRepresentable {
+private struct AppSidebarHostSegmentedControl: NSViewRepresentable {
   @Binding var selection: WorkspaceCreationHost
 
   func makeCoordinator() -> Coordinator {
@@ -410,9 +398,7 @@ private struct WorkspaceHostSegmentedControl: NSViewRepresentable {
   }
 }
 
-// MARK: - Workspace Row
-
-private struct SidebarWorkspaceRow: View {
+private struct AppSidebarWorkspaceRow: View {
   @Environment(\.appTheme) private var theme
   @ObservedObject var model: AppModel
   let repository: BridgeRepository
@@ -436,12 +422,12 @@ private struct SidebarWorkspaceRow: View {
       } label: {
         HStack(spacing: 6) {
           Image(systemName: workspace.ref == nil ? "folder.badge.gearshape" : "arrow.triangle.branch")
-            .font(.system(size: 10, weight: .medium))
+            .font(.lc(size: 10, weight: .medium))
             .foregroundStyle(isActive ? theme.sidebarForegroundColor : theme.sidebarMutedForegroundColor)
             .frame(width: 16)
 
           Text(workspace.name)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.lc(size: 12, weight: .semibold))
             .foregroundStyle(isActive ? theme.sidebarForegroundColor : theme.sidebarMutedForegroundColor)
             .lineLimit(1)
             .truncationMode(.tail)
@@ -462,7 +448,7 @@ private struct SidebarWorkspaceRow: View {
           presentArchiveWorkspaceAlert()
         } label: {
           Image(systemName: "archivebox")
-            .font(.system(size: 11, weight: .medium))
+            .font(.lc(size: 11, weight: .medium))
             .foregroundStyle(theme.sidebarMutedForegroundColor)
             .frame(width: 24, height: 24)
         }
@@ -521,31 +507,36 @@ private struct SidebarWorkspaceRow: View {
   }
 }
 
-// MARK: - Bottom Bar
-
-private struct SidebarBottomBar: View {
+private struct AppSidebarBottomBar: View {
   @Environment(\.appTheme) private var theme
+  @ObservedObject var model: AppModel
   let onOpenSettings: () -> Void
 
   var body: some View {
-    HStack(alignment: .center) {
-      LifecycleLogo(size: .small, foregroundOpacity: 0.68)
+    VStack(alignment: .leading, spacing: 0) {
+      theme.borderColor.opacity(0.3)
+        .frame(height: 1)
+        .padding(.horizontal, 12)
 
-      Spacer()
+      HStack(alignment: .center, spacing: 12) {
+        AppSidebarUserFooterView(model: model)
+          .frame(maxWidth: .infinity, alignment: .leading)
 
-      Button {
-        onOpenSettings()
-      } label: {
-        Image(systemName: "gearshape")
-          .font(.system(size: 13, weight: .medium))
-          .foregroundStyle(theme.sidebarMutedForegroundColor)
+        Button {
+          onOpenSettings()
+        } label: {
+          Image(systemName: "gearshape")
+            .font(.lc(size: 13, weight: .medium))
+            .foregroundStyle(theme.sidebarMutedForegroundColor)
+            .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.plain)
+        .lcPointerCursor()
+        .contentShape(Rectangle())
+        .help("Settings")
       }
-      .buttonStyle(.plain)
-      .lcPointerCursor()
-      .contentShape(Rectangle())
-      .help("Settings")
+      .padding(.horizontal, 12)
+      .padding(.vertical, 10)
     }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 12)
   }
 }

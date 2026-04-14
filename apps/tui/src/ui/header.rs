@@ -50,10 +50,16 @@ pub fn render_route(frame: &mut Frame, area: Rect, app: &App) -> (Rect, Rect) {
             .services
             .iter()
             .any(|s| matches!(s.status.as_str(), "starting" | "ready"));
-    let stack_label = if stack_running { " ■ Stack " } else { " ▶ Stack " };
+    let stack_label = if stack_running {
+        " ■ Stack "
+    } else {
+        " ▶ Stack "
+    };
 
     let git_style = match &app.dialog {
-        AppDialog::GitCommit(_) => Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        AppDialog::GitCommit(_) => Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
         _ => Style::default().fg(Color::DarkGray),
     };
     let stack_style = if stack_running {

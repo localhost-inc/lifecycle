@@ -20,6 +20,19 @@ final class AppThemeTests: XCTestCase {
     XCTAssertNotNil(AppResources.lifecycleLogoImage)
   }
 
+  func testAppResourcesLoadsLifecycleWordmarkImage() {
+    XCTAssertNotNil(AppResources.lifecycleWordmarkImage)
+  }
+
+  func testAppResourcesRegistersBundledGeistFonts() {
+    XCTAssertTrue(AppResources.registerBundledFonts())
+  }
+
+  func testAppTypographyResolvesBundledGeistPixelSquareFont() {
+    let font = AppTypography.nsFont(size: 34, role: .pixel)
+    XCTAssertEqual(font.fontName, "GeistPixel-Square")
+  }
+
   func testAppThemeStorePersistsThemePreferenceAndPreservesUnknownFields() throws {
     let rootURL = temporaryRootURL()
     let settingsURL = rootURL.appendingPathComponent("settings.json")
@@ -64,6 +77,7 @@ final class AppThemeTests: XCTestCase {
     XCTAssertTrue(FileManager.default.fileExists(atPath: configPath))
 
     let contents = try String(contentsOfFile: configPath, encoding: .utf8)
+    XCTAssertTrue(contents.contains("font-family = Geist Mono"))
     XCTAssertTrue(contents.contains("background = #191724"))
     XCTAssertTrue(contents.contains("cursor-color = #ebbcba"))
     XCTAssertTrue(contents.contains("palette = 1=#eb6f92"))
@@ -143,6 +157,67 @@ final class AppThemeTests: XCTestCase {
     XCTAssertEqual(claude["loginMethod"] as? String, "console")
   }
 
+  func testAppThemeStorePersistsDeveloperSettingsLocally() throws {
+    let rootURL = temporaryRootURL()
+    let settingsURL = rootURL.appendingPathComponent("settings.json")
+    try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+    try """
+    {
+      "customUserField": 42
+    }
+    """.write(to: settingsURL, atomically: true, encoding: .utf8)
+
+    let store = AppThemeStore(
+      environment: [
+        "HOME": NSHomeDirectory(),
+        "LIFECYCLE_ROOT": rootURL.path,
+        "LIFECYCLE_DEV": "1",
+      ]
+    )
+
+    XCTAssertTrue(store.isDeveloperMode)
+    store.setDeveloperShowsOnboarding(true)
+
+    let data = try Data(contentsOf: settingsURL)
+    let raw = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let developer = try XCTUnwrap(raw["developer"] as? [String: Any])
+
+    XCTAssertEqual(raw["customUserField"] as? Int, 42)
+    XCTAssertEqual(developer["showOnboarding"] as? Bool, true)
+  }
+
+  func testAppThemeStoreClearsDeveloperSettingsLocally() throws {
+    let rootURL = temporaryRootURL()
+    let settingsURL = rootURL.appendingPathComponent("settings.json")
+    try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+    try """
+    {
+      "developer": {
+        "showOnboarding": true
+      }
+    }
+    """.write(to: settingsURL, atomically: true, encoding: .utf8)
+
+    let store = AppThemeStore(
+      environment: [
+        "HOME": NSHomeDirectory(),
+        "LIFECYCLE_ROOT": rootURL.path,
+        "LIFECYCLE_DEV": "1",
+      ]
+    )
+
+    XCTAssertTrue(store.isDeveloperMode)
+    XCTAssertTrue(store.settings.developer.showsOnboarding)
+
+    store.setDeveloperShowsOnboarding(false)
+
+    let data = try Data(contentsOf: settingsURL)
+    let raw = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let developer = raw["developer"] as? [String: Any]
+
+    XCTAssertTrue(developer == nil || developer?["showOnboarding"] as? Bool == false)
+  }
+
   func testAppThemeStorePersistsTerminalProfilesInNewShape() throws {
     let rootURL = temporaryRootURL()
     let settingsURL = rootURL.appendingPathComponent("settings.json")
@@ -202,12 +277,67 @@ final class AppThemeTests: XCTestCase {
     let preset = AppThemeCatalog.resolve(preference: .monokai, systemAppearance: .dark)
     let contents = TerminalThemeConfigWriter.render(preset: preset)
 
+    XCTAssertTrue(contents.contains("font-family = Geist Mono"))
     XCTAssertTrue(contents.contains("background = #272822"))
     XCTAssertTrue(contents.contains("foreground = #f8f8f2"))
     XCTAssertTrue(contents.contains("cursor-color = #66d9ef"))
     XCTAssertTrue(contents.contains("palette = 0=#403e41"))
     XCTAssertTrue(contents.contains("palette = 7=#ccccc6"))
     XCTAssertTrue(contents.contains("palette = 15=#f8f8f2"))
+  }
+
+  func testLightPrimaryButtonsUseNeutralChromeAtRest() {
+    let theme = AppThemeCatalog.resolve(preference: .light, systemAppearance: .light).theme
+
+    let palette = theme.buttonPalette(
+      for: .primary,
+      isEnabled: true,
+      isHovering: false,
+      isActive: false
+    )
+
+    XCTAssertEqual(palette.foregroundHex, theme.foreground)
+    XCTAssertEqual(palette.backgroundHex, theme.card)
+    XCTAssertEqual(palette.borderHex, theme.border)
+    XCTAssertEqual(palette.borderOpacity, 0.62, accuracy: 0.001)
+  }
+
+  func testGitHubLightPrimaryButtonsHoverToSlightlyDarkerNeutralChrome() {
+    let theme = AppThemeCatalog.resolve(preference: .githubLight, systemAppearance: .light).theme
+
+    let palette = theme.buttonPalette(
+      for: .primary,
+      isEnabled: true,
+      isHovering: true,
+      isActive: false
+    )
+
+    XCTAssertEqual(palette.foregroundHex, theme.foreground)
+    XCTAssertEqual(palette.backgroundHex, theme.glass)
+    XCTAssertEqual(palette.borderHex, theme.border)
+    XCTAssertEqual(palette.borderOpacity, 0.78, accuracy: 0.001)
+  }
+
+  func testDarkPrimaryButtonsRemainInvertedFromThemePalette() {
+    let theme = AppThemeCatalog.resolve(preference: .dark, systemAppearance: .dark).theme
+
+    let palette = theme.buttonPalette(
+      for: .primary,
+      isEnabled: true,
+      isHovering: false,
+      isActive: false
+    )
+
+    XCTAssertEqual(palette.foregroundHex, theme.background)
+    XCTAssertEqual(palette.backgroundHex, theme.foreground)
+    XCTAssertNil(palette.borderHex)
+  }
+
+  func testGitHubLightThemeKeepsPrimarySeparateFromAccent() {
+    let theme = AppThemeCatalog.resolve(preference: .githubLight, systemAppearance: .light).theme
+
+    XCTAssertEqual(theme.primary, "#1f2328")
+    XCTAssertEqual(theme.accent, "#0969da")
   }
 
   private func temporaryRootURL() -> URL {

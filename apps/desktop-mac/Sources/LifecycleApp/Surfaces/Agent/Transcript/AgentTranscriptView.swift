@@ -38,11 +38,11 @@ struct AgentTranscriptView: View {
               ForEach(statusRows) { row in
                 HStack(alignment: .top, spacing: 0) {
                   Text(statusPrefix(for: row.tone))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(.lc(size: 13, weight: .medium, design: .monospaced))
                     .foregroundStyle(statusPrefixColor(for: row.tone))
 
                   Text(verbatim: " \(row.text)")
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(.lc(size: 13, weight: .medium, design: .monospaced))
                     .foregroundStyle(statusTextColor(for: row.tone))
                 }
                 .padding(.horizontal, 16)

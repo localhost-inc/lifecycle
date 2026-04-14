@@ -135,9 +135,12 @@ pub struct WorkspaceStackActionPayload {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceGitPayload {
     pub status: GitStatusPayload,
     pub commits: Vec<GitLogEntryPayload>,
+    pub current_branch: GitBranchPullRequestPayload,
+    pub pull_requests: GitPullRequestListPayload,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -149,6 +152,7 @@ pub struct WorkspaceGitCommitPayload {
 #[serde(rename_all = "camelCase")]
 pub struct GitStatusPayload {
     pub branch: Option<String>,
+    pub upstream: Option<String>,
     pub ahead: u32,
     pub behind: u32,
     pub files: Vec<GitFileStatusPayload>,
@@ -158,6 +162,7 @@ pub struct GitStatusPayload {
 #[serde(rename_all = "camelCase")]
 pub struct GitFileStatusPayload {
     pub path: String,
+    pub original_path: Option<String>,
     pub index_status: Option<String>,
     pub worktree_status: Option<String>,
     pub staged: bool,
@@ -185,6 +190,54 @@ pub struct GitLogEntryPayload {
 #[serde(rename_all = "camelCase")]
 pub struct GitPushPayload {}
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitPullRequestSupportPayload {
+    pub available: bool,
+    pub provider: Option<String>,
+    pub reason: Option<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitPullRequestCheckSummaryPayload {
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitPullRequestSummaryPayload {
+    pub number: u32,
+    pub title: String,
+    pub state: String,
+    pub is_draft: bool,
+    pub author: String,
+    pub head_ref_name: String,
+    pub base_ref_name: String,
+    pub mergeable: String,
+    pub review_decision: Option<String>,
+    pub checks: Option<Vec<GitPullRequestCheckSummaryPayload>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitPullRequestListPayload {
+    pub support: GitPullRequestSupportPayload,
+    pub pull_requests: Vec<GitPullRequestSummaryPayload>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranchPullRequestPayload {
+    pub support: GitPullRequestSupportPayload,
+    pub branch: Option<String>,
+    pub upstream: Option<String>,
+    pub has_pull_request_changes: Option<bool>,
+    pub suggested_base_ref: Option<String>,
+    pub pull_request: Option<GitPullRequestSummaryPayload>,
+}
+
 impl LifecycleBridgeClient {
     pub fn from_env() -> Option<Self> {
         let base_url = std::env::var(LIFECYCLE_BRIDGE_URL_ENV).ok()?;
@@ -199,8 +252,12 @@ impl LifecycleBridgeClient {
         Some(Self {
             base_url: shared_url,
             launch: BridgeLaunchConfig {
-                runtime: std::env::var(LIFECYCLE_BRIDGE_CLI_RUNTIME_ENV).ok().filter(|value| !value.trim().is_empty()),
-                entrypoint: std::env::var(LIFECYCLE_BRIDGE_CLI_ENTRYPOINT_ENV).ok().filter(|value| !value.trim().is_empty()),
+                runtime: std::env::var(LIFECYCLE_BRIDGE_CLI_RUNTIME_ENV)
+                    .ok()
+                    .filter(|value| !value.trim().is_empty()),
+                entrypoint: std::env::var(LIFECYCLE_BRIDGE_CLI_ENTRYPOINT_ENV)
+                    .ok()
+                    .filter(|value| !value.trim().is_empty()),
             },
             url_changed_rx: Arc::new(Mutex::new(url_changed_rx)),
             _watcher: Arc::new(Mutex::new(watcher)),
@@ -214,7 +271,10 @@ impl LifecycleBridgeClient {
     /// Drain any pending URL-change notifications from the file watcher.
     /// Returns the latest new base URL if the bridge moved, or `None`.
     pub fn poll_url_changed(&self) -> Option<String> {
-        let rx = self.url_changed_rx.lock().expect("url_changed lock poisoned");
+        let rx = self
+            .url_changed_rx
+            .lock()
+            .expect("url_changed lock poisoned");
         let mut latest = None;
         while let Ok(url) = rx.try_recv() {
             latest = Some(url);
@@ -270,7 +330,10 @@ impl LifecycleBridgeClient {
         self.get(&format!("/workspaces/{}/git", workspace_id))
     }
 
-    pub fn workspace_shell(&self, workspace_id: &str) -> Result<crate::shell::WorkspaceShell, String> {
+    pub fn workspace_shell(
+        &self,
+        workspace_id: &str,
+    ) -> Result<crate::shell::WorkspaceShell, String> {
         self.post(&format!("/workspaces/{}/shell", workspace_id))
     }
 
@@ -303,7 +366,11 @@ impl LifecycleBridgeClient {
         self.send_json::<serde_json::Value>("/repos", body)
     }
 
-    pub fn create_workspace(&self, name: &str, repo_path: Option<&str>) -> Result<serde_json::Value, String> {
+    pub fn create_workspace(
+        &self,
+        name: &str,
+        repo_path: Option<&str>,
+    ) -> Result<serde_json::Value, String> {
         let repo_path = repo_path
             .map(str::trim)
             .filter(|path| !path.is_empty())
@@ -316,7 +383,11 @@ impl LifecycleBridgeClient {
         self.send_json::<serde_json::Value>("/workspaces", body)
     }
 
-    pub fn archive_workspace(&self, name: &str, repo_path: &str) -> Result<serde_json::Value, String> {
+    pub fn archive_workspace(
+        &self,
+        name: &str,
+        repo_path: &str,
+    ) -> Result<serde_json::Value, String> {
         self.request_json::<serde_json::Value, _>(|base_url| {
             let url = format!(
                 "{}/workspaces/{}?repoPath={}",
@@ -353,10 +424,7 @@ impl LifecycleBridgeClient {
         })
     }
 
-    fn request_json<TResult: DeserializeOwned, F>(
-        &self,
-        mut send: F,
-    ) -> Result<TResult, String>
+    fn request_json<TResult: DeserializeOwned, F>(&self, mut send: F) -> Result<TResult, String>
     where
         F: FnMut(&str) -> Result<ureq::Response, ureq::Error>,
     {
@@ -397,7 +465,10 @@ impl LifecycleBridgeClient {
     }
 
     fn current_base_url(&self) -> String {
-        self.base_url.lock().expect("bridge url lock poisoned").clone()
+        self.base_url
+            .lock()
+            .expect("bridge url lock poisoned")
+            .clone()
     }
 
     fn set_base_url(&self, next_url: String) {
@@ -603,45 +674,48 @@ fn start_registration_watcher(
     let registration_path = bridge_registration_path()?;
     let watch_dir = registration_path.parent()?.to_path_buf();
 
-    let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-        let event = match res {
-            Ok(event) => event,
-            Err(_) => return,
-        };
+    let mut watcher =
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+            let event = match res {
+                Ok(event) => event,
+                Err(_) => return,
+            };
 
-        let dominated = matches!(
-            event.kind,
-            notify::EventKind::Create(_)
-                | notify::EventKind::Modify(_)
-                | notify::EventKind::Remove(_)
-        );
-        if !dominated {
-            return;
-        }
+            let dominated = matches!(
+                event.kind,
+                notify::EventKind::Create(_)
+                    | notify::EventKind::Modify(_)
+                    | notify::EventKind::Remove(_)
+            );
+            if !dominated {
+                return;
+            }
 
-        let affects_registration = event.paths.iter().any(|p| p.ends_with("bridge.json"));
-        if !affects_registration {
-            return;
-        }
+            let affects_registration = event.paths.iter().any(|p| p.ends_with("bridge.json"));
+            if !affects_registration {
+                return;
+            }
 
-        let next_url = match discover_healthy_bridge_url() {
-            Some(url) => url,
-            None => return,
-        };
+            let next_url = match discover_healthy_bridge_url() {
+                Some(url) => url,
+                None => return,
+            };
 
-        let current = base_url.lock().expect("bridge url lock poisoned").clone();
-        if next_url != current {
-            crate::debug::log(format!(
-                "bridge registration changed: {} -> {}",
-                current, next_url
-            ));
-            *base_url.lock().expect("bridge url lock poisoned") = next_url.clone();
-            let _ = tx.send(next_url);
-        }
-    })
-    .ok()?;
+            let current = base_url.lock().expect("bridge url lock poisoned").clone();
+            if next_url != current {
+                crate::debug::log(format!(
+                    "bridge registration changed: {} -> {}",
+                    current, next_url
+                ));
+                *base_url.lock().expect("bridge url lock poisoned") = next_url.clone();
+                let _ = tx.send(next_url);
+            }
+        })
+        .ok()?;
 
-    watcher.watch(&watch_dir, RecursiveMode::NonRecursive).ok()?;
+    watcher
+        .watch(&watch_dir, RecursiveMode::NonRecursive)
+        .ok()?;
     Some(watcher)
 }
 
@@ -649,6 +723,7 @@ fn start_registration_watcher(
 mod tests {
     use super::{
         bridge_registration_path_from_env, bridge_url_from_registration_text, format_bridge_error,
+        WorkspaceGitPayload,
     };
     use std::path::PathBuf;
 
@@ -676,7 +751,10 @@ mod tests {
     #[test]
     fn formats_raw_text_failures_with_status() {
         let message = format_bridge_error(500, "upstream exploded");
-        assert_eq!(message, "Bridge request failed with status 500: upstream exploded");
+        assert_eq!(
+            message,
+            "Bridge request failed with status 500: upstream exploded"
+        );
     }
 
     #[test]
@@ -707,5 +785,127 @@ mod tests {
         .expect("registration path");
 
         assert_eq!(path, PathBuf::from("/tmp/runtime-root/bridge.json"));
+    }
+
+    #[test]
+    fn deserializes_workspace_git_payload_with_pull_request_fields() {
+        let payload = serde_json::from_str::<WorkspaceGitPayload>(
+            r#"{
+                "status": {
+                    "branch": "feature/git-prs",
+                    "headSha": "abcdef1234567890",
+                    "upstream": "origin/feature/git-prs",
+                    "ahead": 2,
+                    "behind": 1,
+                    "files": [
+                        {
+                            "path": "src/app.ts",
+                            "originalPath": null,
+                            "indexStatus": "modified",
+                            "worktreeStatus": "modified",
+                            "staged": true,
+                            "unstaged": true,
+                            "stats": {
+                                "insertions": 12,
+                                "deletions": 4
+                            }
+                        }
+                    ]
+                },
+                "commits": [
+                    {
+                        "sha": "abcdef1234567890",
+                        "shortSha": "abcdef12",
+                        "message": "feat: add version control panel",
+                        "author": "kyle",
+                        "email": "kyle@example.com",
+                        "timestamp": "2026-03-09T11:00:00.000Z"
+                    }
+                ],
+                "currentBranch": {
+                    "support": {
+                        "available": true,
+                        "provider": "github",
+                        "reason": null,
+                        "message": null
+                    },
+                    "branch": "feature/git-prs",
+                    "upstream": "origin/feature/git-prs",
+                    "hasPullRequestChanges": true,
+                    "suggestedBaseRef": "main",
+                    "pullRequest": {
+                        "number": 42,
+                        "title": "feat: add git pull request rail",
+                        "url": "https://github.com/example/repo/pull/42",
+                        "state": "open",
+                        "isDraft": false,
+                        "author": "kyle",
+                        "headRefName": "feature/git-prs",
+                        "baseRefName": "main",
+                        "createdAt": "2026-03-09T10:00:00.000Z",
+                        "updatedAt": "2026-03-09T11:00:00.000Z",
+                        "mergeable": "mergeable",
+                        "mergeStateStatus": "CLEAN",
+                        "reviewDecision": "approved",
+                        "checks": [
+                            {
+                                "name": "build",
+                                "status": "success",
+                                "workflowName": "CI",
+                                "detailsUrl": "https://github.com/example/repo/actions/runs/42"
+                            }
+                        ]
+                    }
+                },
+                "pullRequests": {
+                    "support": {
+                        "available": true,
+                        "provider": "github",
+                        "reason": null,
+                        "message": null
+                    },
+                    "pullRequests": [
+                        {
+                            "number": 42,
+                            "title": "feat: add git pull request rail",
+                            "url": "https://github.com/example/repo/pull/42",
+                            "state": "open",
+                            "isDraft": false,
+                            "author": "kyle",
+                            "headRefName": "feature/git-prs",
+                            "baseRefName": "main",
+                            "createdAt": "2026-03-09T10:00:00.000Z",
+                            "updatedAt": "2026-03-09T11:00:00.000Z",
+                            "mergeable": "mergeable",
+                            "mergeStateStatus": "CLEAN",
+                            "reviewDecision": "approved",
+                            "checks": [
+                                {
+                                    "name": "build",
+                                    "status": "success",
+                                    "workflowName": "CI",
+                                    "detailsUrl": "https://github.com/example/repo/actions/runs/42"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }"#,
+        )
+        .expect("payload should deserialize");
+
+        assert_eq!(
+            payload.status.upstream.as_deref(),
+            Some("origin/feature/git-prs")
+        );
+        assert_eq!(
+            payload
+                .current_branch
+                .pull_request
+                .as_ref()
+                .map(|pr| pr.number),
+            Some(42)
+        );
+        assert_eq!(payload.pull_requests.pull_requests.len(), 1);
     }
 }

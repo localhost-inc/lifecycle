@@ -5,6 +5,7 @@ enum LCButtonVariant {
   case secondary
   case ghost
   case chrome
+  case surface
 }
 
 enum LCButtonSize {
@@ -15,6 +16,90 @@ enum LCButtonSize {
 enum LCButtonLayout {
   case standard
   case icon
+}
+
+struct LCButtonPalette: Equatable {
+  let foregroundHex: String
+  let foregroundOpacity: Double
+  let backgroundHex: String?
+  let backgroundOpacity: Double
+  let borderHex: String?
+  let borderOpacity: Double
+  let controlOpacity: Double
+}
+
+extension AppTheme {
+  func buttonPalette(
+    for variant: LCButtonVariant,
+    isEnabled: Bool,
+    isHovering: Bool,
+    isActive: Bool
+  ) -> LCButtonPalette {
+    switch variant {
+    case .primary:
+      if isDarkAppearance {
+        return LCButtonPalette(
+          foregroundHex: background,
+          foregroundOpacity: 1,
+          backgroundHex: foreground,
+          backgroundOpacity: 1,
+          borderHex: nil,
+          borderOpacity: 0,
+          controlOpacity: isEnabled ? 1 : 0.5
+        )
+      }
+
+      return LCButtonPalette(
+        foregroundHex: foreground,
+        foregroundOpacity: 1,
+        backgroundHex: isHovering || isActive ? glass : card,
+        backgroundOpacity: 1,
+        borderHex: border,
+        borderOpacity: isEnabled ? ((isHovering || isActive) ? 0.78 : 0.62) : 0.45,
+        controlOpacity: isEnabled ? 1 : 0.5
+      )
+    case .secondary:
+      return LCButtonPalette(
+        foregroundHex: foreground,
+        foregroundOpacity: 1,
+        backgroundHex: nil,
+        backgroundOpacity: 0,
+        borderHex: border,
+        borderOpacity: 1,
+        controlOpacity: isEnabled ? 1 : 0.5
+      )
+    case .ghost:
+      return LCButtonPalette(
+        foregroundHex: mutedForeground,
+        foregroundOpacity: 1,
+        backgroundHex: nil,
+        backgroundOpacity: 0,
+        borderHex: nil,
+        borderOpacity: 0,
+        controlOpacity: isEnabled ? 1 : 0.5
+      )
+    case .surface:
+      return LCButtonPalette(
+        foregroundHex: foreground,
+        foregroundOpacity: 1,
+        backgroundHex: isEnabled ? ((isHovering || isActive) ? surfaceHover : surface) : surface,
+        backgroundOpacity: isEnabled ? 1 : 0.9,
+        borderHex: border,
+        borderOpacity: isEnabled ? (isActive ? 0.88 : (isHovering ? 0.8 : 0.62)) : 0.45,
+        controlOpacity: isEnabled ? 1 : 0.82
+      )
+    case .chrome:
+      return LCButtonPalette(
+        foregroundHex: foreground,
+        foregroundOpacity: 1,
+        backgroundHex: card,
+        backgroundOpacity: isEnabled ? ((isHovering || isActive) ? 0.98 : 0.9) : 0.55,
+        borderHex: border,
+        borderOpacity: isEnabled ? (isActive ? 0.88 : (isHovering ? 0.8 : 0.62)) : 0.45,
+        controlOpacity: isEnabled ? 1 : 0.82
+      )
+    }
+  }
 }
 
 struct LCButton: View {
@@ -104,12 +189,21 @@ struct LCButton: View {
     environmentEnabled && isEnabled
   }
 
+  private var palette: LCButtonPalette {
+    theme.buttonPalette(
+      for: variant,
+      isEnabled: controlEnabled,
+      isHovering: isHovering,
+      isActive: isActive
+    )
+  }
+
   @ViewBuilder
   private var renderedLabel: some View {
     let baseLabel: AnyView = if stylesLabelInternally {
       AnyView(
         content
-          .font(.system(size: fontSize, weight: fontWeight))
+          .font(.lc(size: fontSize, weight: fontWeight))
           .foregroundStyle(foregroundColor)
       )
     } else {
@@ -136,14 +230,14 @@ struct LCButton: View {
 
   private var fontWeight: Font.Weight {
     switch variant {
-    case .primary, .chrome: .semibold
+    case .primary, .chrome, .surface: .semibold
     case .secondary, .ghost: .medium
     }
   }
 
   private var horizontalPadding: CGFloat {
     switch variant {
-    case .chrome:
+    case .chrome, .surface:
       return 10
     case .primary, .secondary, .ghost:
       switch size {
@@ -157,7 +251,7 @@ struct LCButton: View {
 
   private var verticalPadding: CGFloat {
     switch variant {
-    case .chrome:
+    case .chrome, .surface:
       return 6
     case .primary, .secondary, .ghost:
       switch size {
@@ -171,7 +265,7 @@ struct LCButton: View {
 
   private var cornerRadius: CGFloat {
     switch variant {
-    case .chrome:
+    case .chrome, .surface:
       return 7
     case .primary, .secondary, .ghost:
       return 8
@@ -179,86 +273,72 @@ struct LCButton: View {
   }
 
   private var foregroundColor: Color {
-    switch variant {
-    case .primary: theme.shellBackground
-    case .secondary: theme.primaryTextColor
-    case .ghost: theme.mutedColor
-    case .chrome: theme.primaryTextColor
-    }
+    Color(nsColor: NSColor(themeHex: palette.foregroundHex))
+      .opacity(palette.foregroundOpacity)
   }
 
   private var backgroundColor: Color {
-    switch variant {
-    case .primary:
-      return theme.primaryTextColor
-    case .secondary, .ghost:
+    guard let backgroundHex = palette.backgroundHex else {
       return .clear
-    case .chrome:
-      if !controlEnabled {
-        return theme.surfaceRaised.opacity(0.55)
-      }
-
-      if isHovering || isActive {
-        return theme.panelBackground.opacity(0.98)
-      }
-
-      return theme.panelBackground.opacity(0.9)
     }
+
+    return Color(nsColor: NSColor(themeHex: backgroundHex))
+      .opacity(palette.backgroundOpacity)
   }
 
   private var borderColor: Color {
-    switch variant {
-    case .primary, .ghost:
+    guard let borderHex = palette.borderHex else {
       return .clear
-    case .secondary:
-      return theme.borderColor
-    case .chrome:
-      if !controlEnabled {
-        return theme.borderColor.opacity(0.45)
-      }
-
-      if isActive {
-        return theme.borderColor.opacity(0.88)
-      }
-
-      return theme.borderColor.opacity(isHovering ? 0.8 : 0.62)
     }
+
+    return Color(nsColor: NSColor(themeHex: borderHex))
+      .opacity(palette.borderOpacity)
   }
 
   private var shadowColor: Color {
-    guard variant == .chrome, controlEnabled else {
+    guard controlEnabled else {
       return .clear
     }
 
-    if isHovering || isActive {
-      return theme.cardShadowColor.opacity(0.92)
-    }
+    switch variant {
+    case .chrome:
+      if isHovering || isActive {
+        return theme.cardShadowColor.opacity(0.92)
+      }
 
-    return theme.cardShadowColor.opacity(0.72)
+      return theme.cardShadowColor.opacity(0.72)
+    case .surface, .primary, .secondary, .ghost:
+      return .clear
+    }
   }
 
   private var shadowRadius: CGFloat {
-    guard variant == .chrome, controlEnabled else {
+    guard controlEnabled else {
       return 0
     }
 
-    return (isHovering || isActive) ? 2.25 : 1.25
+    switch variant {
+    case .chrome:
+      return (isHovering || isActive) ? 2.25 : 1.25
+    case .surface, .primary, .secondary, .ghost:
+      return 0
+    }
   }
 
   private var shadowYOffset: CGFloat {
-    guard variant == .chrome, controlEnabled else {
+    guard controlEnabled else {
       return 0
     }
 
-    return (isHovering || isActive) ? 1.25 : 0.75
+    switch variant {
+    case .chrome:
+      return (isHovering || isActive) ? 1.25 : 0.75
+    case .surface, .primary, .secondary, .ghost:
+      return 0
+    }
   }
 
   private var controlOpacity: Double {
-    switch variant {
-    case .chrome:
-      return controlEnabled ? 1 : 0.82
-    case .primary, .secondary, .ghost:
-      return controlEnabled ? 1 : 0.5
-    }
+    palette.controlOpacity
   }
 }

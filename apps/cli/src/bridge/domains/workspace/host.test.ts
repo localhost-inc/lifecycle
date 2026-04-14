@@ -4,10 +4,7 @@ import { createWorkspaceHostRegistry } from "./index";
 import type { WorkspaceHostAdapter } from "./host";
 import { CloudWorkspaceHost } from "./hosts/cloud";
 import { type LocalHostDeps, LocalWorkspaceHost } from "./hosts/local";
-import {
-  MANAGED_TMUX_SOCKET_NAME,
-  normalizeTmuxTerminalId,
-} from "../terminal/tmux-runtime";
+import { MANAGED_TMUX_SOCKET_NAME, normalizeTmuxTerminalId } from "../terminal/tmux-runtime";
 
 describe("workspace contract", () => {
   function workspace(overrides: Partial<WorkspaceRecord> = {}): WorkspaceRecord {
@@ -152,7 +149,7 @@ describe("workspace contract", () => {
     const targetWorkspace = workspace();
     const config = {
       workspace: { prepare: [], teardown: [] },
-      stack: {},
+      stack: { nodes: {} },
     };
     const input = {
       hostLabel: "workspace-1",
@@ -321,7 +318,7 @@ describe("workspace contract", () => {
     await expect(
       client.startStack(
         workspace({ host: "cloud" }),
-        { workspace: { prepare: [], teardown: [] }, stack: {} },
+        { workspace: { prepare: [], teardown: [] }, stack: { nodes: {} } },
         {
           hostLabel: "workspace-1",
           logScope: { repositorySlug: "project-1", workspaceSlug: "workspace-1" },
@@ -894,6 +891,81 @@ describe("workspace contract", () => {
     });
   });
 
+  test("local host client launches the requested harness command when creating a terminal", async () => {
+    const calls: Array<{ program: string; args: string[] }> = [];
+    const spawnSyncMock = ((program: string, args?: readonly string[]) => {
+      const commandArgs = [...(args ?? [])];
+      calls.push({ program, args: commandArgs });
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("command -v 'tmux'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (
+        program === "sh" &&
+        commandArgs[0] === "-lc" &&
+        commandArgs[1]?.includes("'tmux' 'has-session'")
+      ) {
+        return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (program === "tmux" && commandArgs[0] === "new-window") {
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout: "@8\n",
+        };
+      }
+
+      if (program === "tmux" && commandArgs[0] === "list-windows") {
+        return {
+          error: undefined,
+          status: 0,
+          stderr: "",
+          stdout: "@0\tshell\t0\t1\n@8\tCodex\t0\t0\n",
+        };
+      }
+
+      return { error: undefined, status: 0, stderr: "", stdout: "" };
+    }) as unknown as NonNullable<LocalHostDeps["spawnSync"]>;
+    const client = new LocalWorkspaceHost({
+      invoke: async () => "",
+      spawnSync: spawnSyncMock,
+    });
+
+    const terminal = await client.createTerminal(workspace(), {
+      sessionName: "lc-local-session",
+      kind: "codex",
+      title: "Codex",
+      launchSpec: {
+        program: "codex",
+        args: ["--model", "gpt-5.4", "--search"],
+        cwd: null,
+        env: [],
+      },
+    });
+
+    expect(terminal).toEqual({
+      id: "@8",
+      title: "Codex",
+      kind: "codex",
+      busy: false,
+    });
+    expect(
+      calls.some(
+        (call) =>
+          call.program === "tmux" &&
+          call.args[0] === "new-window" &&
+          call.args.at(-1) === "'env' 'codex' '--model' 'gpt-5.4' '--search'",
+      ),
+    ).toBe(true);
+  });
+
   test("local host client falls back to the terminal listing when create output is not parseable", async () => {
     let listCalls = 0;
     const spawnSyncMock = ((program: string, args?: readonly string[]) => {
@@ -1249,7 +1321,7 @@ describe("workspace contract", () => {
       fileReader: {
         exists: async () => true,
         readTextFile: async () =>
-          '{"workspace":{"prepare":[]},"stack":{"web":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
+          '{"workspace":{"prepare":[]},"stack":{"nodes":{"web":{"kind":"process","command":"bun run dev"}}}}',
       },
     });
 

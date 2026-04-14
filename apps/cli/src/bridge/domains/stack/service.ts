@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import type {
   LifecycleConfig,
   ServiceRecord,
+  StackManagedRecord,
   StackNodeRecord,
   StackSummaryRecord,
   WorkspaceRecord,
@@ -15,7 +16,7 @@ import {
   isPidAlive,
   previewUrlForService,
   readStackRuntimeState,
-  resolvePreviewProxyPort,
+  resolveBridgePort,
   stackServiceContainerName,
   upsertStackRuntimeService,
 } from "../stack";
@@ -26,6 +27,34 @@ import { resolveWorkspaceRecord } from "../workspace/resolve";
 async function broadcastBridgeMessage(message: object): Promise<void> {
   const { broadcastMessage } = await import("../../lib/server");
   broadcastMessage(message);
+}
+
+type ServiceLifecycleEventType =
+  | "service.starting"
+  | "service.started"
+  | "service.failed"
+  | "service.stopping"
+  | "service.stopped";
+
+type ServiceLifecycleMessage = {
+  type: ServiceLifecycleEventType;
+  workspace_id: string;
+  service: string;
+  error?: string;
+};
+
+export function buildServiceLifecycleMessage(input: {
+  error?: string;
+  service: string;
+  type: ServiceLifecycleEventType;
+  workspaceId: string;
+}): ServiceLifecycleMessage {
+  return {
+    type: input.type,
+    workspace_id: input.workspaceId,
+    service: input.service,
+    ...(input.error ? { error: input.error } : {}),
+  };
 }
 
 function requireWorkspacePath(workspace: WorkspaceRecord): string {
@@ -39,6 +68,18 @@ type BridgeStackManifest =
   | { state: "missing" }
   | { errors: string[]; state: "invalid" }
   | { config: LifecycleConfig; state: "ready" };
+
+type StackNodes = NonNullable<LifecycleConfig["stack"]>["nodes"];
+type ManagedNodeConfig = Extract<StackNodes[string], { kind: "process" | "image" }>;
+type TaskNodeConfig = Extract<StackNodes[string], { kind: "task" }>;
+
+function stackNodes(config: LifecycleConfig): StackNodes {
+  return (config.stack?.nodes ?? {}) as StackNodes;
+}
+
+function hasConfiguredStack(config: LifecycleConfig): boolean {
+  return config.stack !== undefined;
+}
 
 export async function readWorkspaceStackManifest(
   workspaceRegistry: WorkspaceHostRegistry,
@@ -85,40 +126,41 @@ function servicePreviewURL(
 ): string | null {
   return assignedPort === null
     ? null
-    : previewUrlForService(hostLabel, serviceName, resolvePreviewProxyPort());
+    : previewUrlForService(hostLabel, serviceName, resolveBridgePort());
 }
 
-function serviceNodeRecord(input: {
-  config: Extract<LifecycleConfig["stack"][string], { kind: "service" }>;
+function managedNodeRecord(input: {
+  config: ManagedNodeConfig;
   hostLabel: string;
   name: string;
   runtimeState: Awaited<ReturnType<typeof readStackRuntimeState>>;
   workspace: WorkspaceRecord;
-}): StackNodeRecord {
+}): StackManagedRecord {
   const { config, hostLabel, name, runtimeState, workspace } = input;
   const existing = runtimeState.services[name];
   const running =
-    existing?.runtime === "process"
+    existing?.kind === "process"
       ? existing.pid !== null && isPidAlive(existing.pid)
-      : existing?.runtime === "image"
+      : existing?.kind === "image"
         ? isContainerRunning(stackServiceContainerName(workspace.id, name))
         : false;
 
   const createdAt = existing?.created_at ?? workspace.created_at;
   const updatedAt = existing?.updated_at ?? workspace.updated_at;
+  const isStarting = existing?.status === "starting";
   const failed = !running && existing?.status === "failed";
-  const status = running ? "ready" : failed ? "failed" : "stopped";
-  const statusReason = failed ? (existing?.status_reason ?? "unknown") : null;
-  const assignedPort = running ? (existing?.assigned_port ?? null) : null;
+  const status = isStarting ? "starting" : running ? "ready" : failed ? "failed" : "stopped";
+  const statusReason =
+    status === "failed" ? (existing?.status_reason ?? "unknown") : null;
+  const assignedPort = status === "ready" ? (existing?.assigned_port ?? null) : null;
 
   return {
     assigned_port: assignedPort,
     created_at: createdAt,
     depends_on: config.depends_on ?? [],
-    kind: "service",
+    kind: config.kind,
     name,
     preview_url: servicePreviewURL(hostLabel, name, assignedPort),
-    runtime: config.runtime,
     status,
     status_reason: statusReason,
     updated_at: updatedAt,
@@ -127,7 +169,7 @@ function serviceNodeRecord(input: {
 }
 
 function taskNodeRecord(input: {
-  config: Extract<LifecycleConfig["stack"][string], { kind: "task" }>;
+  config: TaskNodeConfig;
   name: string;
   workspace: WorkspaceRecord;
 }): StackNodeRecord {
@@ -145,7 +187,7 @@ function taskNodeRecord(input: {
 
 function stackServiceRecords(summary: StackSummaryRecord): ServiceRecord[] {
   return summary.nodes.flatMap((node) => {
-    if (node.kind !== "service") {
+    if (node.kind === "task") {
       return [];
     }
 
@@ -178,7 +220,9 @@ export async function healthWorkspaceStack(
   workspace: WorkspaceRecord;
 }> {
   const workspace = await resolveWorkspaceRecord(db, workspaceId);
-  const services = stackServiceRecords(await listWorkspaceStack(db, workspaceRegistry, workspace.id));
+  const services = stackServiceRecords(
+    await listWorkspaceStack(db, workspaceRegistry, workspace.id),
+  );
 
   return {
     checks: services.map((service) => ({
@@ -186,7 +230,7 @@ export async function healthWorkspaceStack(
       message:
         service.status === "ready"
           ? null
-          : service.status_reason ?? `Service is ${service.status}.`,
+          : (service.status_reason ?? `Service is ${service.status}.`),
       service: service.name,
     })),
     workspace,
@@ -219,21 +263,30 @@ export async function listWorkspaceStack(
     };
   }
 
+  if (!hasConfiguredStack(manifest.config)) {
+    return {
+      errors: [],
+      nodes: [],
+      state: "unconfigured",
+      workspace_id: workspace.id,
+    };
+  }
+
   const runtimeState = await readStackRuntimeState(workspace.id);
   const hostLabel = workspaceHostLabel(workspace);
-  const nodes = Object.entries(manifest.config.stack).map(
+  const nodes = Object.entries(stackNodes(manifest.config)).map(
     ([name, node]): StackNodeRecord =>
-      node.kind === "service"
-        ? serviceNodeRecord({
+      node.kind === "task"
+        ? taskNodeRecord({
+            config: node,
+            name,
+            workspace,
+          })
+        : managedNodeRecord({
             config: node,
             hostLabel,
             name,
             runtimeState,
-            workspace,
-          })
-        : taskNodeRecord({
-            config: node,
-            name,
             workspace,
           }),
   );
@@ -272,6 +325,13 @@ export async function startWorkspaceStack(
       status: 400,
     });
   }
+  if (!hasConfiguredStack(manifest.config)) {
+    throw new BridgeError({
+      code: "stack_unconfigured",
+      message: `Workspace "${workspace.id}" does not declare a managed stack.`,
+      status: 400,
+    });
+  }
 
   const currentServices = stackServiceRecords(
     await listWorkspaceStack(db, workspaceRegistry, workspace.id),
@@ -287,7 +347,7 @@ export async function startWorkspaceStack(
     });
   }
 
-  const configByName = new Map(Object.entries(manifest.config.stack));
+  const configByName = new Map(Object.entries(stackNodes(manifest.config)));
   const hostLabel = workspaceHostLabel(workspace);
   let runtimeWriteQueue = Promise.resolve();
   const queueRuntimeWrite = (
@@ -300,7 +360,7 @@ export async function startWorkspaceStack(
     },
   ) => {
     const config = configByName.get(name);
-    if (!config || config.kind !== "service") {
+    if (!config || config.kind === "task") {
       return;
     }
 
@@ -323,9 +383,9 @@ export async function startWorkspaceStack(
       upsertStackRuntimeService(workspace.id, {
         assigned_port: input.assignedPort ?? null,
         created_at: existing?.created_at ?? now,
+        kind: config.kind,
         name,
         pid: input.pid ?? null,
-        runtime: config.runtime,
         status: input.status,
         status_reason: input.statusReason,
         updated_at: now,
@@ -350,6 +410,16 @@ export async function startWorkspaceStack(
             status: "starting",
             statusReason: null,
           });
+
+          runtimeWriteQueue = runtimeWriteQueue.then(async () => {
+            await broadcastBridgeMessage(
+              buildServiceLifecycleMessage({
+                service: name,
+                type: "service.starting",
+                workspaceId: workspace.id,
+              }),
+            );
+          });
         },
         onServiceReady: (service) => {
           queueRuntimeWrite(service.name, {
@@ -359,10 +429,14 @@ export async function startWorkspaceStack(
             statusReason: null,
           });
 
-          void broadcastBridgeMessage({
-            type: "service.started",
-            workspace_id: workspace.id,
-            service: service.name,
+          runtimeWriteQueue = runtimeWriteQueue.then(async () => {
+            await broadcastBridgeMessage(
+              buildServiceLifecycleMessage({
+                service: service.name,
+                type: "service.started",
+                workspaceId: workspace.id,
+              }),
+            );
           });
         },
         onServiceFailed: (name) => {
@@ -371,11 +445,15 @@ export async function startWorkspaceStack(
             statusReason: "service_start_failed",
           });
 
-          void broadcastBridgeMessage({
-            type: "service.failed",
-            workspace_id: workspace.id,
-            service: name,
-            error: "Service failed to start.",
+          runtimeWriteQueue = runtimeWriteQueue.then(async () => {
+            await broadcastBridgeMessage(
+              buildServiceLifecycleMessage({
+                error: "Service failed to start.",
+                service: name,
+                type: "service.failed",
+                workspaceId: workspace.id,
+              }),
+            );
           });
         },
       },
@@ -423,39 +501,66 @@ export async function stopWorkspaceStack(
       status: 400,
     });
   }
+  if (!hasConfiguredStack(manifest.config)) {
+    return {
+      stack: await listWorkspaceStack(db, workspaceRegistry, workspace.id),
+      stoppedServices: [],
+      workspaceId: workspace.id,
+    };
+  }
 
   const currentServices = stackServiceRecords(
     await listWorkspaceStack(db, workspaceRegistry, workspace.id),
   );
   const targetNames =
     serviceNames && serviceNames.length > 0 ? serviceNames : declaredServiceNames(manifest.config);
-  const runningNames = currentServices
-    .filter((service) => targetNames.includes(service.name) && service.status === "ready")
+  const activeNames = currentServices
+    .filter(
+      (service) =>
+        targetNames.includes(service.name) &&
+        matchesServiceStatus(service.status, ["ready", "starting"]),
+    )
     .map((service) => service.name);
+
+  for (const name of activeNames) {
+    void broadcastBridgeMessage(
+      buildServiceLifecycleMessage({
+        service: name,
+        type: "service.stopping",
+        workspaceId: workspace.id,
+      }),
+    );
+  }
 
   const runtimeState = await readStackRuntimeState(workspace.id);
   await workspaceRegistry.resolve(workspace.host).stopStack(workspace, {
     names: targetNames,
     processIds: targetNames.flatMap((name) => {
       const service = runtimeState.services[name];
-      return service?.runtime === "process" && service.pid !== null ? [service.pid] : [];
+      return service?.kind === "process" && service.pid !== null ? [service.pid] : [];
     }),
   });
   await clearStackRuntimeServices(workspace.id, targetNames);
 
-  for (const name of runningNames) {
-    void broadcastBridgeMessage({
-      type: "service.stopped",
-      workspace_id: workspace.id,
-      service: name,
-    });
+  for (const name of activeNames) {
+    void broadcastBridgeMessage(
+      buildServiceLifecycleMessage({
+        service: name,
+        type: "service.stopped",
+        workspaceId: workspace.id,
+      }),
+    );
   }
 
   return {
     stack: await listWorkspaceStack(db, workspaceRegistry, workspace.id),
-    stoppedServices: runningNames,
+    stoppedServices: activeNames,
     workspaceId: workspace.id,
   };
+}
+
+function matchesServiceStatus(status: string, allowed: string[]): boolean {
+  return allowed.includes(status);
 }
 
 export async function resetWorkspaceStack(

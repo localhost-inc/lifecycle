@@ -12,7 +12,7 @@ struct LCTextInput: View {
   var body: some View {
     TextField("", text: $text, prompt: promptText)
       .textFieldStyle(.plain)
-      .font(.system(size: 12, weight: .medium))
+      .font(.lc(size: 12, weight: .medium))
       .foregroundStyle(theme.primaryTextColor)
       .padding(.horizontal, 10)
       .padding(.vertical, 7)

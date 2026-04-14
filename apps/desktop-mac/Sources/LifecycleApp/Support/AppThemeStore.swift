@@ -10,7 +10,7 @@ struct AppTerminalThemeContext: Equatable, Sendable {
 
   static let fallback = AppTerminalThemeContext(
     themeConfigPath: AppResources.bundledTerminalThemeConfigPath(),
-    backgroundHexColor: AppThemeCatalog.defaultPreset.tokens.terminalBackgroundHexColor,
+    backgroundHexColor: AppThemeCatalog.defaultPreset.theme.terminalBackgroundHexColor,
     darkAppearance: AppThemeCatalog.defaultPreset.appearance.isDark
   )
 }
@@ -284,10 +284,15 @@ struct AppTerminalSettings: Equatable, Sendable {
   var profiles = defaultAppTerminalProfiles()
 }
 
+struct AppDeveloperSettings: Equatable, Sendable {
+  var showsOnboarding = false
+}
+
 struct AppSettingsSnapshot: Equatable, Sendable {
   var appearance = AppAppearanceSettings()
   var providers = AppProviderSettings()
   var terminal = AppTerminalSettings()
+  var developer = AppDeveloperSettings()
 
   static let `default` = AppSettingsSnapshot()
 
@@ -296,14 +301,19 @@ struct AppSettingsSnapshot: Equatable, Sendable {
   init(
     appearance: AppAppearanceSettings,
     providers: AppProviderSettings,
-    terminal: AppTerminalSettings
+    terminal: AppTerminalSettings,
+    developer: AppDeveloperSettings = AppDeveloperSettings()
   ) {
     self.appearance = appearance
     self.providers = providers
     self.terminal = terminal
+    self.developer = developer
   }
 
-  init(bridgeSettings: BridgeSettings) {
+  init(
+    bridgeSettings: BridgeSettings,
+    developer: AppDeveloperSettings = AppDeveloperSettings()
+  ) {
     appearance = AppAppearanceSettings(
       theme: AppThemePreference(rawValue: bridgeSettings.appearance.theme) ?? .dark
     )
@@ -328,6 +338,7 @@ struct AppSettingsSnapshot: Equatable, Sendable {
       defaultProfile: bridgeSettings.terminal.defaultProfile,
       profiles: appTerminalProfiles(from: bridgeSettings.terminal.profiles)
     )
+    self.developer = developer
   }
 }
 
@@ -339,6 +350,7 @@ final class AppSettingsStore: ObservableObject {
   @Published private(set) var terminalThemeContext: AppTerminalThemeContext
   @Published private(set) var settingsPath: String
   @Published private(set) var errorMessage: String?
+  let isDeveloperMode: Bool
 
   private let fileManager: FileManager
   private let environment: [String: String]
@@ -355,6 +367,8 @@ final class AppSettingsStore: ObservableObject {
     self.fileManager = fileManager
     self.environment = environment
     self.systemAppearance = .dark
+    isDeveloperMode = LifecycleEnvironment(values: environment).string(for: LifecycleEnvironmentKey.dev)
+      == "1"
 
     do {
       let settingsURL = try LifecyclePaths.settingsURL(environment: environment)
@@ -381,7 +395,7 @@ final class AppSettingsStore: ObservableObject {
     startWatchingSettingsFile()
   }
 
-  var theme: AppThemeTokens { resolvedTheme.tokens }
+  var theme: AppTheme { resolvedTheme.theme }
 
   var preferredColorScheme: ColorScheme? {
     switch preference {
@@ -652,6 +666,16 @@ final class AppSettingsStore: ObservableObject {
     }
   }
 
+  func setDeveloperShowsOnboarding(_ isEnabled: Bool) {
+    guard settings.developer.showsOnboarding != isEnabled else {
+      return
+    }
+
+    updateSettings(persistLocallyOnly: true) { nextSettings in
+      nextSettings.developer.showsOnboarding = isEnabled
+    }
+  }
+
   private func updateKnownTerminalProfile(
     _ profileID: String,
     mutate: (inout AppTerminalProfile) -> Bool
@@ -675,14 +699,15 @@ final class AppSettingsStore: ObservableObject {
   }
 
   private func updateSettings(
-    bridgePayload: [String: Any],
+    bridgePayload: [String: Any] = [:],
+    persistLocallyOnly: Bool = false,
     mutate: (inout AppSettingsSnapshot) -> Void
   ) {
     var nextSettings = settings
     mutate(&nextSettings)
     applyInMemorySettings(nextSettings)
 
-    if bridgeClient != nil {
+    if bridgeClient != nil, !persistLocallyOnly {
       Task {
         await persistSettings(nextSettings, bridgePayload: bridgePayload)
       }
@@ -703,8 +728,8 @@ final class AppSettingsStore: ObservableObject {
     if let bridgeClient {
       do {
         let envelope = try await bridgeClient.updateSettings(bridgePayload)
+        syncPersistedObjectFromDisk(pathOverride: envelope.settingsPath)
         applyRemoteSettings(envelope)
-        syncPersistedObjectFromDisk()
         errorMessage = nil
         return
       } catch {
@@ -742,8 +767,8 @@ final class AppSettingsStore: ObservableObject {
     if preferBridge, let bridgeClient {
       do {
         let envelope = try await bridgeClient.settings()
+        syncPersistedObjectFromDisk(pathOverride: envelope.settingsPath)
         applyRemoteSettings(envelope)
-        syncPersistedObjectFromDisk()
         errorMessage = nil
         return
       } catch {
@@ -771,15 +796,18 @@ final class AppSettingsStore: ObservableObject {
   }
 
   private func applyRemoteSettings(_ envelope: BridgeSettingsEnvelope) {
-    applyInMemorySettings(AppSettingsSnapshot(bridgeSettings: envelope.settings))
+    applyInMemorySettings(
+      AppSettingsSnapshot(
+        bridgeSettings: envelope.settings,
+        developer: loadDeveloperSettings(pathOverride: envelope.settingsPath)
+      )
+    )
     settingsPath = envelope.settingsPath
     startWatchingSettingsFile()
   }
 
-  private func syncPersistedObjectFromDisk() {
-    let path = settingsPath.isEmpty
-      ? ((try? LifecyclePaths.settingsURL(environment: environment).path) ?? "")
-      : settingsPath
+  private func syncPersistedObjectFromDisk(pathOverride: String? = nil) {
+    let path = resolvedSettingsPath(pathOverride: pathOverride)
     guard !path.isEmpty else {
       return
     }
@@ -795,6 +823,32 @@ final class AppSettingsStore: ObservableObject {
     }
   }
 
+  private func loadDeveloperSettings(pathOverride: String? = nil) -> AppDeveloperSettings {
+    let path = resolvedSettingsPath(pathOverride: pathOverride)
+    guard !path.isEmpty else {
+      return LifecycleSettingsFile.parseDeveloperSettings(from: persistedObject)
+    }
+
+    if let snapshot = try? LifecycleSettingsFile.read(
+      from: URL(fileURLWithPath: path),
+      fileManager: fileManager
+    ) {
+      return snapshot.settings.developer
+    }
+
+    return LifecycleSettingsFile.parseDeveloperSettings(from: persistedObject)
+  }
+
+  private func resolvedSettingsPath(pathOverride: String? = nil) -> String {
+    if let pathOverride, !pathOverride.isEmpty {
+      return pathOverride
+    }
+
+    return settingsPath.isEmpty
+      ? ((try? LifecyclePaths.settingsURL(environment: environment).path) ?? "")
+      : settingsPath
+  }
+
   private func refreshThemeArtifacts() {
     resolvedTheme = AppThemeCatalog.resolve(preference: preference, systemAppearance: systemAppearance)
 
@@ -808,7 +862,7 @@ final class AppSettingsStore: ObservableObject {
     } catch {
       terminalThemeContext = AppTerminalThemeContext(
         themeConfigPath: AppResources.bundledTerminalThemeConfigPath(),
-        backgroundHexColor: resolvedTheme.tokens.terminalBackgroundHexColor,
+        backgroundHexColor: resolvedTheme.theme.terminalBackgroundHexColor,
         darkAppearance: resolvedTheme.appearance.isDark
       )
       errorMessage = error.localizedDescription
@@ -1147,6 +1201,21 @@ enum LifecycleSettingsFile {
     terminalObject["profiles"] = appTerminalProfilesJSONObject(settings.terminal.profiles)
 
     nextObject["terminal"] = terminalObject
+    var developerObject = (nextObject["developer"] as? [String: Any]) ?? [:]
+    if settings.developer.showsOnboarding {
+      developerObject["showOnboarding"] = true
+      nextObject["developer"] = developerObject
+    } else if developerObject.isEmpty {
+      nextObject.removeValue(forKey: "developer")
+    } else {
+      developerObject.removeValue(forKey: "showOnboarding")
+      if developerObject.isEmpty {
+        nextObject.removeValue(forKey: "developer")
+      } else {
+        nextObject["developer"] = developerObject
+      }
+    }
+
     try write(nextObject, to: url, fileManager: fileManager)
     return LifecycleSettingsSnapshot(
       object: nextObject,
@@ -1217,7 +1286,15 @@ enum LifecycleSettingsFile {
         ),
         defaultProfile: defaultProfile,
         profiles: profiles
-      )
+      ),
+      developer: parseDeveloperSettings(from: object)
+    )
+  }
+
+  fileprivate static func parseDeveloperSettings(from object: [String: Any]) -> AppDeveloperSettings {
+    let developerObject = object["developer"] as? [String: Any]
+    return AppDeveloperSettings(
+      showsOnboarding: developerObject?["showOnboarding"] as? Bool ?? false
     )
   }
 
@@ -1272,15 +1349,16 @@ enum TerminalThemeConfigWriter {
 
     return AppTerminalThemeContext(
       themeConfigPath: fileURL.path,
-      backgroundHexColor: preset.tokens.terminalBackgroundHexColor,
+      backgroundHexColor: preset.theme.terminalBackgroundHexColor,
       darkAppearance: preset.appearance.isDark
     )
   }
 
   static func render(preset: AppThemePreset) -> String {
-    let tokens = preset.tokens
+    let tokens = preset.theme
     var lines = [
       "# Generated by Lifecycle.",
+      "font-family = Geist Mono",
       "background = \(tokens.terminalSurfaceBackground)",
       "foreground = \(tokens.terminalForeground)",
       "cursor-color = \(tokens.terminalCursorColor)",

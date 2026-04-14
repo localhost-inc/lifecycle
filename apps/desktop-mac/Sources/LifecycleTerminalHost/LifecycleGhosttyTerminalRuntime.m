@@ -829,6 +829,9 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 
   self.wantsLayer = YES;
   self.layer = [CAMetalLayer layer];
+  self.layer.magnificationFilter = kCAFilterNearest;
+  self.layer.minificationFilter = kCAFilterNearest;
+  self.layer.allowsEdgeAntialiasing = NO;
   self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawNever;
   // Let AppKit stretch the sibling overlay during native live-resize/zoom
   // animations. The webview still sends the exact final frame afterward.

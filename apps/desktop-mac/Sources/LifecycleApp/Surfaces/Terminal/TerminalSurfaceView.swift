@@ -1,6 +1,17 @@
 import LifecycleTerminalHost
 import SwiftUI
 
+private let terminalSurfaceBaseFontSize: CGFloat = 13
+private let terminalSurfaceMinimumFontSize: CGFloat = 6
+private let terminalSurfaceMaximumFontSize: CGFloat = 24
+
+func terminalSurfacePresentationFontSize(for presentationScale: CGFloat) -> CGFloat {
+  min(
+    max(terminalSurfaceBaseFontSize * presentationScale, terminalSurfaceMinimumFontSize),
+    terminalSurfaceMaximumFontSize
+  )
+}
+
 struct TerminalSurfaceConfiguration: Equatable {
   let workingDirectory: String
   let command: String
@@ -27,13 +38,14 @@ struct TerminalSurfaceConfiguration: Equatable {
   }
 }
 
-struct TerminalSurfaceView: NSViewRepresentable {
+struct TerminalSurfaceView: NSViewRepresentable, Equatable {
   let surface: ResolvedTerminalSurface
   let themeConfigPath: String
   let backgroundHexColor: String
   let darkAppearance: Bool
   let isFocused: Bool
   let isVisible: Bool
+  let presentationScale: CGFloat
 
   func makeNSView(context: Context) -> LifecycleTerminalHostView {
     let view = LifecycleTerminalHostView(terminalID: surface.terminalID)
@@ -55,7 +67,7 @@ struct TerminalSurfaceView: NSViewRepresentable {
       focusedTerminal: isFocused && isVisible,
       hiddenTerminal: !isVisible,
       pointerPassthrough: !isVisible,
-      terminalFontSize: 13
+      terminalFontSize: terminalSurfacePresentationFontSize(for: presentationScale)
     )
     view.applyHostConfiguration(configuration.hostConfiguration)
   }

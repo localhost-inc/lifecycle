@@ -2,7 +2,11 @@ import type {
   LifecycleTerminalPersistenceBackend,
   LifecycleTerminalPersistenceMode,
 } from "@lifecycle/contracts";
-import type { WorkspaceTerminalKind, WorkspaceTerminalRecord } from "../workspace/host";
+import type {
+  WorkspaceShellLaunchSpec,
+  WorkspaceTerminalKind,
+  WorkspaceTerminalRecord,
+} from "../workspace/host";
 
 export const TMUX_TERMINAL_RECORD_FORMAT =
   "#{window_id}\t#{window_name}\t#{window_activity_flag}\t#{window_active}";
@@ -155,8 +159,9 @@ export function buildTmuxCreateTerminalArgs(
   sessionName: string,
   cwd: string,
   title: string,
+  launchSpec?: WorkspaceShellLaunchSpec | null,
 ): string[] {
-  return [
+  const args = [
     "new-window",
     "-P",
     "-F",
@@ -168,6 +173,13 @@ export function buildTmuxCreateTerminalArgs(
     "-n",
     title,
   ];
+
+  const launchCommand = buildShellLaunchCommandText(launchSpec);
+  if (launchCommand) {
+    args.push(launchCommand);
+  }
+
+  return args;
 }
 
 export function buildTmuxCloseTerminalArgs(sessionName: string, terminalId: string): string[] {
@@ -296,16 +308,32 @@ function buildTmuxSessionOptionCommands(
 }
 
 function inferTerminalKind(title: string): WorkspaceTerminalKind {
-  switch (title.trim().toLowerCase()) {
-    case "claude":
-      return "claude";
-    case "codex":
-      return "codex";
+  const normalized = title.trim().toLowerCase();
+  if (/^claude(?:\s+\d+)?$/.test(normalized)) {
+    return "claude";
+  }
+
+  if (/^codex(?:\s+\d+)?$/.test(normalized)) {
+    return "codex";
+  }
+
+  switch (normalized) {
     case "shell":
       return "shell";
     default:
       return "custom";
   }
+}
+
+function buildShellLaunchCommandText(
+  spec: WorkspaceShellLaunchSpec | null | undefined,
+): string | null {
+  if (!spec) {
+    return null;
+  }
+
+  const envArgs = spec.env.map(([key, value]) => `${key}=${value}`);
+  return ["env", ...envArgs, spec.program, ...spec.args].map(shellEscape).join(" ");
 }
 
 function parseTmuxTerminalRow(row: string): {

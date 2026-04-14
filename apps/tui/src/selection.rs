@@ -10,7 +10,12 @@ struct SelectionState {
 
 fn selection_state_path() -> Option<PathBuf> {
     let home = std::env::var_os("HOME")?;
-    Some(PathBuf::from(home).join(".lifecycle").join("tui").join("state.json"))
+    Some(
+        PathBuf::from(home)
+            .join(".lifecycle")
+            .join("tui")
+            .join("state.json"),
+    )
 }
 
 pub fn load_workspace_selection() -> Option<String> {

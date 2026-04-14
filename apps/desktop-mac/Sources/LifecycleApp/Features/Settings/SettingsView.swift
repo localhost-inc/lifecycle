@@ -1,14 +1,48 @@
 import SwiftUI
 
-private enum SettingsViewSection: String, CaseIterable, Identifiable {
+enum SettingsViewSection: String, CaseIterable, Identifiable {
   case appearance = "Appearance"
   case terminal = "Terminal"
   case connection = "Connection"
+  case developer = "Developer"
 
   var id: String { rawValue }
+
+  var systemImage: String {
+    switch self {
+    case .appearance:
+      "paintpalette"
+    case .terminal:
+      "terminal"
+    case .connection:
+      "bolt.horizontal.circle"
+    case .developer:
+      "wrench.and.screwdriver"
+    }
+  }
+}
+
+func visibleSettingsSections(isDeveloperMode: Bool) -> [SettingsViewSection] {
+  var sections: [SettingsViewSection] = [.appearance, .terminal, .connection]
+  if isDeveloperMode {
+    sections.append(.developer)
+  }
+  return sections
 }
 
 private let settingsBuiltInTerminalProfileIDs = ["shell", "claude", "codex"]
+
+private enum SettingsLayout {
+  static let contentMaxWidth: CGFloat = 720
+  static let cardHorizontalPadding: CGFloat = 28
+  static let cardVerticalPadding: CGFloat = 28
+  static let sectionSpacing: CGFloat = 32
+  static let subsectionSpacing: CGFloat = 18
+  static let rowHorizontalPadding: CGFloat = 18
+  static let rowVerticalPadding: CGFloat = 12
+  static let stackedRowVerticalPadding: CGFloat = 10
+  static let groupCornerRadius: CGFloat = 12
+}
 
 struct SettingsView: View {
   @Environment(\.appTheme) private var theme
@@ -26,126 +60,156 @@ struct SettingsView: View {
   @State private var codexConfigProfileDraft = ""
 
   var body: some View {
-    VStack(spacing: 0) {
-      // Back button
-      HStack {
-        Button {
-          dismiss()
-        } label: {
-          HStack(spacing: 4) {
-            Image(systemName: "chevron.left")
-              .font(.system(size: 11, weight: .semibold))
-            Text("Back")
-              .font(.system(size: 13, weight: .medium))
+    let sections = visibleSettingsSections(isDeveloperMode: settingsStore.isDeveloperMode)
+
+    ScrollViewReader { proxy in
+      HStack(spacing: 0) {
+        SettingsSidebar(
+          sections: sections,
+          activeSection: activeSection,
+          namespace: sectionIndicator,
+          dismiss: dismiss
+        ) { section in
+          withAnimation(.easeInOut(duration: 0.25)) {
+            activeSection = section
           }
-          .foregroundStyle(theme.mutedColor)
+          withAnimation(.easeInOut(duration: 0.2)) {
+            proxy.scrollTo(section.id, anchor: .top)
+          }
         }
-        .buttonStyle(.plain)
-        .lcPointerCursor()
+        .frame(width: 228)
 
-        Spacer()
-      }
-      .padding(.leading, 20)
-      .padding(.top, 52)
-
-      ScrollViewReader { proxy in
-        VStack(alignment: .leading, spacing: 0) {
-          // Header
-          VStack(alignment: .leading, spacing: 4) {
-            Text("Settings")
-              .font(.system(size: 22, weight: .semibold))
-              .foregroundStyle(theme.primaryTextColor)
-
-            Text("Manage appearance, terminal, and connection preferences.")
-              .font(.system(size: 13))
-              .foregroundStyle(theme.mutedColor)
-          }
-          .frame(maxWidth: 760, alignment: .leading)
-          .padding(.top, 24)
-          .padding(.bottom, 20)
-
-          HStack(alignment: .top, spacing: 28) {
-            SettingsSectionRail(
-              activeSection: activeSection,
-              namespace: sectionIndicator
-            ) { section in
-              withAnimation(.easeInOut(duration: 0.25)) {
-                activeSection = section
-              }
-              withAnimation(.easeInOut(duration: 0.2)) {
-                proxy.scrollTo(section.id, anchor: .top)
-              }
-            }
-            .frame(width: 156)
-            .padding(.top, 8)
-
+        VStack(spacing: 0) {
+          SettingsContentCard {
             LCScrollSpy(
               activeSelection: $activeSection,
-              sections: SettingsViewSection.allCases
+              sections: sections,
+              activationOffset: 120,
+              showsIndicators: true
             ) { scrollSpySpace in
-              VStack(alignment: .leading, spacing: 0) {
-                trackedSectionHeader(.appearance, in: scrollSpySpace)
+              VStack(alignment: .leading, spacing: SettingsLayout.sectionSpacing) {
+                if let errorMessage = settingsStore.errorMessage {
+                  SettingsStatusBanner(
+                    message: errorMessage,
+                    tint: theme.errorColor,
+                    systemImage: "exclamationmark.circle.fill"
+                  )
+                }
 
-                SettingsRowView(
-                  label: "Theme",
-                  description: themeDescription
+                SettingsFormSection(
+                  title: "Appearance",
+                  description: "Choose the theme used for the app chrome and terminal surfaces."
                 ) {
-                  Picker("", selection: themeBinding) {
-                    ForEach(AppThemePreference.allCases) { option in
-                      Text(option.label).tag(option)
+                  SettingsFormGroup {
+                    SettingsFormRow(
+                      label: "Theme",
+                      description: themeDescription
+                    ) {
+                      Picker("", selection: themeBinding) {
+                        ForEach(AppThemePreference.allCases) { option in
+                          Text(option.label).tag(option)
+                        }
+                      }
+                      .pickerStyle(.menu)
+                      .tint(theme.primaryTextColor)
+                      .lcPointerCursor()
                     }
                   }
-                  .pickerStyle(.menu)
-                  .tint(theme.primaryTextColor)
-                  .frame(width: 160)
-                  .lcPointerCursor()
                 }
+                .id(SettingsViewSection.appearance.id)
+                .lcScrollSpyTarget(SettingsViewSection.appearance, in: scrollSpySpace)
 
-                if let errorMessage = settingsStore.errorMessage {
-                  Text(errorMessage)
-                    .font(.system(size: 11))
-                    .foregroundStyle(theme.errorColor)
-                    .padding(.top, 8)
-                }
-
-                trackedSectionHeader(.terminal, in: scrollSpySpace)
-                  .padding(.top, 32)
-
-                terminalRuntimeSection
-
-                trackedSectionHeader(.connection, in: scrollSpySpace)
-                  .padding(.top, 32)
-
-                SettingsRowView(
-                  label: "Bridge",
-                  description: "Local process that connects the app to your workspaces."
+                SettingsFormSection(
+                  title: "Terminal",
+                  description: "Set launch defaults for new terminals and tune per-profile overrides."
                 ) {
-                  HStack(spacing: 6) {
-                    Circle()
-                      .fill(model.bridgeClient != nil ? theme.successColor : theme.errorColor)
-                      .frame(width: 7, height: 7)
-                    Text(model.bridgeClient != nil ? "Connected" : "Disconnected")
-                      .font(.system(size: 12, weight: .medium))
-                      .foregroundStyle(theme.primaryTextColor)
+                  VStack(alignment: .leading, spacing: SettingsLayout.subsectionSpacing) {
+                    SettingsFormSubsectionHeader(
+                      title: "Runtime",
+                      description: "Defaults shared by direct shell sessions and persistent terminals."
+                    )
+                    SettingsFormGroup {
+                      terminalRuntimeCardContent
+                    }
+
+                    SettingsFormSubsectionHeader(
+                      title: "Profiles",
+                      description: "Choose the default launcher and adjust built-in profile behavior."
+                    )
+                    SettingsFormGroup {
+                      terminalProfilesCardContent
+                    }
                   }
+                }
+                .id(SettingsViewSection.terminal.id)
+                .lcScrollSpyTarget(SettingsViewSection.terminal, in: scrollSpySpace)
+
+                SettingsFormSection(
+                  title: "Connection",
+                  description: "Check the local bridge that powers workspace state, shell attach, and terminal lifecycle."
+                ) {
+                  SettingsFormGroup {
+                    SettingsFormRow(
+                      label: "Local Bridge",
+                      description: "Required for workspace state, shell attach, and terminal orchestration."
+                    ) {
+                      HStack(spacing: 6) {
+                        Circle()
+                          .fill(model.bridgeClient != nil ? theme.successColor : theme.errorColor)
+                          .frame(width: 7, height: 7)
+                        Text(model.bridgeClient != nil ? "Connected" : "Disconnected")
+                          .font(.lc(size: 12, weight: .medium))
+                          .foregroundStyle(theme.primaryTextColor)
+                      }
+                    }
+                  }
+                }
+                .id(SettingsViewSection.connection.id)
+                .lcScrollSpyTarget(SettingsViewSection.connection, in: scrollSpySpace)
+
+                if settingsStore.isDeveloperMode {
+                  SettingsFormSection(
+                    title: "Developer",
+                    description: "Desktop-only switches for testing flows without mutating your local repositories."
+                  ) {
+                    SettingsFormGroup {
+                      SettingsFormRow(
+                        label: "Show onboarding",
+                        description: "Force the welcome flow even when repositories already exist, so you can exercise onboarding from a live dev build."
+                      ) {
+                        Toggle("", isOn: developerShowsOnboardingBinding)
+                          .labelsHidden()
+                          .toggleStyle(.switch)
+                          .tint(theme.accentColor)
+                      }
+                    }
+                  }
+                  .id(SettingsViewSection.developer.id)
+                  .lcScrollSpyTarget(SettingsViewSection.developer, in: scrollSpySpace)
                 }
 
                 Color.clear
                   .frame(height: 1)
                   .lcScrollSpyContentBottom(in: scrollSpySpace)
               }
-              .frame(maxWidth: 560, alignment: .leading)
-              .padding(.top, 8)
-              .padding(.bottom, 60)
+              .frame(maxWidth: SettingsLayout.contentMaxWidth, alignment: .leading)
+              .padding(.horizontal, SettingsLayout.cardHorizontalPadding)
+              .padding(.vertical, SettingsLayout.cardVerticalPadding)
+              .frame(maxWidth: .infinity, alignment: .center)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
           }
-          .frame(maxWidth: 760, alignment: .leading)
+          .padding(.horizontal, 10)
+          .padding(.top, 10)
+          .padding(.bottom, 10)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.shellBackground)
       }
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     .background(theme.shellBackground)
+    .navigationBarBackButtonHidden()
+    .ignoresSafeArea(.container, edges: .top)
     .onAppear {
       syncDrafts()
       syncActiveTerminalProfileSelection()
@@ -169,9 +233,9 @@ struct SettingsView: View {
 
   private var themeDescription: String {
     if settingsStore.preference == .system {
-      return "Following system appearance (\(settingsStore.resolvedTheme.appearance.rawValue))."
+      return "Follows your current macOS appearance (\(settingsStore.resolvedTheme.appearance.rawValue.capitalized))."
     }
-    return "Color theme for the app shell and terminal surfaces."
+    return "Applied to the app chrome and terminal surfaces."
   }
 
   private var persistenceBackendOptions: [AppTerminalPersistenceBackend] {
@@ -200,6 +264,13 @@ struct SettingsView: View {
     Binding(
       get: { settingsStore.settings.terminal.defaultProfile },
       set: { settingsStore.setTerminalDefaultProfile($0) }
+    )
+  }
+
+  private var developerShowsOnboardingBinding: Binding<Bool> {
+    Binding(
+      get: { settingsStore.settings.developer.showsOnboarding },
+      set: { settingsStore.setDeveloperShowsOnboarding($0) }
     )
   }
 
@@ -245,13 +316,12 @@ struct SettingsView: View {
     )
   }
 
-  private var terminalRuntimeSection: some View {
+  private var terminalRuntimeCardContent: some View {
     VStack(alignment: .leading, spacing: 0) {
-      SettingsSubsectionHeader(title: "Runtime")
-
-      SettingsRowView(
+      SettingsFormRow(
         label: "Command",
-        description: "Program launched inside direct terminal sessions. Leave empty to use your login shell."
+        description: "Program used for direct shell sessions. Leave empty to use your login shell.",
+        showsDivider: true
       ) {
         SettingsOptionalTextFieldControl(
           text: $commandProgramDraft,
@@ -264,9 +334,10 @@ struct SettingsView: View {
         )
       }
 
-      SettingsRowView(
+      SettingsFormRow(
         label: "Persistence Backend",
-        description: persistenceBackendDescription
+        description: persistenceBackendDescription,
+        showsDivider: true
       ) {
         Picker("", selection: persistenceBackendBinding) {
           ForEach(persistenceBackendOptions, id: \.self) { backend in
@@ -275,13 +346,13 @@ struct SettingsView: View {
         }
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
-        .frame(width: 160)
         .lcPointerCursor()
       }
 
-      SettingsRowView(
+      SettingsFormRow(
         label: "Persistence Mode",
-        description: persistenceModeDescription
+        description: persistenceModeDescription,
+        showsDivider: true
       ) {
         Picker("", selection: persistenceModeBinding) {
           ForEach(AppTerminalPersistenceMode.allCases) { mode in
@@ -290,13 +361,12 @@ struct SettingsView: View {
         }
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
-        .frame(width: 160)
         .lcPointerCursor()
       }
 
-      SettingsRowView(
+      SettingsFormRow(
         label: "Executable Path",
-        description: "Optional absolute path override for the persistence backend binary. Leave empty to use PATH."
+        description: "Absolute path to the persistence binary. Leave empty to resolve it from PATH."
       ) {
         SettingsOptionalTextFieldControl(
           text: $persistenceExecutablePathDraft,
@@ -310,61 +380,55 @@ struct SettingsView: View {
       }
 
       if settingsStore.settings.terminal.persistence.backend == .zellij {
-        Text("zellij is represented in settings, but the workspace runtime still only supports tmux. Persistent shells will fail until zellij runtime support lands.")
-          .font(.system(size: 11))
-          .foregroundStyle(theme.warningColor)
-          .padding(.top, 8)
-      }
-
-      SettingsSubsectionHeader(title: "Profiles")
-        .padding(.top, 18)
-
-      VStack(alignment: .leading, spacing: 12) {
-        Text("Profiles control what a new terminal launches. Select one below to configure it.")
-          .font(.system(size: 12))
-          .foregroundStyle(theme.mutedColor)
-          .fixedSize(horizontal: false, vertical: true)
-
-        SettingsRowView(
-          label: "Default Profile",
-          description: "Used when opening a new terminal."
-        ) {
-          Picker("", selection: defaultTerminalProfileBinding) {
-            ForEach(orderedTerminalProfileOptions) { profile in
-              Text(profile.displayLabel).tag(profile.id)
-            }
-          }
-          .pickerStyle(.menu)
-          .tint(theme.primaryTextColor)
-          .frame(width: 180)
-          .lcPointerCursor()
-        }
-
-        if let activeTerminalProfile {
-          VStack(alignment: .leading, spacing: 0) {
-            terminalProfileTabs
-
-            terminalProfileContent(for: activeTerminalProfile)
-          }
+        SettingsFormContentBlock {
+          SettingsInlineNote(
+            message: "zellij can be selected here, but persistent terminals still launch through tmux today.",
+            tone: .warning
+          )
         }
       }
-      .padding(.vertical, 10)
+    }
+  }
+
+  private var terminalProfilesCardContent: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      SettingsFormRow(
+        label: "Default Profile",
+        description: "Used when you open a new terminal from the app.",
+        showsDivider: true
+      ) {
+        Picker("", selection: defaultTerminalProfileBinding) {
+          ForEach(orderedTerminalProfileOptions) { profile in
+            Text(profile.displayLabel).tag(profile.id)
+          }
+        }
+        .pickerStyle(.menu)
+        .tint(theme.primaryTextColor)
+        .lcPointerCursor()
+      }
+
+      if let activeTerminalProfile {
+        SettingsFormContentBlock(spacing: 14) {
+          terminalProfileTabs
+          terminalProfileContent(for: activeTerminalProfile)
+        }
+      }
     }
   }
 
   private var persistenceBackendDescription: String {
     switch settingsStore.settings.terminal.persistence.backend {
     case .tmux:
-      return "Persistence substrate for interactive terminal sessions. tmux is the only runtime currently supported."
+      return "Keeps interactive terminals restorable across app launches. tmux is the only backend wired into the runtime today."
     case .zellij:
-      return "Selected in settings, but not wired through the workspace runtime yet."
+      return "zellij appears in settings, but the workspace runtime still launches persistent terminals through tmux."
     }
   }
 
   private var persistenceModeDescription: String {
     switch settingsStore.settings.terminal.persistence.mode {
     case .managed:
-      return "Lifecycle uses its own isolated persistence profile instead of inheriting your tmux config."
+      return "Lifecycle keeps tmux isolated so your personal sessions and config stay untouched."
     case .inherit:
       return "Lifecycle uses your existing tmux environment and config."
     }
@@ -395,7 +459,7 @@ struct SettingsView: View {
           }
         } label: {
           Text(profile.displayLabel)
-            .font(.system(size: 12, weight: activeTerminalProfileID == profile.id ? .semibold : .regular))
+            .font(.lc(size: 12, weight: activeTerminalProfileID == profile.id ? .semibold : .regular))
             .foregroundStyle(activeTerminalProfileID == profile.id ? theme.primaryTextColor : theme.mutedColor)
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
@@ -419,24 +483,11 @@ struct SettingsView: View {
     )
   }
 
-  private func terminalProfileSubtitle(for profile: AppTerminalProfile) -> String {
-    switch profile.launcher {
-    case .shell:
-      return "Plain shell"
-    case .claude:
-      return "Claude Code"
-    case .codex:
-      return "OpenAI Codex"
-    case .command:
-      return "Custom command"
-    }
-  }
-
   @MainActor @ViewBuilder
   private func terminalProfileContent(for profile: AppTerminalProfile) -> some View {
     VStack(alignment: .leading, spacing: 0) {
       Text(terminalProfileDetailDescription(for: profile))
-        .font(.system(size: 12))
+        .font(.lc(size: 12))
         .foregroundStyle(theme.mutedColor)
         .padding(.top, 10)
         .padding(.bottom, 4)
@@ -456,10 +507,11 @@ struct SettingsView: View {
 
   private var shellTerminalProfileContent: some View {
     VStack(alignment: .leading, spacing: 0) {
-      SettingsRowView(
+      SettingsFormRow(
         label: "Program",
         description: "Inherited from the Runtime command setting above.",
-        stacked: true
+        stacked: true,
+        showsDivider: true
       ) {
         SettingsReadOnlyValue(
           text: settingsStore.settings.terminal.command.program ?? resolvedLoginShell,
@@ -467,7 +519,7 @@ struct SettingsView: View {
         )
       }
 
-      SettingsRowView(
+      SettingsFormRow(
         label: "Persistence",
         description: "Inherited from the Runtime persistence settings above.",
         stacked: true
@@ -481,10 +533,11 @@ struct SettingsView: View {
 
   private var claudeTerminalProfileContent: some View {
     VStack(alignment: .leading, spacing: 0) {
-      SettingsRowView(
+      SettingsFormRow(
         label: "Model",
         description: "Override the default model. Leave empty for the CLI default.",
-        stacked: true
+        stacked: true,
+        showsDivider: true
       ) {
         SettingsOptionalTextFieldControl(
           text: $claudeModelDraft,
@@ -497,10 +550,11 @@ struct SettingsView: View {
         )
       }
 
-      SettingsRowView(
+      SettingsFormRow(
         label: "Permission Mode",
         description: "Controls what Claude can do without asking first.",
-        stacked: true
+        stacked: true,
+        showsDivider: true
       ) {
         Picker("", selection: claudePermissionModeBinding) {
           Text("CLI Default").tag(Optional<AppClaudePermissionMode>.none)
@@ -510,11 +564,10 @@ struct SettingsView: View {
         }
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
-        .frame(width: 180)
         .lcPointerCursor()
       }
 
-      SettingsRowView(
+      SettingsFormRow(
         label: "Effort",
         description: "How much compute Claude uses per response.",
         stacked: true
@@ -527,7 +580,6 @@ struct SettingsView: View {
         }
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
-        .frame(width: 180)
         .lcPointerCursor()
       }
     }
@@ -535,10 +587,11 @@ struct SettingsView: View {
 
   private var codexTerminalProfileContent: some View {
     VStack(alignment: .leading, spacing: 0) {
-      SettingsRowView(
+      SettingsFormRow(
         label: "Model",
         description: "Override the default model. Leave empty for the CLI default.",
-        stacked: true
+        stacked: true,
+        showsDivider: true
       ) {
         SettingsOptionalTextFieldControl(
           text: $codexModelDraft,
@@ -551,10 +604,11 @@ struct SettingsView: View {
         )
       }
 
-      SettingsRowView(
+      SettingsFormRow(
         label: "Config Profile",
         description: "Named configuration profile to load on launch.",
-        stacked: true
+        stacked: true,
+        showsDivider: true
       ) {
         SettingsOptionalTextFieldControl(
           text: $codexConfigProfileDraft,
@@ -567,10 +621,11 @@ struct SettingsView: View {
         )
       }
 
-      SettingsRowView(
+      SettingsFormRow(
         label: "Approval Policy",
         description: "Controls what Codex can do without asking first.",
-        stacked: true
+        stacked: true,
+        showsDivider: true
       ) {
         Picker("", selection: codexApprovalPolicyBinding) {
           Text("CLI Default").tag(Optional<AppCodexApprovalPolicy>.none)
@@ -580,14 +635,14 @@ struct SettingsView: View {
         }
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
-        .frame(width: 180)
         .lcPointerCursor()
       }
 
-      SettingsRowView(
+      SettingsFormRow(
         label: "Sandbox",
         description: "Isolation level for code execution.",
-        stacked: true
+        stacked: true,
+        showsDivider: true
       ) {
         Picker("", selection: codexSandboxModeBinding) {
           Text("CLI Default").tag(Optional<AppCodexSandboxMode>.none)
@@ -597,14 +652,14 @@ struct SettingsView: View {
         }
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
-        .frame(width: 180)
         .lcPointerCursor()
       }
 
-      SettingsRowView(
+      SettingsFormRow(
         label: "Reasoning",
         description: "How much reasoning Codex uses per response.",
-        stacked: true
+        stacked: true,
+        showsDivider: true
       ) {
         Picker("", selection: codexReasoningEffortBinding) {
           Text("CLI Default").tag(Optional<AppCodexReasoningEffort>.none)
@@ -614,11 +669,10 @@ struct SettingsView: View {
         }
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
-        .frame(width: 180)
         .lcPointerCursor()
       }
 
-      SettingsRowView(
+      SettingsFormRow(
         label: "Web Search",
         description: "Whether Codex can search the web.",
         stacked: true
@@ -631,7 +685,6 @@ struct SettingsView: View {
         }
         .pickerStyle(.menu)
         .tint(theme.primaryTextColor)
-        .frame(width: 180)
         .lcPointerCursor()
       }
     }
@@ -640,10 +693,11 @@ struct SettingsView: View {
   @MainActor @ViewBuilder
   private func commandTerminalProfileContent(for profile: AppTerminalProfile) -> some View {
     VStack(alignment: .leading, spacing: 0) {
-      SettingsRowView(
+      SettingsFormRow(
         label: "Program",
         description: "The executable this profile launches.",
-        stacked: true
+        stacked: true,
+        showsDivider: true
       ) {
         SettingsReadOnlyValue(
           text: profile.command?.program ?? "No command configured",
@@ -651,10 +705,11 @@ struct SettingsView: View {
         )
       }
 
-      SettingsRowView(
+      SettingsFormRow(
         label: "Arguments",
         description: "Passed to the program on launch.",
-        stacked: true
+        stacked: true,
+        showsDivider: true
       ) {
         SettingsReadOnlyValue(
           text: profile.command?.args.joined(separator: " ") ?? "No arguments",
@@ -662,10 +717,11 @@ struct SettingsView: View {
         )
       }
 
-      SettingsRowView(
+      SettingsFormRow(
         label: "Environment",
         description: "Extra variables set before launch.",
-        stacked: true
+        stacked: true,
+        showsDivider: true
       ) {
         SettingsReadOnlyValue(
           text: commandProfileEnvironmentSummary(profile.command?.env ?? [:]),
@@ -673,23 +729,25 @@ struct SettingsView: View {
         )
       }
 
-      Text("Custom command profiles already launch correctly from settings. Inline editing for arbitrary command profiles is not wired into the app yet.")
-        .font(.system(size: 11))
-        .foregroundStyle(theme.mutedColor)
-        .padding(.top, 10)
+      SettingsFormContentBlock {
+        SettingsInlineNote(
+          message: "Custom command profiles can launch, but editing arbitrary command profiles still lives in the settings file.",
+          tone: .info
+        )
+      }
     }
   }
 
   private func terminalProfileDetailDescription(for profile: AppTerminalProfile) -> String {
     switch profile.launcher {
     case .shell:
-      return "Opens your default shell with the runtime settings above."
+      return "Launches your shell using the runtime defaults above."
     case .claude:
-      return "Opens Claude Code with the settings below."
+      return "Starts Claude Code with the overrides below."
     case .codex:
-      return "Opens Codex with the settings below."
+      return "Starts Codex with the overrides below."
     case .command:
-      return "Runs a custom command defined in your settings file."
+      return "Launches the custom command defined in your settings file."
     }
   }
 
@@ -758,16 +816,6 @@ struct SettingsView: View {
     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
     return trimmed.isEmpty ? nil : trimmed
   }
-
-  @MainActor @ViewBuilder
-  private func trackedSectionHeader(
-    _ section: SettingsViewSection,
-    in scrollSpySpace: Namespace.ID
-  ) -> some View {
-    SettingsSectionHeader(title: section.rawValue)
-      .id(section.id)
-      .lcScrollSpyTarget(section, in: scrollSpySpace)
-  }
 }
 
 func orderedTerminalProfiles(_ profiles: [String: AppTerminalProfile]) -> [AppTerminalProfile] {
@@ -818,109 +866,90 @@ func commandProfileEnvironmentSummary(_ environment: [String: String]) -> String
   }.joined(separator: "\n")
 }
 
-// MARK: - Section Header
+// MARK: - Sidebar
 
-private struct SettingsSectionRail: View {
+private struct SettingsSidebar: View {
   @Environment(\.appTheme) private var theme
 
+  let sections: [SettingsViewSection]
   let activeSection: SettingsViewSection
   let namespace: Namespace.ID
+  let dismiss: DismissAction
   let action: (SettingsViewSection) -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("SECTIONS")
-        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-        .tracking(1)
-        .foregroundStyle(theme.mutedColor)
-        .padding(.bottom, 4)
+    VStack(alignment: .leading, spacing: 0) {
+      Color.clear.frame(height: 40)
 
-      ForEach(SettingsViewSection.allCases) { section in
-        SettingsRailButton(
-          title: section.rawValue,
-          subtitle: nil,
-          badgeText: nil,
-          isActive: activeSection == section,
-          namespace: namespace
-        ) {
-          action(section)
+      VStack(alignment: .leading, spacing: 16) {
+        Button {
+          dismiss()
+        } label: {
+          HStack(spacing: 6) {
+            Image(systemName: "chevron.left")
+              .font(.lc(size: 10, weight: .semibold))
+            Text("Back to app")
+              .font(.lc(size: 12, weight: .medium))
+          }
+          .foregroundStyle(theme.sidebarMutedForegroundColor)
+          .padding(.horizontal, 8)
+          .padding(.vertical, 6)
+        }
+        .buttonStyle(.plain)
+        .lcPointerCursor()
+
+        VStack(alignment: .leading, spacing: 4) {
+          ForEach(sections) { section in
+            SettingsSidebarButton(
+              section: section,
+              isActive: activeSection == section,
+              namespace: namespace
+            ) {
+              action(section)
+            }
+          }
         }
       }
+      .padding(.horizontal, 12)
+      .padding(.top, 16)
+
+      Spacer()
     }
+    .background(theme.sidebarBackgroundColor)
   }
 }
 
-private struct SettingsSectionHeader: View {
-  @Environment(\.appTheme) private var theme
-  let title: String
-
-  var body: some View {
-    Text(title.uppercased())
-      .font(.system(size: 11, weight: .semibold, design: .monospaced))
-      .tracking(1)
-      .foregroundStyle(theme.mutedColor)
-      .padding(.top, 20)
-      .padding(.bottom, 8)
-  }
-}
-
-private struct SettingsSubsectionHeader: View {
-  @Environment(\.appTheme) private var theme
-  let title: String
-
-  var body: some View {
-    Text(title.uppercased())
-      .font(.system(size: 10, weight: .semibold, design: .monospaced))
-      .tracking(1)
-      .foregroundStyle(theme.mutedColor)
-      .padding(.bottom, 6)
-  }
-}
-
-private struct SettingsRailButton: View {
+private struct SettingsSidebarButton: View {
   @Environment(\.appTheme) private var theme
 
-  let title: String
-  let subtitle: String?
-  let badgeText: String?
+  let section: SettingsViewSection
   let isActive: Bool
   let namespace: Namespace.ID
   let action: () -> Void
 
   var body: some View {
     Button(action: action) {
-      HStack(alignment: .top, spacing: 10) {
-        VStack(alignment: .leading, spacing: 2) {
-          Text(title)
-            .font(.system(size: 13, weight: isActive ? .semibold : .medium))
-            .foregroundStyle(isActive ? theme.primaryTextColor : theme.mutedColor)
+      HStack(spacing: 10) {
+        Image(systemName: section.systemImage)
+          .font(.lc(size: 12, weight: .medium))
+          .foregroundStyle(isActive ? theme.sidebarForegroundColor : theme.sidebarMutedForegroundColor)
+          .frame(width: 14)
 
-          if let subtitle {
-            Text(subtitle)
-              .font(.system(size: 10, weight: .medium, design: .monospaced))
-              .foregroundStyle(isActive ? theme.mutedColor : theme.mutedColor.opacity(0.84))
-          }
-        }
+        Text(section.rawValue)
+          .font(.lc(size: 13, weight: isActive ? .semibold : .medium))
+          .foregroundStyle(isActive ? theme.sidebarForegroundColor : theme.sidebarMutedForegroundColor)
 
-        Spacer(minLength: 8)
-
-        if let badgeText {
-          SettingsInfoBadge(text: badgeText)
-        }
+        Spacer(minLength: 0)
       }
       .padding(.horizontal, 12)
-      .padding(.vertical, 10)
+      .padding(.vertical, 9)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background {
         if isActive {
           RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(theme.surfaceRaised)
-            .matchedGeometryEffect(id: "settings-rail-selection", in: namespace)
+            .fill(theme.sidebarSelectedColor)
+            .matchedGeometryEffect(id: "settings-sidebar-selection", in: namespace)
         }
-      }
-      .overlay {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-          .stroke(isActive ? theme.borderColor : Color.clear)
       }
       .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
@@ -929,50 +958,228 @@ private struct SettingsRailButton: View {
   }
 }
 
+// MARK: - Content Chrome
+
+private struct SettingsContentCard<Content: View>: View {
+  @Environment(\.appTheme) private var theme
+
+  @ViewBuilder let content: () -> Content
+
+  var body: some View {
+    content()
+      .background(theme.surfaceBackground)
+      .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+      .overlay(
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+          .strokeBorder(theme.borderColor)
+      )
+      .shadow(color: theme.cardShadowColor, radius: 24, x: 0, y: 10)
+  }
+}
+
+private struct SettingsFormSection<Content: View>: View {
+  @Environment(\.appTheme) private var theme
+
+  let title: String
+  let description: String?
+  @ViewBuilder let content: () -> Content
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      VStack(alignment: .leading, spacing: 5) {
+        Text(title)
+          .font(.lc(size: 18, weight: .semibold))
+          .foregroundStyle(theme.primaryTextColor)
+
+        if let description {
+          Text(description)
+            .font(.lc(size: 12))
+            .foregroundStyle(theme.mutedColor)
+            .lineSpacing(1)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+      }
+
+      content()
+    }
+  }
+}
+
+private struct SettingsFormSubsectionHeader: View {
+  @Environment(\.appTheme) private var theme
+  let title: String
+  let description: String?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text(title)
+        .font(.lc(size: 13, weight: .semibold))
+        .foregroundStyle(theme.primaryTextColor)
+
+      if let description {
+        Text(description)
+          .font(.lc(size: 11))
+          .foregroundStyle(theme.mutedColor)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+  }
+}
+
+private struct SettingsFormGroup<Content: View>: View {
+  @Environment(\.appTheme) private var theme
+
+  @ViewBuilder let content: () -> Content
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      content()
+    }
+    .overlay(
+      RoundedRectangle(cornerRadius: SettingsLayout.groupCornerRadius, style: .continuous)
+        .strokeBorder(theme.borderColor.opacity(0.75))
+    )
+  }
+}
+
+private struct SettingsFormContentBlock<Content: View>: View {
+  let spacing: CGFloat
+  @ViewBuilder let content: () -> Content
+
+  init(spacing: CGFloat = 0, @ViewBuilder content: @escaping () -> Content) {
+    self.spacing = spacing
+    self.content = content
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: spacing) {
+      content()
+    }
+    .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
+    .padding(.vertical, 12)
+  }
+}
+
+private struct SettingsFormDivider: View {
+  @Environment(\.appTheme) private var theme
+
+  var body: some View {
+    Rectangle()
+      .fill(theme.borderColor.opacity(0.75))
+      .frame(height: 1)
+  }
+}
+
+private struct SettingsStatusBanner: View {
+  let message: String
+  let tint: Color
+  let systemImage: String
+
+  var body: some View {
+    HStack(alignment: .center, spacing: 10) {
+      Image(systemName: systemImage)
+        .font(.lc(size: 12, weight: .semibold))
+        .foregroundStyle(tint)
+
+      Text(message)
+        .font(.lc(size: 12, weight: .medium))
+        .foregroundStyle(tint)
+        .fixedSize(horizontal: false, vertical: true)
+
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, 14)
+    .padding(.vertical, 12)
+    .background(
+      RoundedRectangle(cornerRadius: 14, style: .continuous)
+        .fill(tint.opacity(0.08))
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: 14, style: .continuous)
+        .stroke(tint.opacity(0.22), lineWidth: 1)
+    )
+  }
+}
+
+private enum SettingsInlineNoteTone {
+  case info
+  case warning
+}
+
+private struct SettingsInlineNote: View {
+  @Environment(\.appTheme) private var theme
+
+  let message: String
+  let tone: SettingsInlineNoteTone
+
+  var body: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 8) {
+      Image(systemName: icon)
+        .font(.lc(size: 11, weight: .semibold))
+        .foregroundStyle(color)
+
+      Text(message)
+        .font(.lc(size: 11))
+        .foregroundStyle(color)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  private var icon: String {
+    switch tone {
+    case .info:
+      "info.circle"
+    case .warning:
+      "exclamationmark.triangle"
+    }
+  }
+
+  private var color: Color {
+    switch tone {
+    case .info:
+      theme.mutedColor
+    case .warning:
+      theme.warningColor
+    }
+  }
+}
+
 // MARK: - Settings Row
 
-private struct SettingsRowView<Control: View>: View {
+private struct SettingsFormRow<Control: View>: View {
   @Environment(\.appTheme) private var theme
   let label: String
   let description: String
   var stacked: Bool = false
+  var showsDivider: Bool = false
   @ViewBuilder let control: () -> Control
 
   var body: some View {
-    HStack(alignment: .center, spacing: 16) {
-      VStack(alignment: .leading, spacing: 2) {
-        Text(label)
-          .font(.system(size: stacked ? 13 : 14, weight: .medium))
-          .foregroundStyle(theme.primaryTextColor)
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(alignment: .top, spacing: 16) {
+        VStack(alignment: .leading, spacing: 3) {
+          Text(label)
+            .font(.lc(size: 13, weight: .medium))
+            .foregroundStyle(theme.primaryTextColor)
 
-        Text(description)
-          .font(.system(size: stacked ? 11 : 12))
-          .foregroundStyle(theme.mutedColor)
-          .fixedSize(horizontal: false, vertical: true)
+          Text(description)
+            .font(.lc(size: stacked ? 11 : 12))
+            .foregroundStyle(theme.mutedColor)
+            .lineSpacing(1)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+        control()
+          .frame(maxWidth: .infinity, alignment: .trailing)
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
+      .padding(.vertical, stacked ? SettingsLayout.stackedRowVerticalPadding : SettingsLayout.rowVerticalPadding)
 
-      control()
-        .fixedSize()
+      if showsDivider {
+        SettingsFormDivider()
+      }
     }
-    .padding(.vertical, stacked ? 8 : 10)
-  }
-}
-
-private struct SettingsInfoBadge: View {
-  @Environment(\.appTheme) private var theme
-  let text: String
-
-  var body: some View {
-    Text(text)
-      .font(.system(size: 10, weight: .semibold, design: .monospaced))
-      .foregroundStyle(theme.mutedColor)
-      .padding(.horizontal, 8)
-      .padding(.vertical, 4)
-      .background(
-        Capsule(style: .continuous)
-          .fill(theme.mutedColor.opacity(0.12))
-      )
   }
 }
 
@@ -983,20 +1190,19 @@ private struct SettingsReadOnlyValue: View {
 
   var body: some View {
     Text(text)
-      .font(.system(size: 11, weight: .medium, design: monospaced ? .monospaced : .default))
+      .font(.lc(size: 11, weight: .medium, design: monospaced ? .monospaced : .default))
       .foregroundStyle(theme.primaryTextColor)
       .multilineTextAlignment(.trailing)
       .padding(.horizontal, 10)
       .padding(.vertical, 7)
       .background(
         RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(theme.surfaceRaised)
+          .fill(Color.clear)
       )
       .overlay(
         RoundedRectangle(cornerRadius: 8, style: .continuous)
           .stroke(theme.borderColor, lineWidth: 1)
       )
-      .frame(maxWidth: 240, alignment: .trailing)
       .fixedSize(horizontal: false, vertical: true)
   }
 }
@@ -1012,14 +1218,16 @@ private struct SettingsOptionalTextFieldControl: View {
 
   var body: some View {
     HStack(spacing: 8) {
-      LCTextInput(text: $text, placeholder: placeholder, width: 220, onSubmit: apply)
-
-      LCButton(label: applyLabel, variant: .ghost, size: .small, action: apply)
-        .disabled(!isModified)
-
       if canReset {
         LCButton(label: "Reset", variant: .ghost, size: .small, action: reset)
       }
+
+      LCButton(label: applyLabel, variant: .secondary, size: .small, action: apply)
+        .disabled(!isModified)
+
+      LCTextInput(text: $text, placeholder: placeholder, onSubmit: apply)
+        .frame(maxWidth: .infinity)
     }
+    .frame(maxWidth: .infinity, alignment: .trailing)
   }
 }

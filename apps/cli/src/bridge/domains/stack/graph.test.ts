@@ -24,12 +24,14 @@ describe("lowerStackGraph", () => {
         ]
       },
       "stack": {
-        "api": { "kind": "service", "runtime": "process", "command": "bun run api" },
-        "migrate": {
-          "kind": "task",
-          "command": "bun run db:migrate",
-          "depends_on": ["api"],
-          "timeout_seconds": 60
+        "nodes": {
+          "api": { "kind": "process", "command": "bun run api" },
+          "migrate": {
+            "kind": "task",
+            "command": "bun run db:migrate",
+            "depends_on": ["api"],
+            "timeout_seconds": 60
+          }
         }
       }
     }`);
@@ -37,7 +39,7 @@ describe("lowerStackGraph", () => {
     const graph = lowerStackGraph(config, { prepared: false });
 
     expect(graph.prepareSteps).toHaveLength(2);
-    expect(graph.nodes.get("api")?.kind).toBe("service");
+    expect(graph.nodes.get("api")?.kind).toBe("process");
     expect(graph.nodes.get("migrate")?.kind).toBe("task");
   });
 
@@ -49,19 +51,21 @@ describe("lowerStackGraph", () => {
         ]
       },
       "stack": {
-        "postgres": { "kind": "service", "runtime": "image", "image": "postgres:16" },
-        "seed": {
-          "kind": "task",
-          "command": "bun run seed",
-          "depends_on": ["postgres"],
-          "timeout_seconds": 60
-        },
-        "migrate": {
-          "kind": "task",
-          "command": "bun run db:migrate",
-          "depends_on": ["postgres"],
-          "timeout_seconds": 60,
-          "run_on": "start"
+        "nodes": {
+          "postgres": { "kind": "image", "image": "postgres:16" },
+          "seed": {
+            "kind": "task",
+            "command": "bun run seed",
+            "depends_on": ["postgres"],
+            "timeout_seconds": 60
+          },
+          "migrate": {
+            "kind": "task",
+            "command": "bun run db:migrate",
+            "depends_on": ["postgres"],
+            "timeout_seconds": 60,
+            "run_on": "start"
+          }
         }
       }
     }`);
@@ -77,18 +81,19 @@ describe("lowerStackGraph", () => {
     const config = parse(`{
       "workspace": { "prepare": [] },
       "stack": {
-        "postgres": { "kind": "service", "runtime": "image", "image": "postgres:16" },
-        "seed": {
-          "kind": "task",
-          "command": "bun run seed",
-          "depends_on": ["postgres"],
-          "timeout_seconds": 60
-        },
-        "api": {
-          "kind": "service",
-          "runtime": "process",
-          "command": "bun run api",
-          "depends_on": ["seed", "postgres"]
+        "nodes": {
+          "postgres": { "kind": "image", "image": "postgres:16" },
+          "seed": {
+            "kind": "task",
+            "command": "bun run seed",
+            "depends_on": ["postgres"],
+            "timeout_seconds": 60
+          },
+          "api": {
+            "kind": "process",
+            "command": "bun run api",
+            "depends_on": ["seed", "postgres"]
+          }
         }
       }
     }`);
@@ -103,9 +108,11 @@ describe("lowerStackGraph", () => {
     const config = parse(`{
       "workspace": { "prepare": [] },
       "stack": {
-        "api": { "kind": "service", "runtime": "process", "command": "bun run api" },
-        "www": { "kind": "service", "runtime": "process", "command": "bun run www", "depends_on": ["api"] },
-        "docs": { "kind": "service", "runtime": "process", "command": "bun run docs" }
+        "nodes": {
+          "api": { "kind": "process", "command": "bun run api" },
+          "www": { "kind": "process", "command": "bun run www", "depends_on": ["api"] },
+          "docs": { "kind": "process", "command": "bun run docs" }
+        }
       }
     }`);
 
@@ -122,7 +129,9 @@ describe("lowerStackGraph", () => {
     const config = parse(`{
       "workspace": { "prepare": [] },
       "stack": {
-        "api": { "kind": "service", "runtime": "process", "command": "bun run api" }
+        "nodes": {
+          "api": { "kind": "process", "command": "bun run api" }
+        }
       }
     }`);
 
@@ -138,11 +147,12 @@ describe("lowerStackGraph", () => {
     const config = parse(`{
       "workspace": { "prepare": [] },
       "stack": {
-        "api": {
-          "kind": "service",
-          "runtime": "process",
-          "command": "bun run api",
-          "depends_on": ["postgres"]
+        "nodes": {
+          "api": {
+            "kind": "process",
+            "command": "bun run api",
+            "depends_on": ["postgres"]
+          }
         }
       }
     }`);
@@ -154,22 +164,22 @@ describe("lowerStackGraph", () => {
     const config = parse(`{
       "workspace": { "prepare": [] },
       "stack": {
-        "api": {
-          "kind": "service",
-          "runtime": "process",
-          "command": "bun run api",
-          "depends_on": ["migrate"]
-        },
-        "migrate": {
-          "kind": "task",
-          "command": "bun run db:migrate",
-          "timeout_seconds": 60
-        },
-        "www": {
-          "kind": "service",
-          "runtime": "process",
-          "command": "bun run www",
-          "depends_on": ["api"]
+        "nodes": {
+          "api": {
+            "kind": "process",
+            "command": "bun run api",
+            "depends_on": ["migrate"]
+          },
+          "migrate": {
+            "kind": "task",
+            "command": "bun run db:migrate",
+            "timeout_seconds": 60
+          },
+          "www": {
+            "kind": "process",
+            "command": "bun run www",
+            "depends_on": ["api"]
+          }
         }
       }
     }`);
@@ -191,14 +201,16 @@ describe("topologicalSort", () => {
     const config = parse(`{
       "workspace": { "prepare": [] },
       "stack": {
-        "web": { "kind": "service", "runtime": "process", "command": "bun run web", "depends_on": ["api"] },
-        "api": { "kind": "service", "runtime": "process", "command": "bun run api", "depends_on": ["postgres", "migrate"] },
-        "postgres": { "kind": "service", "runtime": "image", "image": "postgres:16" },
-        "migrate": {
-          "kind": "task",
-          "command": "bun run db:migrate",
-          "depends_on": ["postgres"],
-          "timeout_seconds": 60
+        "nodes": {
+          "web": { "kind": "process", "command": "bun run web", "depends_on": ["api"] },
+          "api": { "kind": "process", "command": "bun run api", "depends_on": ["postgres", "migrate"] },
+          "postgres": { "kind": "image", "image": "postgres:16" },
+          "migrate": {
+            "kind": "task",
+            "command": "bun run db:migrate",
+            "depends_on": ["postgres"],
+            "timeout_seconds": 60
+          }
         }
       }
     }`);
@@ -217,8 +229,10 @@ describe("topologicalSort", () => {
     const config = parse(`{
       "workspace": { "prepare": [] },
       "stack": {
-        "api": { "kind": "service", "runtime": "process", "command": "bun run api", "depends_on": ["db"] },
-        "db": { "kind": "service", "runtime": "process", "command": "bun run db", "depends_on": ["api"] }
+        "nodes": {
+          "api": { "kind": "process", "command": "bun run api", "depends_on": ["db"] },
+          "db": { "kind": "process", "command": "bun run db", "depends_on": ["api"] }
+        }
       }
     }`);
 
@@ -230,9 +244,11 @@ describe("topologicalSort", () => {
     const config = parse(`{
       "workspace": { "prepare": [] },
       "stack": {
-        "charlie": { "kind": "service", "runtime": "process", "command": "c" },
-        "alpha": { "kind": "service", "runtime": "process", "command": "a" },
-        "bravo": { "kind": "service", "runtime": "process", "command": "b" }
+        "nodes": {
+          "charlie": { "kind": "process", "command": "c" },
+          "alpha": { "kind": "process", "command": "a" },
+          "bravo": { "kind": "process", "command": "b" }
+        }
       }
     }`);
 
@@ -253,8 +269,10 @@ describe("resolveStartOrder", () => {
         ]
       },
       "stack": {
-        "api": { "kind": "service", "runtime": "process", "command": "bun run api" },
-        "www": { "kind": "service", "runtime": "process", "command": "bun run www", "depends_on": ["api"] }
+        "nodes": {
+          "api": { "kind": "process", "command": "bun run api" },
+          "www": { "kind": "process", "command": "bun run www", "depends_on": ["api"] }
+        }
       }
     }`);
 
@@ -270,9 +288,11 @@ describe("declaredServiceNames", () => {
     const config = parse(`{
       "workspace": { "prepare": [] },
       "stack": {
-        "api": { "kind": "service", "runtime": "process", "command": "bun run api" },
-        "migrate": { "kind": "task", "command": "bun run db:migrate", "timeout_seconds": 60 },
-        "www": { "kind": "service", "runtime": "process", "command": "bun run www" }
+        "nodes": {
+          "api": { "kind": "process", "command": "bun run api" },
+          "migrate": { "kind": "task", "command": "bun run db:migrate", "timeout_seconds": 60 },
+          "www": { "kind": "process", "command": "bun run www" }
+        }
       }
     }`);
 

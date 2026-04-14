@@ -22,7 +22,7 @@ struct AgentComposerView: View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(alignment: .top, spacing: 0) {
         Text("▶")
-          .font(.system(size: 13, weight: .medium, design: .monospaced))
+          .font(.lc(size: 13, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.accentColor)
           .padding(.top, 4)
           .padding(.trailing, 6)
@@ -30,14 +30,14 @@ struct AgentComposerView: View {
         ZStack(alignment: .topLeading) {
           if draftPrompt.isEmpty {
             Text(verbatim: placeholderText)
-              .font(.system(size: 13, weight: .medium, design: .monospaced))
+              .font(.lc(size: 13, weight: .medium, design: .monospaced))
               .foregroundStyle(theme.mutedColor.opacity(0.68))
               .padding(.top, 1)
               .allowsHitTesting(false)
           }
 
           TextEditor(text: $draftPrompt)
-            .font(.system(size: 13, weight: .medium, design: .monospaced))
+            .font(.lc(size: 13, weight: .medium, design: .monospaced))
             .foregroundStyle(theme.primaryTextColor)
             .scrollContentBackground(.hidden)
             .focused($isFocused)

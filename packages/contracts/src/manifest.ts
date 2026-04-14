@@ -126,7 +126,7 @@ const HealthCheckSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-const BaseServiceFields = {
+const BaseManagedNodeFields = {
   env: z.record(z.string(), z.string()).optional(),
   depends_on: z.array(z.string()).optional(),
   startup_timeout_seconds: z.number().int().positive().optional(),
@@ -169,55 +169,53 @@ const TaskNodeSchema = z
   })
   .superRefine(validateStepAction);
 
-const ProcessServiceNodeSchema = z
+const ProcessNodeSchema = z
   .object({
-    kind: z.literal("service"),
-    runtime: z.literal("process"),
+    kind: z.literal("process"),
     command: z.string(),
     cwd: z.string().optional(),
-    ...BaseServiceFields,
+    ...BaseManagedNodeFields,
   })
-  .superRefine((service, ctx) => {
-    if (service.health_check?.kind === "container") {
+  .superRefine((node, ctx) => {
+    if (node.health_check?.kind === "container") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Container health checks are only valid for runtime: "image" services',
+        message: 'Container health checks are only valid for kind: "image" nodes',
         path: ["health_check", "kind"],
       });
     }
   });
 
-const ImageServiceNodeSchema = z
+const ImageNodeSchema = z
   .object({
-    kind: z.literal("service"),
-    runtime: z.literal("image"),
+    kind: z.literal("image"),
     image: z.string().optional(),
     build: ImageBuildSchema.optional(),
     command: z.string().optional(),
     args: z.array(z.string()).optional(),
     volumes: z.array(ImageVolumeSchema).optional(),
     port: z.number().int().positive().optional(),
-    ...BaseServiceFields,
+    ...BaseManagedNodeFields,
   })
-  .superRefine((service, ctx) => {
-    if (!service.image && !service.build) {
+  .superRefine((node, ctx) => {
+    if (!node.image && !node.build) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Image services require either image or build",
+        message: 'Image nodes require either image or build',
         path: ["image"],
       });
     }
   });
 
-const ServiceNodeSchema = z.union([
-  TaskNodeSchema,
-  ProcessServiceNodeSchema,
-  ImageServiceNodeSchema,
-]);
+const StackNodeSchema = z.union([TaskNodeSchema, ProcessNodeSchema, ImageNodeSchema]);
 
 export const LifecycleConfigSchema = z.object({
   workspace: WorkspaceSchema,
-  stack: z.record(z.string(), ServiceNodeSchema),
+  stack: z
+    .object({
+      nodes: z.record(z.string(), StackNodeSchema),
+    })
+    .optional(),
 });
 
 export type LifecycleConfig = z.infer<typeof LifecycleConfigSchema>;

@@ -1,101 +1,272 @@
+import AppKit
 import LifecyclePresentation
 import SwiftUI
 
-let stackExtensionMinimumTableWidth: CGFloat = 400
-
-func stackExtensionUsesCompactLayout(availableWidth: CGFloat) -> Bool {
-  availableWidth < stackExtensionMinimumTableWidth
-}
+private let stackExtensionANSIControlSequencePattern = try! NSRegularExpression(
+  pattern: "\u{001B}\\[[0-?]*[ -/]*[@-~]"
+)
+private let stackExtensionANSIOperatingSystemCommandPattern = try! NSRegularExpression(
+  pattern: "\u{001B}\\].*?(?:\u{0007}|\u{001B}\\\\)",
+  options: [.dotMatchesLineSeparators]
+)
 
 func stackExtensionServiceNodes(from summary: BridgeWorkspaceStackSummary?) -> [BridgeStackNode] {
-  summary?.nodes.filter { $0.kind == "service" } ?? []
+  summary?.nodes.filter(\.isManagedNode) ?? []
 }
 
 func stackExtensionTaskNodes(from summary: BridgeWorkspaceStackSummary?) -> [BridgeStackNode] {
   summary?.nodes.filter { $0.kind == "task" } ?? []
 }
 
-func stackExtensionSummarySubtitle(summary: BridgeWorkspaceStackSummary?) -> String {
+struct StackExtensionEmptyStateContent: Equatable {
+  let symbolName: String
+  let title: String
+  let description: String
+  let tone: WorkspaceExtensionEmptyStateTone
+  let details: [String]
+}
+
+func stackExtensionEmptyStateContent(
+  summary: BridgeWorkspaceStackSummary?
+) -> StackExtensionEmptyStateContent? {
   guard let summary else {
-    return "Loading stack summary from the bridge..."
+    return nil
   }
 
   switch summary.state {
   case "missing":
-    return "No stack configured for this workspace."
+    return StackExtensionEmptyStateContent(
+      symbolName: "shippingbox.circle.fill",
+      title: "No lifecycle.json",
+      description: "No lifecycle.json found for this workspace.",
+      tone: .warning,
+      details: []
+    )
+  case "unconfigured":
+    return StackExtensionEmptyStateContent(
+      symbolName: "shippingbox.circle",
+      title: "No stack configured",
+      description: "No stack configured for this workspace.",
+      tone: .neutral,
+      details: []
+    )
   case "invalid":
-    return "Invalid lifecycle.json stack."
+    return StackExtensionEmptyStateContent(
+      symbolName: "exclamationmark.triangle.fill",
+      title: "Stack config is invalid",
+      description: "Lifecycle couldn't parse this workspace's stack configuration. Fix lifecycle.json and reload the workspace.",
+      tone: .error,
+      details: summary.errors
+    )
   default:
-    let serviceCount = stackExtensionServiceNodes(from: summary).count
-    let taskCount = stackExtensionTaskNodes(from: summary).count
-    var parts: [String] = []
-
-    if serviceCount > 0 {
-      parts.append("\(serviceCount) service\(serviceCount == 1 ? "" : "s")")
-    }
-
-    if taskCount > 0 {
-      parts.append("\(taskCount) task\(taskCount == 1 ? "" : "s")")
-    }
-
-    return parts.isEmpty ? "No services or tasks declared." : parts.joined(separator: ", ")
+    return nil
   }
+}
+
+func stackExtensionSummarySubtitle(summary: BridgeWorkspaceStackSummary?) -> String {
+  if let emptyState = stackExtensionEmptyStateContent(summary: summary) {
+    return emptyState.description
+  }
+
+  guard let summary else {
+    return "Loading stack summary from the bridge..."
+  }
+
+  let serviceCount = stackExtensionServiceNodes(from: summary).count
+  let taskCount = stackExtensionTaskNodes(from: summary).count
+  var parts: [String] = []
+
+  if serviceCount > 0 {
+    parts.append("\(serviceCount) service\(serviceCount == 1 ? "" : "s")")
+  }
+
+  if taskCount > 0 {
+    parts.append("\(taskCount) task\(taskCount == 1 ? "" : "s")")
+  }
+
+  return parts.isEmpty ? "No services or tasks declared." : parts.joined(separator: ", ")
+}
+
+func stackExtensionServiceMetadata(_ node: BridgeStackNode) -> String? {
+  var parts: [String] = []
+
+  if let assignedPort = node.assignedPort {
+    parts.append(":\(assignedPort)")
+  }
+
+  if !node.dependsOn.isEmpty {
+    parts.append("depends on \(node.dependsOn.joined(separator: ", "))")
+  }
+
+  return parts.isEmpty ? nil : parts.joined(separator: "  ")
+}
+
+func stackExtensionTaskMetadata(_ node: BridgeStackNode) -> String {
+  var parts: [String] = []
+
+  if let runOn = node.runOn {
+    parts.append("run_on \(runOn)")
+  }
+
+  if !node.dependsOn.isEmpty {
+    parts.append("depends on \(node.dependsOn.joined(separator: ", "))")
+  }
+
+  parts.append("write_files \(node.writeFilesCount ?? 0)")
+  return parts.joined(separator: "  ")
+}
+
+func stackExtensionServiceStatusLabel(
+  _ node: BridgeStackNode,
+  phase: StackServicePhase?
+) -> String {
+  switch phase {
+  case .stopping:
+    return "stopping"
+  case nil:
+    return (node.status ?? "stopped").lowercased()
+  }
+}
+
+func stackExtensionSanitizedLogText(_ text: String) -> String {
+  let withoutOperatingSystemCommands =
+    stackExtensionANSIOperatingSystemCommandPattern.stringByReplacingMatches(
+      in: text,
+      range: NSRange(text.startIndex..., in: text),
+      withTemplate: ""
+    )
+
+  let withoutControlSequences =
+    stackExtensionANSIControlSequencePattern.stringByReplacingMatches(
+      in: withoutOperatingSystemCommands,
+      range: NSRange(withoutOperatingSystemCommands.startIndex..., in: withoutOperatingSystemCommands),
+      withTemplate: ""
+    )
+
+  return withoutControlSequences.replacingOccurrences(of: "\r", with: "")
+}
+
+func stackExtensionLogPlainText(_ lines: [BridgeWorkspaceLogLine]) -> String {
+  lines
+    .map { stackExtensionSanitizedLogText($0.text) }
+    .joined(separator: "\n")
+}
+
+private func stackExtensionLogAttributedString(
+  _ lines: [BridgeWorkspaceLogLine],
+  theme: AppTheme
+) -> NSAttributedString {
+  let result = NSMutableAttributedString()
+  let paragraphStyle = NSMutableParagraphStyle()
+  paragraphStyle.lineBreakMode = .byClipping
+  paragraphStyle.lineHeightMultiple = 1.08
+  let font = AppTypography.nsFont(size: 11, weight: .medium, role: .mono)
+
+  for (index, line) in lines.enumerated() {
+    let sanitizedText = stackExtensionSanitizedLogText(line.text)
+    let color =
+      line.stream == "stderr"
+        ? NSColor(themeHex: theme.statusDanger, alpha: 0.92)
+        : NSColor(themeHex: theme.foreground, alpha: 0.88)
+
+    result.append(
+      NSAttributedString(
+        string: sanitizedText,
+        attributes: [
+          .font: font,
+          .foregroundColor: color,
+          .paragraphStyle: paragraphStyle,
+        ]
+      )
+    )
+
+    if index < lines.count - 1 {
+      result.append(
+        NSAttributedString(
+          string: "\n",
+          attributes: [
+            .font: font,
+            .foregroundColor: NSColor(themeHex: theme.foreground, alpha: 0.88),
+            .paragraphStyle: paragraphStyle,
+          ]
+        )
+      )
+    }
+  }
+
+  return result
+}
+
+private enum StackServiceLogState {
+  case idle
+  case loading
+  case loaded([BridgeWorkspaceLogLine])
+  case failed(String)
 }
 
 struct StackExtensionView: View {
   @Environment(\.appTheme) private var theme
 
   let context: WorkspaceExtensionContext
-  @State private var isServicesExpanded = true
+
+  @State private var expandedServiceID: String?
   @State private var isTasksExpanded = false
+  @State private var serviceLogStates: [String: StackServiceLogState] = [:]
 
   var body: some View {
-    GeometryReader { geometry in
-      let usesCompactLayout = stackExtensionUsesCompactLayout(availableWidth: geometry.size.width)
-      let serviceNodes = stackExtensionServiceNodes(from: context.stackSummary)
-      let taskNodes = stackExtensionTaskNodes(from: context.stackSummary)
+    let serviceNodes = stackExtensionServiceNodes(from: context.stackSummary)
+    let taskNodes = stackExtensionTaskNodes(from: context.stackSummary)
+    let emptyState = stackExtensionEmptyStateContent(summary: context.stackSummary)
 
-      ScrollView {
-        VStack(alignment: .leading, spacing: 18) {
-          summaryHeader
+    Group {
+      if let emptyState {
+        WorkspaceExtensionEmptyStateView(
+          symbolName: emptyState.symbolName,
+          title: emptyState.title,
+          description: emptyState.description,
+          tone: emptyState.tone,
+          details: emptyState.details
+        )
+      } else {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 0) {
+            summaryHeader
+              .padding(.horizontal, 12)
+              .padding(.top, 12)
+              .padding(.bottom, 10)
 
-          if context.stackSummary?.state == "invalid", let summary = context.stackSummary, !summary.errors.isEmpty {
-            errorList(summary.errors)
-          }
+            if !serviceNodes.isEmpty {
+              sectionHeader(title: "Services", count: serviceNodes.count)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 4)
 
-          if !serviceNodes.isEmpty {
-            accordionSection(
-              title: "Services",
-              count: serviceNodes.count,
-              isExpanded: $isServicesExpanded
-            ) {
-              if usesCompactLayout {
-                compactNodeList(serviceNodes)
-              } else {
-                serviceTable(serviceNodes)
+              serviceList(serviceNodes)
+            }
+
+            if !taskNodes.isEmpty {
+              if !serviceNodes.isEmpty {
+                divider
+                  .padding(.top, 10)
               }
+
+              taskSection(taskNodes)
+                .padding(.top, serviceNodes.isEmpty ? 0 : 10)
             }
           }
-
-          if !taskNodes.isEmpty {
-            accordionSection(
-              title: "Tasks",
-              count: taskNodes.count,
-              isExpanded: $isTasksExpanded
-            ) {
-              if usesCompactLayout {
-                compactNodeList(taskNodes)
-              } else {
-                taskTable(taskNodes)
-              }
-            }
-          }
+          .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .scrollIndicators(.automatic)
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-      .scrollIndicators(.automatic)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .onChange(of: context.workspace.id) { _ in
+      resetExpandedState()
+    }
+    .onChange(of: stackExtensionServiceNodes(from: context.stackSummary).map(\.id)) { serviceIDs in
+      guard let expandedServiceID, !serviceIDs.contains(expandedServiceID) else {
+        return
+      }
+      self.expandedServiceID = nil
     }
   }
 
@@ -104,321 +275,267 @@ struct StackExtensionView: View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(spacing: 8) {
         Text("STACK")
-          .font(.system(size: 10, weight: .bold, design: .monospaced))
+          .font(.lc(size: 10, weight: .bold, design: .monospaced))
           .foregroundStyle(theme.mutedColor.opacity(0.75))
 
         Spacer(minLength: 0)
 
-        LCBadge(
-          label: (context.stackSummary?.state ?? "loading").uppercased(),
-          color: stateColor(context.stackSummary?.state ?? "loading")
-        )
+        Text((context.stackSummary?.state ?? "loading").uppercased())
+          .font(.lc(size: 10, weight: .bold, design: .monospaced))
+          .foregroundStyle(stateColor(context.stackSummary?.state ?? "loading"))
       }
 
       Text(stackExtensionSummarySubtitle(summary: context.stackSummary))
-        .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(context.stackSummary?.state == "invalid" ? theme.errorColor : theme.primaryTextColor)
+        .font(.lc(size: 12, weight: .medium))
+        .foregroundStyle(
+          context.stackSummary?.state == "invalid"
+            ? theme.errorColor
+            : theme.primaryTextColor
+        )
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private func sectionHeader(title: String, count: Int) -> some View {
+    HStack(spacing: 8) {
+      Text(title.uppercased())
+        .font(.lc(size: 10, weight: .bold, design: .monospaced))
+        .foregroundStyle(theme.mutedColor.opacity(0.76))
+
+      Spacer(minLength: 0)
+
+      Text("\(count)")
+        .font(.lc(size: 10, weight: .medium, design: .monospaced))
+        .foregroundStyle(theme.mutedColor.opacity(0.72))
     }
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
   @ViewBuilder
-  private func accordionSection<Content: View>(
-    title: String,
-    count: Int,
-    isExpanded: Binding<Bool>,
-    @ViewBuilder content: () -> Content
-  ) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
+  private func taskSection(_ nodes: [BridgeStackNode]) -> some View {
+    VStack(alignment: .leading, spacing: 0) {
       Button {
         withAnimation(.spring(response: 0.26, dampingFraction: 0.86)) {
-          isExpanded.wrappedValue.toggle()
+          isTasksExpanded.toggle()
         }
       } label: {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
           Image(systemName: "chevron.right")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(theme.mutedColor.opacity(0.82))
-            .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
+            .font(.lc(size: 10, weight: .semibold))
+            .foregroundStyle(theme.mutedColor.opacity(0.8))
+            .rotationEffect(.degrees(isTasksExpanded ? 90 : 0))
 
-          Text(title.uppercased())
-            .font(.system(size: 10, weight: .bold, design: .monospaced))
-            .foregroundStyle(theme.mutedColor.opacity(0.78))
+          Text("TASKS")
+            .font(.lc(size: 10, weight: .bold, design: .monospaced))
+            .foregroundStyle(theme.mutedColor.opacity(0.76))
 
           Spacer(minLength: 0)
 
-          Text("\(count)")
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
+          Text("\(nodes.count)")
+            .font(.lc(size: 10, weight: .medium, design: .monospaced))
             .foregroundStyle(theme.mutedColor.opacity(0.72))
         }
-        .padding(.vertical, 2)
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .lcPointerCursor()
 
-      if isExpanded.wrappedValue {
-        content()
+      if isTasksExpanded {
+        VStack(alignment: .leading, spacing: 0) {
+          ForEach(Array(nodes.enumerated()), id: \.element.id) { index, node in
+            taskRow(node)
+
+            if index < nodes.count - 1 {
+              divider
+            }
+          }
+        }
+        .padding(.top, 4)
       }
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  @ViewBuilder
-  private func errorList(_ errors: [String]) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-      ForEach(errors, id: \.self) { error in
-        Text(error)
-          .font(.system(size: 11, weight: .medium, design: .monospaced))
-          .foregroundStyle(theme.errorColor)
-          .textSelection(.enabled)
-          .fixedSize(horizontal: false, vertical: true)
-      }
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-  }
-
-  @ViewBuilder
-  private func serviceTable(_ nodes: [BridgeStackNode]) -> some View {
+  private func serviceList(_ nodes: [BridgeStackNode]) -> some View {
     VStack(alignment: .leading, spacing: 0) {
-      HStack(spacing: 12) {
-        tableHeader("Name", width: 116)
-        tableHeader("State", width: 88)
-        tableHeader("Details", width: nil)
-      }
-      .padding(.vertical, 8)
+      ForEach(Array(nodes.enumerated()), id: \.element.id) { index, node in
+        VStack(alignment: .leading, spacing: 0) {
+          Button {
+            toggleService(node)
+          } label: {
+            serviceRow(node, isExpanded: expandedServiceID == node.id)
+          }
+          .buttonStyle(.plain)
+          .lcPointerCursor()
+          .help(serviceHelpText(for: node))
 
-      ForEach(nodes) { node in
-        VStack(alignment: .leading, spacing: 6) {
-          HStack(alignment: .top, spacing: 12) {
-            Text(node.name)
-              .font(.system(size: 12, weight: .semibold, design: .monospaced))
-              .foregroundStyle(theme.primaryTextColor)
-              .frame(width: 116, alignment: .leading)
-
-            statusBadge(for: node)
-              .frame(width: 88, alignment: .leading)
-
-            nodeDetails(node)
+          if expandedServiceID == node.id {
+            serviceLogPanel(for: node)
           }
 
-          if !node.dependsOn.isEmpty {
-            Text("depends_on: \(node.dependsOn.joined(separator: ", "))")
-              .font(.system(size: 10, weight: .medium, design: .monospaced))
-              .foregroundStyle(theme.mutedColor.opacity(0.8))
-              .padding(.leading, 128)
+          if index < nodes.count - 1 {
+            divider
           }
-        }
-        .padding(.vertical, 10)
-
-        if nodes.last?.id != node.id {
-          Divider()
-            .overlay(theme.borderColor.opacity(0.35))
         }
       }
     }
+  }
+
+  private func serviceRow(_ node: BridgeStackNode, isExpanded: Bool) -> some View {
+    let phase = context.model.stackServicePhase(for: context.workspace.id, serviceName: node.name)
+    let statusLabel = stackExtensionServiceStatusLabel(node, phase: phase)
+
+    return HStack(spacing: 10) {
+      Image(systemName: "chevron.right")
+        .font(.lc(size: 10, weight: .semibold))
+        .foregroundStyle(theme.mutedColor.opacity(0.8))
+        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+
+      Circle()
+        .fill(stateColor(statusLabel))
+        .frame(width: 6, height: 6)
+
+      Text(node.name)
+        .font(.lc(size: 12, weight: .semibold, design: .monospaced))
+        .foregroundStyle(theme.primaryTextColor)
+        .lineLimit(1)
+
+      if let metadata = stackExtensionServiceMetadata(node) {
+        Text(metadata)
+          .font(.lc(size: 11, weight: .medium, design: .monospaced))
+          .foregroundStyle(theme.mutedColor.opacity(0.82))
+          .lineLimit(1)
+          .truncationMode(.tail)
+      }
+
+      Spacer(minLength: 12)
+
+      Text(statusLabel)
+        .font(.lc(size: 10, weight: .bold, design: .monospaced))
+        .foregroundStyle(stateColor(statusLabel))
+        .lineLimit(1)
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 11)
     .frame(maxWidth: .infinity, alignment: .leading)
+    .contentShape(Rectangle())
   }
 
   @ViewBuilder
-  private func taskTable(_ nodes: [BridgeStackNode]) -> some View {
-    VStack(alignment: .leading, spacing: 0) {
-      HStack(spacing: 12) {
-        tableHeader("Name", width: 116)
-        tableHeader("Trigger", width: 88)
-        tableHeader("Details", width: nil)
-      }
-      .padding(.vertical, 8)
-
-      ForEach(nodes) { node in
-        VStack(alignment: .leading, spacing: 6) {
-          HStack(alignment: .top, spacing: 12) {
-            Text(node.name)
-              .font(.system(size: 12, weight: .semibold, design: .monospaced))
-              .foregroundStyle(theme.primaryTextColor)
-              .frame(width: 116, alignment: .leading)
-
-            statusBadge(for: node)
-              .frame(width: 88, alignment: .leading)
-
-            nodeDetails(node)
-          }
-
-          if !node.dependsOn.isEmpty {
-            Text("depends_on: \(node.dependsOn.joined(separator: ", "))")
-              .font(.system(size: 10, weight: .medium, design: .monospaced))
-              .foregroundStyle(theme.mutedColor.opacity(0.8))
-              .padding(.leading, 128)
-          }
-        }
-        .padding(.vertical, 10)
-
-        if nodes.last?.id != node.id {
-          Divider()
-            .overlay(theme.borderColor.opacity(0.35))
-        }
-      }
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-  }
-
-  private func tableHeader(_ label: String, width: CGFloat?) -> some View {
-    Text(label.uppercased())
-      .font(.system(size: 10, weight: .bold, design: .monospaced))
-      .foregroundStyle(theme.mutedColor.opacity(0.7))
-      .frame(width: width, alignment: .leading)
-  }
-
-  @ViewBuilder
-  private func compactNodeList(_ nodes: [BridgeStackNode]) -> some View {
-    VStack(alignment: .leading, spacing: 0) {
-      ForEach(nodes) { node in
-        VStack(alignment: .leading, spacing: 8) {
-          HStack(alignment: .top, spacing: 8) {
-            Text(node.name)
-              .font(.system(size: 12, weight: .semibold, design: .monospaced))
-              .foregroundStyle(theme.primaryTextColor)
-
-            Spacer(minLength: 0)
-
-            statusBadge(for: node)
-          }
-
-          compactNodeDetails(node)
-
-          if !node.dependsOn.isEmpty {
-            Text("depends_on: \(node.dependsOn.joined(separator: ", "))")
-              .font(.system(size: 10, weight: .medium, design: .monospaced))
-              .foregroundStyle(theme.mutedColor.opacity(0.8))
-              .fixedSize(horizontal: false, vertical: true)
-          }
-        }
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-
-        if nodes.last?.id != node.id {
-          Divider()
-            .overlay(theme.borderColor.opacity(0.35))
-        }
-      }
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-  }
-
-  @ViewBuilder
-  private func statusBadge(for node: BridgeStackNode) -> some View {
-    if node.kind == "service" {
-      LCBadge(
-        label: node.status ?? "stopped",
-        color: stateColor(node.status ?? "stopped")
-      )
-    } else if let runOn = node.runOn {
-      LCBadge(label: runOn, color: theme.warningColor, variant: .outline)
-    } else {
-      Text("manual")
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
-        .foregroundStyle(theme.mutedColor)
-    }
-  }
-
-  @ViewBuilder
-  private func nodeDetails(_ node: BridgeStackNode) -> some View {
-    VStack(alignment: .leading, spacing: 4) {
-      if node.kind == "service" {
-        HStack(spacing: 8) {
-          if let runtime = node.runtime {
-            Text(runtime)
-              .font(.system(size: 11, weight: .medium, design: .monospaced))
-              .foregroundStyle(theme.primaryTextColor.opacity(0.85))
-          }
-
-          if let assignedPort = node.assignedPort {
-            Text(":\(assignedPort)")
-              .font(.system(size: 11, weight: .medium, design: .monospaced))
-              .foregroundStyle(theme.successColor)
-          }
-        }
-
-        if let previewURL = node.previewURL {
-          Text(previewURL)
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundStyle(theme.mutedColor.opacity(0.8))
-            .textSelection(.enabled)
-            .lineLimit(1)
-        } else if let statusReason = node.statusReason {
-          Text(statusReason)
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundStyle(theme.errorColor)
-        }
+  private func serviceLogPanel(for node: BridgeStackNode) -> some View {
+    switch serviceLogStates[node.id] ?? .idle {
+    case .idle, .loading:
+      logPlaceholder("Loading logs…", color: theme.mutedColor)
+    case let .failed(message):
+      logPlaceholder(message, color: theme.errorColor)
+    case let .loaded(lines):
+      if lines.isEmpty {
+        logPlaceholder("No log lines yet.", color: theme.mutedColor)
       } else {
-        if let command = node.command {
-          Text(command)
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundStyle(theme.primaryTextColor.opacity(0.8))
-            .textSelection(.enabled)
-            .lineLimit(2)
+        StackExtensionLogTextView(lines: lines, theme: theme)
+        .frame(minHeight: 110, idealHeight: 160, maxHeight: 220)
+        .overlay(alignment: .top) {
+          Rectangle()
+            .fill(theme.borderColor.opacity(0.2))
+            .frame(height: 1)
         }
-
-        Text("write_files: \(node.writeFilesCount ?? 0)")
-          .font(.system(size: 10, weight: .medium, design: .monospaced))
-          .foregroundStyle(theme.mutedColor.opacity(0.8))
       }
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  @ViewBuilder
-  private func compactNodeDetails(_ node: BridgeStackNode) -> some View {
-    VStack(alignment: .leading, spacing: 4) {
-      if node.kind == "service" {
-        HStack(spacing: 8) {
-          if let runtime = node.runtime {
-            Text(runtime)
-              .font(.system(size: 11, weight: .medium, design: .monospaced))
-              .foregroundStyle(theme.primaryTextColor.opacity(0.85))
-          }
+  private func logPlaceholder(_ text: String, color: Color) -> some View {
+    Text(text)
+      .font(.lc(size: 11, weight: .medium, design: .monospaced))
+      .foregroundStyle(color)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 12)
+      .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
+      .background(theme.shellBackground)
+      .overlay(alignment: .top) {
+        Rectangle()
+          .fill(theme.borderColor.opacity(0.2))
+          .frame(height: 1)
+      }
+  }
 
-          if let assignedPort = node.assignedPort {
-            Text(":\(assignedPort)")
-              .font(.system(size: 11, weight: .medium, design: .monospaced))
-              .foregroundStyle(theme.successColor)
-          }
-        }
+  private func taskRow(_ node: BridgeStackNode) -> some View {
+    HStack(spacing: 10) {
+      Image(systemName: "bolt.horizontal")
+        .font(.lc(size: 10, weight: .semibold))
+        .foregroundStyle(theme.warningColor.opacity(0.9))
 
-        if let previewURL = node.previewURL {
-          Text(previewURL)
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundStyle(theme.mutedColor.opacity(0.8))
-            .textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
-        } else if let statusReason = node.statusReason {
-          Text(statusReason)
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundStyle(theme.errorColor)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-      } else {
-        if let runOn = node.runOn {
-          Text("run_on: \(runOn)")
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundStyle(theme.warningColor)
-        }
+      Text(node.name)
+        .font(.lc(size: 12, weight: .semibold, design: .monospaced))
+        .foregroundStyle(theme.primaryTextColor)
+        .lineLimit(1)
 
-        if let command = node.command {
-          Text(command)
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundStyle(theme.primaryTextColor.opacity(0.8))
-            .textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
-        }
+      Text(stackExtensionTaskMetadata(node))
+        .font(.lc(size: 11, weight: .medium, design: .monospaced))
+        .foregroundStyle(theme.mutedColor.opacity(0.82))
+        .lineLimit(1)
+        .truncationMode(.tail)
 
-        Text("write_files: \(node.writeFilesCount ?? 0)")
-          .font(.system(size: 10, weight: .medium, design: .monospaced))
-          .foregroundStyle(theme.mutedColor.opacity(0.8))
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 10)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .contentShape(Rectangle())
+    .help(node.command ?? "")
+  }
+
+  private var divider: some View {
+    Rectangle()
+      .fill(theme.borderColor.opacity(0.35))
+      .frame(height: 1)
+  }
+
+  private func toggleService(_ node: BridgeStackNode) {
+    let nextExpandedID = expandedServiceID == node.id ? nil : node.id
+
+    withAnimation(.spring(response: 0.26, dampingFraction: 0.86)) {
+      expandedServiceID = nextExpandedID
+    }
+
+    guard nextExpandedID == node.id else {
+      return
+    }
+
+    Task { @MainActor in
+      serviceLogStates[node.id] = .loading
+
+      do {
+        let lines = try await context.model.stackLogs(
+          for: context.workspace.id,
+          serviceName: node.name
+        )
+        serviceLogStates[node.id] = .loaded(lines)
+      } catch {
+        serviceLogStates[node.id] = .failed(error.localizedDescription)
       }
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private func resetExpandedState() {
+    expandedServiceID = nil
+    isTasksExpanded = false
+    serviceLogStates = [:]
+  }
+
+  private func serviceHelpText(for node: BridgeStackNode) -> String {
+    var parts: [String] = []
+
+    if let previewURL = node.previewURL {
+      parts.append(previewURL)
+    }
+
+    if let statusReason = node.statusReason {
+      parts.append(statusReason)
+    }
+
+    return parts.joined(separator: "\n")
   }
 
   private func stateColor(_ state: String) -> Color {
@@ -427,12 +544,69 @@ struct StackExtensionView: View {
       theme.successColor
     case "starting", "loading":
       theme.accentColor
+    case "stopping":
+      theme.warningColor
     case "invalid", "failed":
       theme.errorColor
-    case "missing":
+    case "missing", "unconfigured":
       theme.warningColor
     default:
       theme.mutedColor
     }
+  }
+}
+
+private struct StackExtensionLogTextView: NSViewRepresentable {
+  let lines: [BridgeWorkspaceLogLine]
+  let theme: AppTheme
+
+  func makeNSView(context: Context) -> NSScrollView {
+    let scrollView = NSScrollView()
+    scrollView.borderType = .noBorder
+    scrollView.autohidesScrollers = true
+    scrollView.hasVerticalScroller = true
+    scrollView.hasHorizontalScroller = true
+    scrollView.drawsBackground = true
+
+    let textView = NSTextView()
+    textView.isEditable = false
+    textView.isSelectable = true
+    textView.isRichText = true
+    textView.importsGraphics = false
+    textView.allowsUndo = false
+    textView.drawsBackground = true
+    textView.textContainerInset = NSSize(width: 12, height: 10)
+    textView.minSize = .zero
+    textView.maxSize = NSSize(
+      width: CGFloat.greatestFiniteMagnitude,
+      height: CGFloat.greatestFiniteMagnitude
+    )
+    textView.isVerticallyResizable = true
+    textView.isHorizontallyResizable = true
+
+    if let textContainer = textView.textContainer {
+      textContainer.widthTracksTextView = false
+      textContainer.containerSize = NSSize(
+        width: CGFloat.greatestFiniteMagnitude,
+        height: CGFloat.greatestFiniteMagnitude
+      )
+      textContainer.lineBreakMode = .byClipping
+      textContainer.lineFragmentPadding = 0
+    }
+
+    scrollView.documentView = textView
+    return scrollView
+  }
+
+  func updateNSView(_ scrollView: NSScrollView, context: Context) {
+    guard let textView = scrollView.documentView as? NSTextView else {
+      return
+    }
+
+    let backgroundColor = NSColor(themeHex: theme.background)
+    scrollView.backgroundColor = backgroundColor
+    textView.backgroundColor = backgroundColor
+    textView.insertionPointColor = NSColor.clear
+    textView.textStorage?.setAttributedString(stackExtensionLogAttributedString(lines, theme: theme))
   }
 }

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { resolvePreviewProxyPort } from "../stack";
+import { resolveBridgePort } from "../stack";
 
 type SupportedPlatform = "darwin" | "linux";
 
@@ -127,7 +127,7 @@ export async function proxyInstallStatus(
     currentPlatformSupported: isSupportedPlatform(platform),
     installed: state !== null,
     platform,
-    proxyPort: resolvePreviewProxyPort(environment),
+    proxyPort: resolveBridgePort(environment),
     state,
   };
 }
@@ -170,7 +170,7 @@ function darwinAnchorContents(proxyPort: number): string {
 
 async function installDarwin(options?: InstallOptions): Promise<string[]> {
   const environment = options?.environment ?? process.env;
-  const proxyPort = resolvePreviewProxyPort(environment);
+  const proxyPort = resolveBridgePort(environment);
   const pfConfPath = darwinPfConfPath(environment);
   const anchorPath = darwinAnchorPath(environment);
   const launchDaemonPath = darwinLaunchDaemonPath(environment);
@@ -302,7 +302,7 @@ WantedBy=multi-user.target
 
 async function installLinux(options?: InstallOptions): Promise<string[]> {
   const environment = options?.environment ?? process.env;
-  const proxyPort = resolvePreviewProxyPort(environment);
+  const proxyPort = resolveBridgePort(environment);
   const servicePath = linuxServicePath(environment);
   const commands = [`write ${servicePath}`];
 
@@ -329,7 +329,10 @@ async function installLinux(options?: InstallOptions): Promise<string[]> {
 async function uninstallLinux(options?: InstallOptions): Promise<string[]> {
   const environment = options?.environment ?? process.env;
   const servicePath = linuxServicePath(environment);
-  execOrThrow("systemctl disable --now lifecycle-http-redirect.service >/dev/null 2>&1 || true", options);
+  execOrThrow(
+    "systemctl disable --now lifecycle-http-redirect.service >/dev/null 2>&1 || true",
+    options,
+  );
   execOrThrow("systemctl daemon-reload", options);
 
   if (!options?.dryRun) {

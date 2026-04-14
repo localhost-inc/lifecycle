@@ -346,6 +346,69 @@ struct BridgeClient {
     }
   }
 
+  func workspaceLogs(
+    for workspaceID: String,
+    service: String? = nil,
+    cursor: String? = nil,
+    tail: Int? = nil
+  ) async throws -> BridgeWorkspaceLogsResponse {
+    let path = "workspaces/\(workspaceID)/logs"
+    var components = URLComponents(
+      url: baseURL.appending(path: path),
+      resolvingAgainstBaseURL: false
+    )
+    components?.queryItems = [
+      service.map { URLQueryItem(name: "service", value: $0) },
+      cursor.map { URLQueryItem(name: "cursor", value: $0) },
+      tail.map { URLQueryItem(name: "tail", value: String($0)) },
+    ].compactMap { $0 }
+
+    guard let url = components?.url else {
+      throw NSError(
+        domain: "LifecycleApp.Bridge",
+        code: 0,
+        userInfo: [NSLocalizedDescriptionKey: "Bridge log request URL was invalid."]
+      )
+    }
+
+    let data: Data
+    let response: URLResponse
+
+    do {
+      (data, response) = try await URLSession.shared.data(from: url)
+    } catch {
+      AppLog.error(
+        .bridge,
+        "Bridge log request failed before receiving a response",
+        error: error,
+        metadata: [
+          "method": "GET",
+          "path": path,
+        ]
+      )
+      throw error
+    }
+
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw NSError(
+        domain: "LifecycleApp.Bridge",
+        code: 0,
+        userInfo: [NSLocalizedDescriptionKey: "Bridge log response was not an HTTP response."]
+      )
+    }
+
+    guard (200 ..< 300).contains(httpResponse.statusCode) else {
+      throw bridgeResponseError(
+        statusCode: httpResponse.statusCode,
+        bodyData: data,
+        method: "GET",
+        path: path
+      )
+    }
+
+    return try decoder.decode(BridgeWorkspaceLogsResponse.self, from: data)
+  }
+
   func agents(for workspaceID: String) async throws -> [BridgeAgentRecord] {
     let _ = workspaceID
     return []
@@ -424,12 +487,12 @@ struct BridgeClient {
 
   func createTerminal(
     for workspaceID: String,
-    kind: String? = nil,
+    kind: BridgeTerminalKind? = nil,
     title: String? = nil
   ) async throws -> BridgeWorkspaceTerminalEnvelope {
     var requestObject: [String: Any] = [:]
-    if let kind, !kind.isEmpty {
-      requestObject["kind"] = kind
+    if let kind {
+      requestObject["kind"] = kind.rawValue
     }
     if let title, !title.isEmpty {
       requestObject["title"] = title

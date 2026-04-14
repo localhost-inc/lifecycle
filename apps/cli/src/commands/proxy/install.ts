@@ -1,16 +1,20 @@
 import { spawnSync } from "node:child_process";
 import { defineCommand } from "@localhost-inc/cmd";
 import { installProxyCleanHttp } from "@/bridge";
-import { resolvePreviewProxyPort } from "@/bridge/stack";
+import { resolveBridgePort } from "@/bridge/stack";
 import { z } from "zod";
 
 import { failCommand, jsonFlag } from "../_shared";
 
 function rerunWithSudo(): number {
   const argv = process.argv.slice(1);
-  const result = spawnSync("sudo", ["env", "LIFECYCLE_INSTALL_AS_ROOT=1", process.execPath, ...argv], {
-    stdio: "inherit",
-  });
+  const result = spawnSync(
+    "sudo",
+    ["env", "LIFECYCLE_INSTALL_AS_ROOT=1", process.execPath, ...argv],
+    {
+      stdio: "inherit",
+    },
+  );
   return result.status ?? 1;
 }
 
@@ -22,7 +26,11 @@ export default defineCommand({
   }),
   run: async (input, context) => {
     try {
-      if (!input.dryRun && process.getuid?.() !== 0 && process.env.LIFECYCLE_INSTALL_AS_ROOT !== "1") {
+      if (
+        !input.dryRun &&
+        process.getuid?.() !== 0 &&
+        process.env.LIFECYCLE_INSTALL_AS_ROOT !== "1"
+      ) {
         return rerunWithSudo();
       }
 
@@ -34,7 +42,7 @@ export default defineCommand({
               actions,
               dryRun: input.dryRun,
               mode: "clean-http",
-              proxyPort: resolvePreviewProxyPort(),
+              proxyPort: resolveBridgePort(),
             },
             null,
             2,
@@ -52,7 +60,7 @@ export default defineCommand({
         context.stdout(`- ${action}`);
       }
       context.stdout(
-        `Traffic to http://*.lifecycle.localhost/ will be redirected to the Lifecycle preview proxy on ${resolvePreviewProxyPort()}.`,
+        `Traffic to http://*.lifecycle.localhost/ will be redirected to the Lifecycle bridge on ${resolveBridgePort()}.`,
       );
       return 0;
     } catch (error) {

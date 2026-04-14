@@ -116,6 +116,127 @@ final class CanvasRuntimeTests: XCTestCase {
     XCTAssertTrue(expectedScript.contains("'TMUX_PANE='"))
   }
 
+  func testShouldAutoCreateInitialTerminalRequiresPendingEmptyCanvasAndNoExistingTerminals() {
+    let workspaceID = "workspace-1"
+    let emptyDocument = defaultCanvasDocument(for: workspaceID)
+    let envelope = BridgeWorkspaceTerminalsEnvelope(
+      workspace: BridgeWorkspaceScope(
+        binding: "current",
+        workspaceID: workspaceID,
+        workspaceName: "Workspace",
+        repoName: "Repo",
+        host: "local",
+        status: "active",
+        sourceRef: "main",
+        cwd: "/tmp/workspace",
+        workspaceRoot: "/tmp/workspace",
+        resolutionNote: nil,
+        resolutionError: nil
+      ),
+      runtime: BridgeTerminalRuntime(
+        backendLabel: "tmux",
+        runtimeID: "runtime-1",
+        launchError: nil,
+        persistent: true,
+        supportsCreate: true,
+        supportsClose: true,
+        supportsConnect: true,
+        supportsRename: true
+      ),
+      terminals: []
+    )
+
+    XCTAssertTrue(
+      shouldAutoCreateInitialTerminal(
+        isPendingInitialTerminal: true,
+        canvasDocument: emptyDocument,
+        terminalEnvelope: envelope
+      )
+    )
+    XCTAssertFalse(
+      shouldAutoCreateInitialTerminal(
+        isPendingInitialTerminal: false,
+        canvasDocument: emptyDocument,
+        terminalEnvelope: envelope
+      )
+    )
+  }
+
+  func testShouldAutoCreateInitialTerminalSkipsWhenWorkspaceAlreadyHasContentOrTerminalCreationUnavailable() {
+    let workspaceID = "workspace-1"
+    let surfaceID = terminalSurfaceID(for: workspaceID, terminalID: "@1")
+    let nonEmptyDocument = WorkspaceCanvasDocument(
+      activeGroupID: defaultCanvasGroupID(for: workspaceID),
+      groupsByID: [
+        defaultCanvasGroupID(for: workspaceID): CanvasGroup(
+          id: defaultCanvasGroupID(for: workspaceID),
+          surfaceOrder: [surfaceID],
+          activeSurfaceID: surfaceID
+        ),
+      ],
+      surfacesByID: [
+        surfaceID: terminalSurfaceRecord(id: surfaceID, title: "shell"),
+      ],
+      layout: .tiled(.group(defaultCanvasGroupID(for: workspaceID)))
+    )
+    let blockedEnvelope = BridgeWorkspaceTerminalsEnvelope(
+      workspace: BridgeWorkspaceScope(
+        binding: "current",
+        workspaceID: workspaceID,
+        workspaceName: "Workspace",
+        repoName: "Repo",
+        host: "local",
+        status: "active",
+        sourceRef: "main",
+        cwd: "/tmp/workspace",
+        workspaceRoot: "/tmp/workspace",
+        resolutionNote: nil,
+        resolutionError: nil
+      ),
+      runtime: BridgeTerminalRuntime(
+        backendLabel: "tmux",
+        runtimeID: "runtime-1",
+        launchError: "terminal runtime unavailable",
+        persistent: true,
+        supportsCreate: false,
+        supportsClose: true,
+        supportsConnect: true,
+        supportsRename: true
+      ),
+      terminals: [
+        BridgeTerminalRecord(id: "@1", title: "shell", kind: "shell", busy: false),
+      ]
+    )
+
+    XCTAssertFalse(
+      shouldAutoCreateInitialTerminal(
+        isPendingInitialTerminal: true,
+        canvasDocument: nonEmptyDocument,
+        terminalEnvelope: blockedEnvelope
+      )
+    )
+    XCTAssertFalse(
+      shouldAutoCreateInitialTerminal(
+        isPendingInitialTerminal: true,
+        canvasDocument: defaultCanvasDocument(for: workspaceID),
+        terminalEnvelope: blockedEnvelope
+      )
+    )
+  }
+
+  func testNextTerminalCreationTitleUsesGenericShellTabsAndProfileSpecificNames() {
+    let terminals = [
+      BridgeTerminalRecord(id: "@1", title: "Tab 2", kind: "shell", busy: false),
+      BridgeTerminalRecord(id: "@2", title: "Claude", kind: "claude", busy: false),
+      BridgeTerminalRecord(id: "@3", title: "Claude 2", kind: "claude", busy: false),
+      BridgeTerminalRecord(id: "@4", title: "Codex", kind: "codex", busy: false),
+    ]
+
+    XCTAssertEqual(nextTerminalCreationTitle(from: terminals, kind: .shell), "Tab 5")
+    XCTAssertEqual(nextTerminalCreationTitle(from: terminals, kind: .claude), "Claude 3")
+    XCTAssertEqual(nextTerminalCreationTitle(from: terminals, kind: .codex), "Codex 2")
+  }
+
   func testNormalizeCanvasDocumentAppendsUnassignedSurfaceToActiveGroup() {
     let workspaceID = "workspace-1"
     let rootGroupID = defaultCanvasGroupID(for: workspaceID)
@@ -236,6 +357,188 @@ final class CanvasRuntimeTests: XCTestCase {
     )
     XCTAssertEqual(normalized.spatialLayout.framesByGroupID[firstGroupID]?.x, 40)
     XCTAssertNotNil(normalized.spatialLayout.framesByGroupID[secondGroupID])
+  }
+
+  func testCanvasSpatialLayoutBringingGroupToFrontAssignsHighestZIndex() {
+    let layout = CanvasSpatialLayout(
+      framesByGroupID: [
+        "group-1": CanvasSpatialFrame(x: 40, y: 60, width: 800, height: 520, zIndex: 2),
+        "group-2": CanvasSpatialFrame(x: 120, y: 140, width: 760, height: 480, zIndex: 5),
+      ]
+    )
+
+    let updated = canvasSpatialLayoutBringingGroupToFront(layout, groupID: "group-1")
+
+    XCTAssertEqual(updated.framesByGroupID["group-1"]?.zIndex, 6)
+    XCTAssertEqual(updated.framesByGroupID["group-2"]?.zIndex, 5)
+  }
+
+  func testCanvasSpatialLayoutPlacingGroupOffsetsNewGroupBesideAnchor() throws {
+    let layout = CanvasSpatialLayout(
+      framesByGroupID: [
+        "anchor": CanvasSpatialFrame(x: 100, y: 120, width: 900, height: 600, zIndex: 1),
+        "new": CanvasSpatialFrame(x: 0, y: 0, width: 900, height: 600, zIndex: 0),
+      ]
+    )
+
+    let updated = canvasSpatialLayoutPlacingGroup(
+      layout,
+      groupID: "new",
+      adjacentTo: "anchor",
+      direction: .row,
+      placeBefore: false
+    )
+
+    let frame = try XCTUnwrap(updated.framesByGroupID["new"])
+    XCTAssertGreaterThan(frame.x, 1_000)
+    XCTAssertEqual(frame.width, 792, accuracy: 0.001)
+    XCTAssertEqual(frame.zIndex, 2)
+  }
+
+  func testCanvasDocumentAddingSurfaceCreatesNewGroupWhenSpatialCanvasAddsTerminal() throws {
+    let workspaceID = "workspace-1"
+    let rootGroupID = defaultCanvasGroupID(for: workspaceID)
+    let existingSurfaceID = terminalSurfaceID(for: workspaceID, terminalID: "@1")
+    let newSurfaceID = terminalSurfaceID(for: workspaceID, terminalID: "@2")
+    let document = WorkspaceCanvasDocument(
+      activeGroupID: rootGroupID,
+      groupsByID: [
+        rootGroupID: CanvasGroup(
+          id: rootGroupID,
+          surfaceOrder: [existingSurfaceID],
+          activeSurfaceID: existingSurfaceID
+        )
+      ],
+      surfacesByID: [
+        existingSurfaceID: terminalSurfaceRecord(id: existingSurfaceID, title: "Terminal 1")
+      ],
+      activeLayoutMode: .spatial,
+      tiledLayout: .group(rootGroupID),
+      spatialLayout: CanvasSpatialLayout(
+        framesByGroupID: [
+          rootGroupID: CanvasSpatialFrame(x: 120, y: 100, width: 900, height: 600, zIndex: 1)
+        ]
+      )
+    )
+
+    let updated = canvasDocumentAddingSurface(
+      terminalSurfaceRecord(id: newSurfaceID, title: "Terminal 2"),
+      to: document,
+      workspaceID: workspaceID
+    )
+
+    let newGroupID = try XCTUnwrap(updated.activeGroupID)
+    XCTAssertNotEqual(newGroupID, rootGroupID)
+    XCTAssertEqual(updated.groupsByID[rootGroupID]?.surfaceOrder, [existingSurfaceID])
+    XCTAssertEqual(updated.groupsByID[newGroupID]?.surfaceOrder, [newSurfaceID])
+    XCTAssertEqual(updated.groupsByID[newGroupID]?.activeSurfaceID, newSurfaceID)
+    XCTAssertNotNil(updated.surfacesByID[newSurfaceID])
+    XCTAssertEqual(Set(canvasGroupIDs(in: updated.tiledLayout)), Set([rootGroupID, newGroupID]))
+    XCTAssertNotNil(updated.spatialLayout.framesByGroupID[newGroupID])
+  }
+
+  func testCanvasDocumentAddingSurfaceAppendsToExplicitSpatialGroup() {
+    let workspaceID = "workspace-1"
+    let rootGroupID = defaultCanvasGroupID(for: workspaceID)
+    let existingSurfaceID = terminalSurfaceID(for: workspaceID, terminalID: "@1")
+    let newSurfaceID = terminalSurfaceID(for: workspaceID, terminalID: "@2")
+    let document = WorkspaceCanvasDocument(
+      activeGroupID: rootGroupID,
+      groupsByID: [
+        rootGroupID: CanvasGroup(
+          id: rootGroupID,
+          surfaceOrder: [existingSurfaceID],
+          activeSurfaceID: existingSurfaceID
+        )
+      ],
+      surfacesByID: [
+        existingSurfaceID: terminalSurfaceRecord(id: existingSurfaceID, title: "Terminal 1")
+      ],
+      activeLayoutMode: .spatial,
+      tiledLayout: .group(rootGroupID),
+      spatialLayout: CanvasSpatialLayout(
+        framesByGroupID: [
+          rootGroupID: CanvasSpatialFrame(x: 120, y: 100, width: 900, height: 600, zIndex: 1)
+        ]
+      )
+    )
+
+    let updated = canvasDocumentAddingSurface(
+      terminalSurfaceRecord(id: newSurfaceID, title: "Terminal 2"),
+      to: document,
+      workspaceID: workspaceID,
+      groupID: rootGroupID
+    )
+
+    XCTAssertEqual(updated.activeGroupID, rootGroupID)
+    XCTAssertEqual(updated.groupsByID[rootGroupID]?.surfaceOrder, [existingSurfaceID, newSurfaceID])
+    XCTAssertEqual(updated.groupsByID[rootGroupID]?.activeSurfaceID, newSurfaceID)
+    XCTAssertEqual(canvasGroupIDs(in: updated.tiledLayout), [rootGroupID])
+    XCTAssertEqual(updated.spatialLayout.framesByGroupID.count, 1)
+  }
+
+  func testMoveSurfaceToEdgePlacesNewSpatialGroupBesideTarget() throws {
+    let workspaceID = "workspace-1"
+    let sourceGroupID = defaultCanvasGroupID(for: workspaceID)
+    let targetGroupID = "group:\(workspaceID):target"
+    let sourceSurfaceID = terminalSurfaceID(for: workspaceID, terminalID: "@1")
+    let targetSurfaceID = terminalSurfaceID(for: workspaceID, terminalID: "@2")
+    let targetFrame = CanvasSpatialFrame(
+      x: 260,
+      y: 180,
+      width: 840,
+      height: 560,
+      zIndex: 3
+    )
+    let document = WorkspaceCanvasDocument(
+      activeGroupID: sourceGroupID,
+      groupsByID: [
+        sourceGroupID: CanvasGroup(
+          id: sourceGroupID,
+          surfaceOrder: [sourceSurfaceID],
+          activeSurfaceID: sourceSurfaceID
+        ),
+        targetGroupID: CanvasGroup(
+          id: targetGroupID,
+          surfaceOrder: [targetSurfaceID],
+          activeSurfaceID: targetSurfaceID
+        ),
+      ],
+      surfacesByID: [
+        sourceSurfaceID: terminalSurfaceRecord(id: sourceSurfaceID, title: "Source"),
+        targetSurfaceID: terminalSurfaceRecord(id: targetSurfaceID, title: "Target"),
+      ],
+      activeLayoutMode: .spatial,
+      tiledLayout: .split(
+        CanvasTiledLayoutSplit(
+          id: "split:\(workspaceID):1",
+          direction: .row,
+          first: .group(sourceGroupID),
+          second: .group(targetGroupID),
+          ratio: 0.5
+        )
+      ),
+      spatialLayout: CanvasSpatialLayout(
+        framesByGroupID: [
+          sourceGroupID: CanvasSpatialFrame(x: 80, y: 80, width: 840, height: 560, zIndex: 1),
+          targetGroupID: targetFrame,
+        ]
+      )
+    )
+
+    let moved = moveSurfaceToEdge(
+      in: document,
+      surfaceID: sourceSurfaceID,
+      targetGroupID: targetGroupID,
+      edge: .right,
+      workspaceID: workspaceID
+    )
+    let newGroupIDs = Set(moved.groupsByID.keys).subtracting([sourceGroupID, targetGroupID])
+    let newGroupID = try XCTUnwrap(newGroupIDs.first)
+    let newFrame = try XCTUnwrap(moved.spatialLayout.framesByGroupID[newGroupID])
+
+    XCTAssertGreaterThan(newFrame.x, targetFrame.x + targetFrame.width)
+    XCTAssertEqual(newFrame.zIndex, 4)
   }
 
   func testActiveCanvasSurfaceIDsReturnsActiveSurfacePerVisibleGroup() {
@@ -459,8 +762,8 @@ final class CanvasRuntimeTests: XCTestCase {
       context: surfaceResolutionContext(workspace: workspace)
     )
 
-    XCTAssertEqual(resolved?.tab.title, "Codex")
-    XCTAssertEqual(resolved?.tab.subtitle, "session-1")
+    XCTAssertEqual(resolved?.tab.label, "Codex")
+    XCTAssertEqual(resolved?.tab.icon, "sparkles")
   }
 
   @MainActor
@@ -476,15 +779,18 @@ final class CanvasRuntimeTests: XCTestCase {
     let terminalID = "@7"
     let surfaceID = terminalSurfaceID(for: workspace.id, terminalID: terminalID)
     let record = terminalSurfaceRecord(id: surfaceID, title: "shell")
+    let terminal = BridgeTerminalRecord(id: terminalID, title: "Codex", kind: "codex", busy: false)
 
     let resolved = TerminalSurfaceDefinition().resolve(
       record: record,
-      context: surfaceResolutionContext(workspace: workspace)
+      context: surfaceResolutionContext(
+        workspace: workspace,
+        terminalsByID: [terminalID: terminal]
+      )
     )
 
-    XCTAssertEqual(resolved?.tab.title, "shell")
-    XCTAssertEqual(resolved?.tab.subtitle, terminalID)
-    XCTAssertEqual(resolved?.tab.icon, "terminal")
+    XCTAssertEqual(resolved?.tab.label, "Codex")
+    XCTAssertEqual(resolved?.tab.icon, "chevron.left.forwardslash.chevron.right")
   }
 
   func testBridgeDiscoveryParsesRegistrationPortAndPID() throws {
@@ -570,14 +876,14 @@ final class CanvasRuntimeTests: XCTestCase {
       environment: LifecycleEnvironment(values: [
         "LIFECYCLE_DEV": "1",
         "LIFECYCLE_REPO_ROOT": "/tmp/lifecycle",
-        "LIFECYCLE_BRIDGE_PORT": "52222",
+        "LIFECYCLE_BRIDGE_PORT": "52300",
       ])
     )
 
     XCTAssertEqual(process.executableURL?.path, "/usr/bin/env")
     XCTAssertEqual(
       process.arguments ?? [],
-      ["bun", "--cwd", "/tmp/lifecycle/apps/cli", "run", "src/bridge/app.ts", "--port", "52222"]
+      ["bun", "--cwd", "/tmp/lifecycle/apps/cli", "run", "src/bridge/app.ts", "--port", "52300"]
     )
   }
 
@@ -743,6 +1049,46 @@ final class CanvasRuntimeTests: XCTestCase {
     XCTAssertEqual(event.projectedMessage?.parts.count, 1)
   }
 
+  func testBridgeSocketDecodesServiceStartingEvent() throws {
+    let payload = """
+      {
+        "type": "service.starting",
+        "workspace_id": "workspace-1",
+        "service": "api"
+      }
+      """
+
+    let data = try XCTUnwrap(payload.data(using: .utf8))
+    let decoded = try XCTUnwrap(decodeBridgeSocketEvent(from: data))
+
+    guard case .serviceStarting(let workspaceID, let service) = decoded else {
+      return XCTFail("Expected service starting event.")
+    }
+
+    XCTAssertEqual(workspaceID, "workspace-1")
+    XCTAssertEqual(service, "api")
+  }
+
+  func testBridgeSocketDecodesServiceStoppingEvent() throws {
+    let payload = """
+      {
+        "type": "service.stopping",
+        "workspace_id": "workspace-1",
+        "service": "api"
+      }
+      """
+
+    let data = try XCTUnwrap(payload.data(using: .utf8))
+    let decoded = try XCTUnwrap(decodeBridgeSocketEvent(from: data))
+
+    guard case .serviceStopping(let workspaceID, let service) = decoded else {
+      return XCTFail("Expected service stopping event.")
+    }
+
+    XCTAssertEqual(workspaceID, "workspace-1")
+    XCTAssertEqual(service, "api")
+  }
+
   @MainActor
   func testRenderedSurfacesOnlyReturnsActiveTab() {
     let firstSurface = canvasSurface(id: "surface:workspace-1:@1", title: "Tab 1")
@@ -755,7 +1101,10 @@ final class CanvasRuntimeTests: XCTestCase {
     )
 
     XCTAssertEqual(rendered.map(\.id), [secondSurface.id])
-    XCTAssertEqual(rendered[0].renderState, SurfaceRenderState(isFocused: true, isVisible: true))
+    XCTAssertEqual(
+      rendered[0].renderState,
+      SurfaceRenderState(isFocused: true, isVisible: true, presentationScale: 1)
+    )
   }
 
   func testAgentSurfaceBindingRoundTripsWorkspaceAndAgent() throws {
@@ -1001,15 +1350,13 @@ final class CanvasRuntimeTests: XCTestCase {
     let record = terminalSurfaceRecord(id: id, title: title)
     return CanvasSurface(
       id: id,
-      title: title,
       surfaceKind: .terminal,
       record: record,
       content: AnySurfaceContent(id: id) { _ in
         EmptyView()
       },
       tabPresentation: SurfaceTabPresentation(
-        title: title,
-        subtitle: nil,
+        label: title,
         icon: "terminal"
       ),
       isClosable: true
@@ -1017,7 +1364,10 @@ final class CanvasRuntimeTests: XCTestCase {
   }
 
   @MainActor
-  private func surfaceResolutionContext(workspace: BridgeWorkspaceSummary) -> SurfaceResolutionContext {
+  private func surfaceResolutionContext(
+    workspace: BridgeWorkspaceSummary,
+    terminalsByID: [String: BridgeTerminalRecord] = [:]
+  ) -> SurfaceResolutionContext {
     SurfaceResolutionContext(
       model: AppModel(),
       workspace: workspace,
@@ -1029,7 +1379,7 @@ final class CanvasRuntimeTests: XCTestCase {
       backendLabel: nil,
       persistent: nil,
       agentsByID: [:],
-      terminalsByID: [:],
+      terminalsByID: terminalsByID,
       connectionBySurfaceID: [:]
     )
   }

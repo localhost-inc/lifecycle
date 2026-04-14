@@ -105,6 +105,15 @@ describe("theme.css", () => {
     expect(css).not.toContain("Lifecycle Mono");
   });
 
+  test("loads bundled Geist sans and mono faces for product typography", () => {
+    const css = readFileSync(new URL("./theme.css", import.meta.url), "utf8");
+
+    expect(css).toContain('font-family: "Geist";');
+    expect(css).toContain('src: url("./fonts/Geist-Variable.woff2") format("woff2");');
+    expect(css).toContain('font-family: "Geist Mono";');
+    expect(css).toContain('src: url("./fonts/GeistMono-Variable.woff2") format("woff2");');
+  });
+
   test("defines shared lifecycle logo stroke animations for reusable loading states", () => {
     const css = readFileSync(new URL("./theme.css", import.meta.url), "utf8");
 

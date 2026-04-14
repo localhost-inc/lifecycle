@@ -24,7 +24,12 @@ pub fn render(
     host_label: &str,
     focus: Focus,
 ) {
-    let content = Rect::new(area.x, area.y + area.height.saturating_sub(1), area.width, 1);
+    let content = Rect::new(
+        area.x,
+        area.y + area.height.saturating_sub(1),
+        area.width,
+        1,
+    );
     let dim = Style::default().fg(Color::DarkGray);
     let width = content.width as usize;
 

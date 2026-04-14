@@ -46,8 +46,8 @@ final class WorkspaceStore: ObservableObject {
     model.selectExtension(kind, workspaceID: workspaceID)
   }
 
-  func createTerminalTab(groupID: String? = nil) {
-    model.createTerminalTab(workspaceID: workspaceID, groupID: groupID)
+  func createTerminalTab(kind: BridgeTerminalKind = .shell, groupID: String? = nil) {
+    model.createTerminalTab(kind: kind, workspaceID: workspaceID, groupID: groupID)
   }
 
   func selectSurface(_ surfaceID: String, groupID: String? = nil) {

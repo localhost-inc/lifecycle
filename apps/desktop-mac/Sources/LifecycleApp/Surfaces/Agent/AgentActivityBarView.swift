@@ -20,14 +20,14 @@ struct AgentActivityBarView: View {
           .scaleEffect(visible ? pulseScale(for: context.date) : 1)
 
         Text(activityLabel)
-          .font(.system(size: 12, weight: .medium, design: .monospaced))
+          .font(.lc(size: 12, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.primaryTextColor.opacity(0.92))
 
         if let latestStatus, !latestStatus.isEmpty {
           Text(verbatim: "· \(latestStatus)")
             .lineLimit(1)
             .truncationMode(.tail)
-            .font(.system(size: 12, weight: .medium, design: .monospaced))
+            .font(.lc(size: 12, weight: .medium, design: .monospaced))
             .foregroundStyle(theme.mutedColor.opacity(0.72))
         }
 
@@ -40,7 +40,7 @@ struct AgentActivityBarView: View {
             }
           } label: {
             Text("cancel")
-              .font(.system(size: 12, weight: .medium, design: .monospaced))
+              .font(.lc(size: 12, weight: .medium, design: .monospaced))
               .foregroundStyle(theme.mutedColor.opacity(0.78))
           }
           .buttonStyle(.plain)

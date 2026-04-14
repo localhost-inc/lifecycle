@@ -5,7 +5,7 @@ import type { ServiceStatus, ServiceStatusReason } from "@lifecycle/contracts";
 
 export interface StackRuntimeServiceRecord {
   name: string;
-  runtime: "process" | "image";
+  kind: "process" | "image";
   status: ServiceStatus;
   status_reason: ServiceStatusReason | null;
   assigned_port: number | null;

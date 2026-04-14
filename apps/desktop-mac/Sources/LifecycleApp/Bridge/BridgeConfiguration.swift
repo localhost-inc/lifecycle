@@ -3,6 +3,7 @@ import Foundation
 enum BridgeConfiguration {
   static let bootstrapAttempts = 120
   static let bootstrapWaitNanoseconds: UInt64 = 100_000_000
+  static let defaultBridgePort = 52300
   static let healthPath = "health"
   static let healthTimeout: TimeInterval = 1.5
 
@@ -12,6 +13,10 @@ enum BridgeConfiguration {
 
   static func bridgeRegistrationURL(environment: LifecycleEnvironment) throws -> URL {
     try environment.bridgeRegistrationURL()
+  }
+
+  static func defaultBridgeURL(environment: LifecycleEnvironment) -> URL {
+    URL(string: "http://127.0.0.1:\(bridgePort(environment: environment))")!
   }
 
   static func bridgeStartCommandOverride(environment: LifecycleEnvironment) -> String? {
@@ -74,5 +79,22 @@ enum BridgeConfiguration {
     }
 
     return nil
+  }
+
+  private static func bridgePort(environment: LifecycleEnvironment) -> Int {
+    if let explicitPort = environment.string(for: LifecycleEnvironmentKey.bridgePort),
+       let parsed = Int(explicitPort),
+       parsed > 0
+    {
+      return parsed
+    }
+
+    if let explicitURL = environment.url(for: LifecycleEnvironmentKey.bridgeURL),
+       let port = explicitURL.port
+    {
+      return port
+    }
+
+    return defaultBridgePort
   }
 }

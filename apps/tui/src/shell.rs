@@ -105,7 +105,10 @@ pub struct WorkspaceShell {
 
 pub fn build_workspace_shell(scope: WorkspaceScope, tmux_available: bool) -> WorkspaceShell {
     let shell = build_shell_runtime(&scope, tmux_available);
-    WorkspaceShell { workspace: scope, shell }
+    WorkspaceShell {
+        workspace: scope,
+        shell,
+    }
 }
 
 fn build_shell_runtime(scope: &WorkspaceScope, tmux_available: bool) -> ShellPlan {
@@ -366,9 +369,15 @@ mod tests {
         assert!(spec.args.iter().any(|arg| arg == "-s"));
         assert!(spec.args.iter().any(|arg| arg == "-c"));
         assert!(spec.args.windows(4).any(|window| {
-            window[0] == ";" && window[1] == "set-option" && window[2] == "-t" && window[3] == "my-app-feature-branch"
+            window[0] == ";"
+                && window[1] == "set-option"
+                && window[2] == "-t"
+                && window[3] == "my-app-feature-branch"
         }));
-        assert!(spec.args.windows(2).any(|window| window == ["window-size", "latest"]));
+        assert!(spec
+            .args
+            .windows(2)
+            .any(|window| window == ["window-size", "latest"]));
     }
 
     #[test]
@@ -380,7 +389,10 @@ mod tests {
         let plan = build_shell_runtime(&scoped, true);
         let spec = plan.spec.expect("expected local launch spec");
         assert_eq!(spec.program, "tmux");
-        assert!(spec.args.windows(2).any(|window| window == ["-c", "/tmp/it's-real"]));
+        assert!(spec
+            .args
+            .windows(2)
+            .any(|window| window == ["-c", "/tmp/it's-real"]));
     }
 
     #[test]

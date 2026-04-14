@@ -254,7 +254,7 @@ export class CloudWorkspaceHost implements WorkspaceHostAdapter {
       requireWorkspaceId(workspace),
       buildTmuxCommand(
         context.profile,
-        buildTmuxCreateTerminalArgs(context.sessionName, context.cwd, title),
+        buildTmuxCreateTerminalArgs(context.sessionName, context.cwd, title, input.launchSpec),
       ),
     );
     this.throwIfCommandFailed(

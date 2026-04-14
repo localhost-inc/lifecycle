@@ -20,7 +20,7 @@ struct LCTabItem: View {
   var body: some View {
     Button(action: action) {
       Text(label)
-        .font(.system(size: 12, weight: isActive ? .semibold : .medium))
+        .font(.lc(size: 12, weight: isActive ? .semibold : .medium))
         .foregroundStyle(isActive ? theme.primaryTextColor : theme.mutedColor)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)

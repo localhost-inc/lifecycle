@@ -120,7 +120,7 @@ struct AgentStatusBarView: View {
         Text(verbatim: statusText)
           .lineLimit(1)
           .truncationMode(.tail)
-          .font(.system(size: 11, weight: .medium, design: .monospaced))
+          .font(.lc(size: 11, weight: .medium, design: .monospaced))
           .foregroundStyle(displayStatusColor.opacity(0.78))
       }
 
@@ -128,7 +128,7 @@ struct AgentStatusBarView: View {
 
       if let usage, usage.hasUsage {
         Text(usageSummaryText(usage))
-          .font(.system(size: 11, weight: .medium, design: .monospaced))
+          .font(.lc(size: 11, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.mutedColor.opacity(0.72))
           .help(
             """
@@ -146,7 +146,7 @@ struct AgentStatusBarView: View {
           isDebugInspectorPresented = true
         } label: {
           Image(systemName: "ladybug")
-            .font(.system(size: 11, weight: .medium))
+            .font(.lc(size: 11, weight: .medium))
             .foregroundStyle(theme.mutedColor.opacity(0.55))
         }
         .buttonStyle(.plain)
@@ -164,7 +164,7 @@ struct AgentStatusBarView: View {
           }
         } label: {
           Text(isSending ? "sending..." : "send")
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .font(.lc(size: 11, weight: .medium, design: .monospaced))
             .foregroundStyle(canSend ? theme.primaryTextColor : theme.mutedColor.opacity(0.45))
         }
         .buttonStyle(.plain)
@@ -228,7 +228,7 @@ private struct AgentProviderBadgeView: View {
         .frame(width: 6, height: 6)
 
       Text(label.uppercased())
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .font(.lc(size: 11, weight: .medium, design: .monospaced))
         .tracking(0.9)
         .foregroundStyle(theme.mutedColor)
     }
@@ -244,7 +244,7 @@ private struct AgentStatusIndicator: View {
     HStack(spacing: 6) {
       statusIcon
       Text(status.label)
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .font(.lc(size: 11, weight: .medium, design: .monospaced))
     }
     .foregroundStyle(statusColor)
   }
@@ -254,7 +254,7 @@ private struct AgentStatusIndicator: View {
     switch status {
     case .idle:
       Image(systemName: "message")
-        .font(.system(size: 11, weight: .medium))
+        .font(.lc(size: 11, weight: .medium))
     case .working:
       ProgressView()
         .controlSize(.small)
@@ -262,10 +262,10 @@ private struct AgentStatusIndicator: View {
         .frame(width: 10, height: 10)
     case .waiting:
       Image(systemName: "pause.fill")
-        .font(.system(size: 9, weight: .bold))
+        .font(.lc(size: 9, weight: .bold))
     case .failed:
       Image(systemName: "exclamationmark.triangle.fill")
-        .font(.system(size: 10, weight: .bold))
+        .font(.lc(size: 10, weight: .bold))
     }
   }
 
@@ -293,7 +293,7 @@ private struct AgentDebugInspectorView: View {
     VStack(spacing: 0) {
       HStack(spacing: 12) {
         Text("Agent Debug")
-          .font(.system(size: 12, weight: .semibold))
+          .font(.lc(size: 12, weight: .semibold))
           .textCase(.uppercase)
           .tracking(1.2)
           .foregroundStyle(theme.primaryTextColor)
@@ -305,7 +305,7 @@ private struct AgentDebugInspectorView: View {
         }
         .buttonStyle(.plain)
         .lcPointerCursor()
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .font(.lc(size: 11, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.mutedColor)
 
         Button("Close") {
@@ -313,7 +313,7 @@ private struct AgentDebugInspectorView: View {
         }
         .buttonStyle(.plain)
         .lcPointerCursor()
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .font(.lc(size: 11, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.mutedColor)
       }
       .padding(.horizontal, 16)
@@ -406,7 +406,7 @@ private struct AgentDebugSection<Content: View>: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text(title)
-        .font(.system(size: 11, weight: .semibold))
+        .font(.lc(size: 11, weight: .semibold))
         .textCase(.uppercase)
         .tracking(1.0)
         .foregroundStyle(theme.mutedColor)
@@ -426,12 +426,12 @@ private struct AgentDebugKeyValueGrid: View {
       ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
         HStack(alignment: .top, spacing: 12) {
           Text(row.0)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .font(.lc(size: 11, weight: .medium, design: .monospaced))
             .foregroundStyle(theme.mutedColor)
             .frame(width: 160, alignment: .leading)
 
           Text(verbatim: row.1)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .font(.lc(size: 11, weight: .medium, design: .monospaced))
             .foregroundStyle(theme.primaryTextColor)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -461,7 +461,7 @@ private struct AgentDebugEmptyState: View {
 
   var body: some View {
     Text(text)
-      .font(.system(size: 11, weight: .medium, design: .monospaced))
+      .font(.lc(size: 11, weight: .medium, design: .monospaced))
       .foregroundStyle(theme.mutedColor.opacity(0.72))
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(.horizontal, 12)
@@ -500,7 +500,7 @@ private struct AgentDebugMessageRow: View {
         if !message.text.isEmpty {
           ScrollView(.horizontal) {
             Text(verbatim: message.text)
-              .font(.system(size: 11, weight: .medium, design: .monospaced))
+              .font(.lc(size: 11, weight: .medium, design: .monospaced))
               .foregroundStyle(theme.primaryTextColor)
               .textSelection(.enabled)
               .frame(maxWidth: .infinity, alignment: .leading)
@@ -519,24 +519,24 @@ private struct AgentDebugMessageRow: View {
     } label: {
       HStack(spacing: 10) {
         Text("\(index)")
-          .font(.system(size: 10, weight: .medium, design: .monospaced))
+          .font(.lc(size: 10, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.mutedColor.opacity(0.5))
           .frame(width: 18, alignment: .trailing)
 
         Text(message.role)
-          .font(.system(size: 11, weight: .semibold, design: .monospaced))
+          .font(.lc(size: 11, weight: .semibold, design: .monospaced))
           .foregroundStyle(roleColor)
           .frame(width: 72, alignment: .leading)
 
         Text(verbatim: messagePreview(message))
-          .font(.system(size: 11, weight: .medium, design: .monospaced))
+          .font(.lc(size: 11, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.primaryTextColor.opacity(0.78))
           .lineLimit(1)
 
         Spacer(minLength: 0)
 
         Text(message.parts.isEmpty ? "text-only" : "\(message.parts.count) parts")
-          .font(.system(size: 10, weight: .medium, design: .monospaced))
+          .font(.lc(size: 10, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.mutedColor.opacity(0.55))
       }
       .padding(.horizontal, 12)

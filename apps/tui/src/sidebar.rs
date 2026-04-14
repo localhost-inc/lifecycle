@@ -45,13 +45,21 @@ pub enum SidebarDialog {
     /// Text input for new workspace name under repo at index.
     NewWorkspace { repo_index: usize, input: String },
     /// Confirmation to delete a workspace with uncommitted changes.
-    ConfirmDelete { repo_index: usize, ws_index: usize, message: String },
+    ConfirmDelete {
+        repo_index: usize,
+        ws_index: usize,
+        message: String,
+    },
 }
 
 /// Messages from background threads back to the sidebar.
 pub enum SidebarMessage {
     Reload,
-    ConfirmDelete { repo_index: usize, ws_index: usize, ws_name: String },
+    ConfirmDelete {
+        repo_index: usize,
+        ws_index: usize,
+        ws_name: String,
+    },
     Error(String),
 }
 
@@ -94,23 +102,29 @@ impl SidebarState {
         }
     }
 
-    fn start_config_watcher(tx: mpsc::Sender<SidebarMessage>) -> Option<notify::RecommendedWatcher> {
+    fn start_config_watcher(
+        tx: mpsc::Sender<SidebarMessage>,
+    ) -> Option<notify::RecommendedWatcher> {
         let config_path = config_file_path()?;
         let watch_dir = config_path.parent()?.to_path_buf();
         let file_name = config_path.file_name()?.to_owned();
 
         let mut watcher = recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
             if let Ok(event) = res {
-                let is_config = event.paths.iter().any(|p| {
-                    p.file_name().map(|n| n == file_name).unwrap_or(false)
-                });
+                let is_config = event
+                    .paths
+                    .iter()
+                    .any(|p| p.file_name().map(|n| n == file_name).unwrap_or(false));
                 if is_config && matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
                     let _ = tx.send(SidebarMessage::Reload);
                 }
             }
-        }).ok()?;
+        })
+        .ok()?;
 
-        watcher.watch(&watch_dir, RecursiveMode::NonRecursive).ok()?;
+        watcher
+            .watch(&watch_dir, RecursiveMode::NonRecursive)
+            .ok()?;
         Some(watcher)
     }
 
@@ -198,7 +212,11 @@ impl SidebarState {
                     self.repos = load_repos();
                     changed = true;
                 }
-                SidebarMessage::ConfirmDelete { repo_index, ws_index, ws_name } => {
+                SidebarMessage::ConfirmDelete {
+                    repo_index,
+                    ws_index,
+                    ws_name,
+                } => {
                     self.dialog = Some(SidebarDialog::ConfirmDelete {
                         repo_index,
                         ws_index,
@@ -253,8 +271,12 @@ impl SidebarState {
                         return;
                     };
                     match bridge.create_workspace(&name, repo_path.as_deref()) {
-                        Ok(_) => { let _ = tx.send(SidebarMessage::Reload); }
-                        Err(e) => { let _ = tx.send(SidebarMessage::Error(e)); }
+                        Ok(_) => {
+                            let _ = tx.send(SidebarMessage::Reload);
+                        }
+                        Err(e) => {
+                            let _ = tx.send(SidebarMessage::Error(e));
+                        }
                     }
                 });
             }
@@ -314,9 +336,13 @@ impl SidebarState {
         let wi = ws_index;
 
         thread::spawn(move || {
-            let Some(bridge) = LifecycleBridgeClient::from_env() else { return; };
+            let Some(bridge) = LifecycleBridgeClient::from_env() else {
+                return;
+            };
             match bridge.archive_workspace(&ws_name, &repo_path) {
-                Ok(_) => { let _ = tx.send(SidebarMessage::Reload); }
+                Ok(_) => {
+                    let _ = tx.send(SidebarMessage::Reload);
+                }
                 Err(_) => {
                     let _ = tx.send(SidebarMessage::ConfirmDelete {
                         repo_index: ri,
@@ -356,7 +382,12 @@ impl SidebarState {
     /// Handle confirm dialog responses.
     pub fn dialog_confirm(&mut self, yes: bool) {
         let dialog = self.dialog.take();
-        if let Some(SidebarDialog::ConfirmDelete { repo_index, ws_index, .. }) = dialog {
+        if let Some(SidebarDialog::ConfirmDelete {
+            repo_index,
+            ws_index,
+            ..
+        }) = dialog
+        {
             if yes {
                 self.force_delete_workspace(repo_index, ws_index);
             }

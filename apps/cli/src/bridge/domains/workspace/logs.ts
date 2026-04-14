@@ -160,7 +160,7 @@ export async function readWorkspaceLogs(
 ): Promise<ReadWorkspaceLogsResult> {
   const logScope = await resolveLogScope(db, workspaceId);
   const stack = await listWorkspaceStack(db, workspaceHosts, workspaceId);
-  const serviceNames = stack.nodes.flatMap((node) => (node.kind === "service" ? [node.name] : []));
+  const serviceNames = stack.nodes.flatMap((node) => (node.kind === "task" ? [] : [node.name]));
   const availableNames = new Set(serviceNames);
   const targetServiceNames = options.serviceName ? [options.serviceName] : serviceNames;
 

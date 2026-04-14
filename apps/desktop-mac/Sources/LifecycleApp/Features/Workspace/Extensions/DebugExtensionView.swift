@@ -57,7 +57,7 @@ struct DebugExtensionView: View {
         if let note = scope.resolutionNote {
           debugInlineRow("Note") {
             Text(note)
-              .font(.system(size: 10, weight: .medium))
+              .font(.lc(size: 10, weight: .medium))
               .foregroundStyle(theme.mutedColor.opacity(0.7))
               .lineLimit(2)
           }
@@ -108,10 +108,10 @@ struct DebugExtensionView: View {
 
             VStack(alignment: .leading, spacing: 2) {
               Text(issue.label)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.lc(size: 10, weight: .semibold))
                 .foregroundStyle(issue.isError ? theme.errorColor : theme.warningColor)
               Text(issue.message)
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .font(.lc(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(theme.primaryTextColor.opacity(0.85))
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
@@ -136,7 +136,7 @@ struct DebugExtensionView: View {
               .frame(width: 6, height: 6)
 
             Text(terminal.title)
-              .font(.system(size: 11, weight: .medium))
+              .font(.lc(size: 11, weight: .medium))
               .foregroundStyle(theme.primaryTextColor)
               .lineLimit(1)
 
@@ -177,7 +177,7 @@ struct DebugExtensionView: View {
   ) -> some View {
     VStack(alignment: .leading, spacing: 0) {
       Text(title.uppercased())
-        .font(.system(size: 10, weight: .bold, design: .monospaced))
+        .font(.lc(size: 10, weight: .bold, design: .monospaced))
         .foregroundStyle(theme.mutedColor.opacity(0.7))
         .padding(.horizontal, 12)
         .padding(.top, 14)
@@ -204,7 +204,7 @@ struct DebugExtensionView: View {
   private func debugInlineRow(_ label: String, text value: String) -> some View {
     debugInlineRow(label) {
       Text(value)
-        .font(.system(size: 11, weight: .medium))
+        .font(.lc(size: 11, weight: .medium))
         .foregroundStyle(theme.primaryTextColor)
         .textSelection(.enabled)
         .lineLimit(1)
@@ -214,7 +214,7 @@ struct DebugExtensionView: View {
   private func debugInlineRow(_ label: String, mono value: String) -> some View {
     debugInlineRow(label) {
       Text(value)
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .font(.lc(size: 11, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.primaryTextColor.opacity(0.85))
         .textSelection(.enabled)
         .lineLimit(1)
@@ -227,7 +227,7 @@ struct DebugExtensionView: View {
   ) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
       Text(label)
-        .font(.system(size: 11, weight: .medium))
+        .font(.lc(size: 11, weight: .medium))
         .foregroundStyle(theme.mutedColor)
         .frame(minWidth: 70, alignment: .leading)
 

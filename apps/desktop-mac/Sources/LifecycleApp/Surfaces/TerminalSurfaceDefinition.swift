@@ -50,8 +50,10 @@ struct TerminalSurfaceDefinition: SurfaceDefinition {
           backgroundHexColor: context.terminalBackgroundHexColor,
           darkAppearance: context.terminalDarkAppearance,
           isFocused: renderState.isFocused,
-          isVisible: renderState.isVisible
+          isVisible: renderState.isVisible,
+          presentationScale: renderState.presentationScale
         )
+        .equatable()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: NSColor(themeHex: context.terminalBackgroundHexColor)))
       }
@@ -70,9 +72,8 @@ struct TerminalSurfaceDefinition: SurfaceDefinition {
     }
 
     let tab = SurfaceTabPresentation(
-      title: title,
-      subtitle: terminalRecord?.id ?? terminalBinding.terminalID,
-      icon: "terminal"
+      label: title,
+      icon: terminalTabIcon(for: terminalRecord)
     )
 
     return ResolvedSurface(
@@ -80,6 +81,17 @@ struct TerminalSurfaceDefinition: SurfaceDefinition {
       tab: tab,
       isClosable: true
     )
+  }
+}
+
+private func terminalTabIcon(for terminal: BridgeTerminalRecord?) -> String {
+  switch terminal?.kind {
+  case "claude":
+    return "sparkles"
+  case "codex":
+    return "chevron.left.forwardslash.chevron.right"
+  default:
+    return "terminal"
   }
 }
 
@@ -95,7 +107,7 @@ private struct TerminalSurfacePendingView: View {
     VStack(spacing: 14) {
       if let launchError, !launchError.isEmpty {
         Image(systemName: "exclamationmark.triangle.fill")
-          .font(.system(size: 22, weight: .semibold))
+          .font(.lc(size: 22, weight: .semibold))
           .foregroundStyle(theme.errorColor)
       } else {
         ProgressView()
@@ -105,17 +117,17 @@ private struct TerminalSurfacePendingView: View {
 
       VStack(spacing: 6) {
         Text(title)
-          .font(.system(size: 16, weight: .semibold))
+          .font(.lc(size: 16, weight: .semibold))
           .foregroundStyle(theme.primaryTextColor)
 
         Text(launchError ?? "Connecting terminal \(terminalID)...")
-          .font(.system(size: 12, weight: .medium, design: .monospaced))
+          .font(.lc(size: 12, weight: .medium, design: .monospaced))
           .foregroundStyle(launchError == nil ? theme.mutedColor : theme.errorColor)
           .multilineTextAlignment(.center)
 
         if let backendLabel, !backendLabel.isEmpty {
           Text(backendLabel)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .font(.lc(size: 11, weight: .medium, design: .monospaced))
             .foregroundStyle(theme.mutedColor.opacity(0.72))
         }
       }

@@ -1,4 +1,5 @@
 import SwiftUI
+import LifecyclePresentation
 
 enum WorkspaceStackHeaderActionKind: Equatable {
   case start
@@ -17,7 +18,8 @@ struct WorkspaceStackHeaderActionState: Equatable {
 
 func workspaceStackHeaderActionState(
   summary: BridgeWorkspaceStackSummary?,
-  isMutating: Bool
+  isMutating: Bool,
+  hasStoppingServices: Bool = false
 ) -> WorkspaceStackHeaderActionState? {
   guard let summary, summary.state == "ready" else {
     return nil
@@ -30,6 +32,16 @@ func workspaceStackHeaderActionState(
 
   let hasReadyServices = serviceNodes.contains { $0.status == "ready" }
   let hasStartingServices = serviceNodes.contains { $0.status == "starting" }
+
+  if hasStoppingServices {
+    return WorkspaceStackHeaderActionState(
+      kind: .stopping,
+      label: "Stopping…",
+      icon: "stop.fill",
+      isEnabled: false,
+      helpText: "Stopping running workspace services."
+    )
+  }
 
   if isMutating {
     if hasReadyServices {
@@ -90,16 +102,16 @@ struct WorkspaceHeaderView: View {
       HStack(spacing: 8) {
         if let repository = model.selectedRepository {
           Label(repository.name, systemImage: "folder")
-            .font(.system(size: 13, weight: .medium))
+            .font(.lc(size: 13, weight: .medium))
             .foregroundStyle(theme.mutedColor)
         }
 
         Image(systemName: "chevron.right")
-          .font(.system(size: 10, weight: .semibold))
+          .font(.lc(size: 10, weight: .semibold))
           .foregroundStyle(theme.mutedColor.opacity(0.8))
 
         Label(workspace.name, systemImage: workspace.ref == nil ? "folder.badge.gearshape" : "point.topleft.down.curvedto.point.bottomright.up")
-          .font(.system(size: 13, weight: .semibold))
+          .font(.lc(size: 13, weight: .semibold))
           .foregroundStyle(theme.primaryTextColor)
       }
       .contentShape(Rectangle())
@@ -129,7 +141,8 @@ private struct WorkspaceHeaderActionRow: View {
   private var stackActionState: WorkspaceStackHeaderActionState? {
     workspaceStackHeaderActionState(
       summary: model.stackSummary(for: workspace.id),
-      isMutating: model.isStackActionLoading(for: workspace.id)
+      isMutating: model.isStackActionLoading(for: workspace.id),
+      hasStoppingServices: model.hasStoppingServices(for: workspace.id)
     )
   }
 
@@ -168,25 +181,21 @@ private struct WorkspaceHeaderActionChip: View {
   let action: () -> Void
 
   var body: some View {
-    LCButton(variant: .chrome, isEnabled: isEnabled, action: action) {
+    LCButton(variant: .surface, isEnabled: isEnabled, action: action) {
       HStack(spacing: 6) {
         Image(systemName: icon)
-          .font(.system(size: 10, weight: .semibold))
+          .font(.lc(size: 10, weight: .semibold))
           .foregroundStyle(iconColor)
 
         Text(label)
-          .font(.system(size: 11, weight: .semibold))
+          .font(.lc(size: 11, weight: .semibold))
           .foregroundStyle(labelColor)
       }
     }
   }
 
   private var labelColor: Color {
-    guard isEnabled else {
-      return theme.mutedColor
-    }
-
-    return theme.primaryTextColor
+    isEnabled ? theme.primaryTextColor : theme.mutedColor
   }
 
   private var iconColor: Color {
@@ -214,9 +223,9 @@ private struct WorkspaceHeaderButton: View {
   let action: () -> Void
 
   var body: some View {
-    LCButton(variant: .chrome, layout: .icon, isActive: isActive, action: action) {
+    LCButton(variant: .surface, layout: .icon, isActive: isActive, action: action) {
       Image(systemName: icon)
-        .font(.system(size: 11, weight: .semibold))
+        .font(.lc(size: 11, weight: .semibold))
         .foregroundStyle(isActive ? theme.primaryTextColor : theme.mutedColor)
     }
   }
@@ -230,19 +239,20 @@ private struct WorkspaceViewSettingsPopover: View {
   let workspace: BridgeWorkspaceSummary
 
   private var isSpatial: Bool {
-    if case .spatial = model.canvasState(for: workspace.id)?.layout {
-      return true
-    }
-    return false
+    model.canvasLayoutMode(for: workspace.id) == .spatial
   }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text("View")
-        .font(.system(size: 11, weight: .semibold))
+        .font(.lc(size: 11, weight: .semibold))
         .foregroundStyle(theme.mutedColor)
 
-      WorkspaceViewSettingsLayoutPicker(isSpatial: isSpatial)
+      WorkspaceViewSettingsLayoutPicker(
+        model: model,
+        workspaceID: workspace.id,
+        isSpatial: isSpatial
+      )
     }
     .padding(12)
     .frame(width: 200)
@@ -253,45 +263,69 @@ private struct WorkspaceViewSettingsPopover: View {
 
 private struct WorkspaceViewSettingsLayoutPicker: View {
   @Environment(\.appTheme) private var theme
+  @ObservedObject var model: AppModel
+  let workspaceID: String
   let isSpatial: Bool
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Layout")
-        .font(.system(size: 11, weight: .medium))
+        .font(.lc(size: 11, weight: .medium))
         .foregroundStyle(theme.primaryTextColor)
 
       HStack(spacing: 4) {
-        layoutOption(label: "Tiled", icon: "rectangle.split.2x1", isSelected: !isSpatial, isEnabled: true)
-        layoutOption(label: "Spatial", icon: "rectangle.on.rectangle", isSelected: isSpatial, isEnabled: false)
+        layoutOption(
+          label: "Tiled",
+          icon: "rectangle.split.2x1",
+          isSelected: !isSpatial,
+          mode: .tiled
+        )
+        layoutOption(
+          label: "Spatial",
+          icon: "rectangle.on.rectangle",
+          isSelected: isSpatial,
+          mode: .spatial
+        )
       }
     }
   }
 
   @ViewBuilder
-  private func layoutOption(label: String, icon: String, isSelected: Bool, isEnabled: Bool) -> some View {
+  private func layoutOption(
+    label: String,
+    icon: String,
+    isSelected: Bool,
+    mode: CanvasLayoutMode
+  ) -> some View {
     let foreground = isSelected
       ? theme.primaryTextColor
-      : (isEnabled ? theme.mutedColor : theme.mutedColor.opacity(0.5))
+      : theme.mutedColor
 
-    HStack(spacing: 5) {
-      Image(systemName: icon)
-        .font(.system(size: 10, weight: .medium))
-      Text(label)
-        .font(.system(size: 11, weight: isSelected ? .semibold : .medium))
+    Button {
+      model.setCanvasLayoutMode(mode, workspaceID: workspaceID)
+    } label: {
+      HStack(spacing: 5) {
+        Image(systemName: icon)
+          .font(.lc(size: 10, weight: .medium))
+        Text(label)
+          .font(.lc(size: 11, weight: isSelected ? .semibold : .medium))
+      }
+      .foregroundStyle(foreground)
+      .padding(.horizontal, 8)
+      .padding(.vertical, 5)
+      .frame(maxWidth: .infinity)
+      .background(
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+          .fill(isSelected ? theme.mutedColor.opacity(0.15) : .clear)
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+          .strokeBorder(isSelected ? theme.borderColor : .clear)
+      )
+      .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
-    .foregroundStyle(foreground)
-    .padding(.horizontal, 8)
-    .padding(.vertical, 5)
-    .frame(maxWidth: .infinity)
-    .background(
-      RoundedRectangle(cornerRadius: 6, style: .continuous)
-        .fill(isSelected ? theme.mutedColor.opacity(0.15) : .clear)
-    )
-    .overlay(
-      RoundedRectangle(cornerRadius: 6, style: .continuous)
-        .strokeBorder(isSelected ? theme.borderColor : .clear)
-    )
-    .help(isEnabled ? "" : "Spatial canvas is not implemented yet")
+    .buttonStyle(.plain)
+    .disabled(isSelected)
+    .lcPointerCursor()
   }
 }

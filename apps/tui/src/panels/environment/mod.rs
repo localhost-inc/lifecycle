@@ -110,7 +110,7 @@ pub fn load_services(workspace_id: Option<&str>) -> Vec<ServiceEntry> {
                 .stack
                 .nodes
                 .into_iter()
-                .filter(|node| node.kind == "service")
+                .filter(|node| node.kind != "task")
                 .map(|node| ServiceEntry {
                     name: node.name,
                     status: node.status.unwrap_or_else(|| "stopped".to_string()),

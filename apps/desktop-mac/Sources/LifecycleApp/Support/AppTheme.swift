@@ -60,10 +60,64 @@ enum AppThemeAppearance: String, Codable, Hashable, Sendable {
 struct AppThemePreset: Equatable, Sendable {
   let id: AppThemePreference
   let appearance: AppThemeAppearance
-  let tokens: AppThemeTokens
+  let theme: AppTheme
 }
 
-struct AppThemeTokens: Equatable, Sendable {
+struct AppThemeSpacing: Equatable, Sendable {
+  let xxs: CGFloat
+  let xs: CGFloat
+  let sm: CGFloat
+  let md: CGFloat
+  let lg: CGFloat
+  let xl: CGFloat
+  let xxl: CGFloat
+  let xxxl: CGFloat
+
+  static let standard = AppThemeSpacing(
+    xxs: 2,
+    xs: 4,
+    sm: 6,
+    md: 8,
+    lg: 10,
+    xl: 12,
+    xxl: 16,
+    xxxl: 24
+  )
+}
+
+struct AppThemeRadius: Equatable, Sendable {
+  let xs: CGFloat
+  let sm: CGFloat
+  let md: CGFloat
+  let lg: CGFloat
+  let xl: CGFloat
+
+  static let standard = AppThemeRadius(
+    xs: 4,
+    sm: 7,
+    md: 8,
+    lg: 10,
+    xl: 12
+  )
+}
+
+struct AppThemeSizing: Equatable, Sendable {
+  let controlIconSquare: CGFloat
+  let workspaceTabRailHeight: CGFloat
+  let workspaceTabMaximumWidth: CGFloat
+  let workspaceTabLeadingInset: CGFloat
+  let terminalSurfaceInset: CGFloat
+
+  static let standard = AppThemeSizing(
+    controlIconSquare: 28,
+    workspaceTabRailHeight: 34,
+    workspaceTabMaximumWidth: 220,
+    workspaceTabLeadingInset: 18,
+    terminalSurfaceInset: 8
+  )
+}
+
+struct AppTheme: Equatable, Sendable {
   let background: String
   let foreground: String
   let card: String
@@ -115,6 +169,9 @@ struct AppThemeTokens: Equatable, Sendable {
   let gitStatusModified: String
   let gitStatusDeleted: String
   let gitStatusRenamed: String
+  let spacing: AppThemeSpacing = .standard
+  let radius: AppThemeRadius = .standard
+  let sizing: AppThemeSizing = .standard
 
   var shellBackground: Color { color(background) }
   var sidebarBackgroundColor: Color { color(sidebarBackground) }
@@ -127,9 +184,12 @@ struct AppThemeTokens: Equatable, Sendable {
   var surfaceBackground: Color { color(surface) }
   var surfaceRaised: Color { color(surfaceHover) }
   var primaryTextColor: Color { color(foreground) }
+  var primaryColor: Color { color(primary) }
+  var primaryForegroundColor: Color { color(primaryForeground) }
   var mutedColor: Color { color(mutedForeground) }
   var highlightColor: Color { color(sidebarSelected) }
   var borderColor: Color { color(border) }
+  var isDarkAppearance: Bool { appearance.isDark }
   var accentColor: Color { color(accent) }
   var successColor: Color { color(statusSuccess) }
   var warningColor: Color { color(statusWarning) }
@@ -184,7 +244,7 @@ enum AppThemeCatalog {
     .light: AppThemePreset(
       id: .light,
       appearance: .light,
-      tokens: AppThemeTokens(
+      theme: AppTheme(
         background: "#f5f5f3",
         foreground: "#111111",
         card: "#ededea",
@@ -241,7 +301,7 @@ enum AppThemeCatalog {
     .dark: AppThemePreset(
       id: .dark,
       appearance: .dark,
-      tokens: AppThemeTokens(
+      theme: AppTheme(
         background: "#171411",
         foreground: "#fafaf9",
         card: "#221e1a",
@@ -298,7 +358,7 @@ enum AppThemeCatalog {
     .githubLight: AppThemePreset(
       id: .githubLight,
       appearance: .light,
-      tokens: AppThemeTokens(
+      theme: AppTheme(
         background: "#f6f8fa",
         foreground: "#1f2328",
         card: "#ebecf0",
@@ -313,7 +373,7 @@ enum AppThemeCatalog {
         muted: "#ebecf0",
         mutedForeground: "#656d76",
         border: "#d0d7de",
-        primary: "#1f883d",
+        primary: "#1f2328",
         primaryForeground: "#ffffff",
         accent: "#0969da",
         accentForeground: "#ffffff",
@@ -355,7 +415,7 @@ enum AppThemeCatalog {
     .githubDark: AppThemePreset(
       id: .githubDark,
       appearance: .dark,
-      tokens: AppThemeTokens(
+      theme: AppTheme(
         background: "#0d1117",
         foreground: "#e6edf3",
         card: "#161b22",
@@ -412,7 +472,7 @@ enum AppThemeCatalog {
     .nord: AppThemePreset(
       id: .nord,
       appearance: .dark,
-      tokens: AppThemeTokens(
+      theme: AppTheme(
         background: "#3b4252",
         foreground: "#eceff4",
         card: "#434c5e",
@@ -469,7 +529,7 @@ enum AppThemeCatalog {
     .monokai: AppThemePreset(
       id: .monokai,
       appearance: .dark,
-      tokens: AppThemeTokens(
+      theme: AppTheme(
         background: "#2f3028",
         foreground: "#f8f8f2",
         card: "#34352d",
@@ -526,7 +586,7 @@ enum AppThemeCatalog {
     .catppuccin: AppThemePreset(
       id: .catppuccin,
       appearance: .dark,
-      tokens: AppThemeTokens(
+      theme: AppTheme(
         background: "#1e1e2e",
         foreground: "#cdd6f4",
         card: "#313244",
@@ -583,7 +643,7 @@ enum AppThemeCatalog {
     .dracula: AppThemePreset(
       id: .dracula,
       appearance: .dark,
-      tokens: AppThemeTokens(
+      theme: AppTheme(
         background: "#282a36",
         foreground: "#f8f8f2",
         card: "#2d2f3d",
@@ -640,7 +700,7 @@ enum AppThemeCatalog {
     .rosePine: AppThemePreset(
       id: .rosePine,
       appearance: .dark,
-      tokens: AppThemeTokens(
+      theme: AppTheme(
         background: "#211f32",
         foreground: "#e0def4",
         card: "#26233a",
@@ -709,14 +769,14 @@ enum AppThemeCatalog {
   }
 }
 
-private struct AppThemeTokensKey: EnvironmentKey {
-  static let defaultValue = AppThemeCatalog.defaultPreset.tokens
+private struct AppThemeKey: EnvironmentKey {
+  static let defaultValue = AppThemeCatalog.defaultPreset.theme
 }
 
 extension EnvironmentValues {
-  var appTheme: AppThemeTokens {
-    get { self[AppThemeTokensKey.self] }
-    set { self[AppThemeTokensKey.self] = newValue }
+  var appTheme: AppTheme {
+    get { self[AppThemeKey.self] }
+    set { self[AppThemeKey.self] = newValue }
   }
 }
 

@@ -39,14 +39,21 @@ pub fn render(
     let title_btn = "[+] ";
     let title_pad = (tree_area.width as usize).saturating_sub(title_label.len() + title_btn.len());
     lines.push(Line::from(vec![
-        Span::styled(title_label, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            title_label,
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" ".repeat(title_pad)),
         Span::styled(title_btn, plus_style),
     ]));
 
     for (ri, repo) in state.repos.iter().enumerate() {
         // Screen row = tree_area.y + lines.len() (flush, no border offset)
-        state.repo_button_rows.push((ri, tree_area.y + lines.len() as u16));
+        state
+            .repo_button_rows
+            .push((ri, tree_area.y + lines.len() as u16));
         let is_selected = state.selected == Some(SidebarSelection::Repo(ri));
         let icon = if repo.expanded { "▼" } else { "▶" };
         let source_tag = match repo.source {
@@ -55,9 +62,13 @@ pub fn render(
         };
 
         let style = if is_selected && focused {
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
         } else if is_selected {
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::White)
         };
@@ -76,25 +87,38 @@ pub fn render(
             let btn = "[+] ";
             let pad = inner_width.saturating_sub(used + btn.len());
             spans.push(Span::raw(" ".repeat(pad)));
-            spans.push(Span::styled(btn, Style::default().fg(
-                if is_hovered { Color::Cyan } else { Color::DarkGray }
-            )));
+            spans.push(Span::styled(
+                btn,
+                Style::default().fg(if is_hovered {
+                    Color::Cyan
+                } else {
+                    Color::DarkGray
+                }),
+            ));
         }
 
         lines.push(Line::from(spans));
 
         if repo.expanded {
             // New workspace dialog renders at top of list, right under repo header
-            if let Some(SidebarDialog::NewWorkspace { repo_index, ref input }) = &state.dialog {
+            if let Some(SidebarDialog::NewWorkspace {
+                repo_index,
+                ref input,
+            }) = &state.dialog
+            {
                 if *repo_index == ri {
-                    let mut spans = vec![
-                        Span::styled("   + ", Style::default().fg(Color::Cyan)),
-                    ];
+                    let mut spans = vec![Span::styled("   + ", Style::default().fg(Color::Cyan))];
                     if input.is_empty() {
                         spans.push(Span::styled("█", Style::default().fg(Color::Cyan)));
-                        spans.push(Span::styled("workspace name…", Style::default().fg(Color::DarkGray)));
+                        spans.push(Span::styled(
+                            "workspace name…",
+                            Style::default().fg(Color::DarkGray),
+                        ));
                     } else {
-                        spans.push(Span::styled(input.clone(), Style::default().fg(Color::White)));
+                        spans.push(Span::styled(
+                            input.clone(),
+                            Style::default().fg(Color::White),
+                        ));
                         spans.push(Span::styled("█", Style::default().fg(Color::Cyan)));
                     }
                     lines.push(Line::from(spans));
@@ -102,9 +126,10 @@ pub fn render(
             }
 
             for (wi, ws) in repo.workspaces.iter().enumerate() {
-                state.workspace_rows.push((ri, wi, tree_area.y + lines.len() as u16));
-                let is_ws_selected =
-                    state.selected == Some(SidebarSelection::Workspace(ri, wi));
+                state
+                    .workspace_rows
+                    .push((ri, wi, tree_area.y + lines.len() as u16));
+                let is_ws_selected = state.selected == Some(SidebarSelection::Workspace(ri, wi));
 
                 let status_color = match ws.status.as_str() {
                     "active" => Color::Green,
@@ -125,7 +150,10 @@ pub fn render(
                 let ws_hovered = hover_row == Some(ws_row);
 
                 let ws_key = format!("{}\t{}", repo.name, ws.name);
-                let ws_activity = activity.get(&ws_key).copied().unwrap_or(WorkspaceActivity::Idle);
+                let ws_activity = activity
+                    .get(&ws_key)
+                    .copied()
+                    .unwrap_or(WorkspaceActivity::Idle);
 
                 let (indicator, indicator_style) = match ws_activity {
                     WorkspaceActivity::Busy => {
@@ -169,7 +197,12 @@ pub fn render(
             }
 
             // Inline dialogs (confirm delete stays at bottom)
-            if let Some(SidebarDialog::ConfirmDelete { repo_index, ws_index: _, ref message }) = &state.dialog {
+            if let Some(SidebarDialog::ConfirmDelete {
+                repo_index,
+                ws_index: _,
+                ref message,
+            }) = &state.dialog
+            {
                 if *repo_index == ri {
                     lines.push(Line::from(Span::styled(
                         format!("   {message}"),

@@ -1,6 +1,8 @@
 #import "LifecycleTerminalHostView.h"
 
 #import "LifecycleGhosttyTerminalRuntime.h"
+#import <math.h>
+#import <QuartzCore/QuartzCore.h>
 
 @interface LifecycleTerminalHostView ()
 
@@ -15,6 +17,8 @@
   NSView *_placeholderView;
   NSString *_mountedWorkingDirectory;
   NSString *_mountedCommand;
+  CGFloat _mountedFontSize;
+  BOOL _hasMountedFontSize;
 }
 
 + (BOOL)ensureGhosttyRuntime {
@@ -71,6 +75,9 @@
 
   self.wantsLayer = YES;
   self.layer.backgroundColor = NSColor.blackColor.CGColor;
+  self.layer.magnificationFilter = kCAFilterNearest;
+  self.layer.minificationFilter = kCAFilterNearest;
+  self.layer.allowsEdgeAntialiasing = NO;
 
   _placeholderView = [[NSView alloc] initWithFrame:self.bounds];
   _placeholderView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
@@ -83,6 +90,14 @@
   return YES;
 }
 
+- (NSSize)intrinsicContentSize {
+  return NSMakeSize(NSViewNoIntrinsicMetric, NSViewNoIntrinsicMetric);
+}
+
+- (NSSize)fittingSize {
+  return self.bounds.size;
+}
+
 - (void)layout {
   [super layout];
   _placeholderView.frame = self.bounds;
@@ -91,7 +106,9 @@
 
 - (void)applyHostConfiguration:(LifecycleTerminalHostConfiguration *)configuration {
   if ([_configuration isEqual:configuration]) {
-    [self syncTerminalIfNeeded];
+    if (_appliedConfiguration == nil || ![_appliedConfiguration isEqual:configuration]) {
+      [self syncTerminalIfNeeded];
+    }
     return;
   }
 
@@ -111,13 +128,17 @@
   BOOL workingDirectoryChanged =
       ![_mountedWorkingDirectory ?: @"" isEqualToString:_configuration.workingDirectory ?: @""];
   BOOL commandChanged = ![_mountedCommand ?: @"" isEqualToString:_configuration.command ?: @""];
-  if (!workingDirectoryChanged && !commandChanged) {
+  BOOL fontSizeChanged = _hasMountedFontSize &&
+                         fabs(_mountedFontSize - _configuration.terminalFontSize) > 0.01;
+  if (!workingDirectoryChanged && !commandChanged && !fontSizeChanged) {
     return;
   }
 
   lifecycle_ghostty_terminal_close(self.terminalID.UTF8String);
   _mountedWorkingDirectory = nil;
   _mountedCommand = nil;
+  _mountedFontSize = 0;
+  _hasMountedFontSize = NO;
   _appliedConfiguration = nil;
 }
 
@@ -199,6 +220,8 @@
 
   _mountedWorkingDirectory = [_configuration.workingDirectory copy];
   _mountedCommand = [_configuration.command copy];
+  _mountedFontSize = _configuration.terminalFontSize;
+  _hasMountedFontSize = YES;
   _appliedConfiguration = [_configuration copy];
   self.lastError = nil;
 }

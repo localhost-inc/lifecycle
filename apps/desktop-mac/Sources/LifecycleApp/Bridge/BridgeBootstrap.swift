@@ -27,7 +27,7 @@ enum BridgeBootstrap {
       return discovered.url
     }
 
-    let fallbackURL = URL(string: "http://127.0.0.1:0")!
+    let fallbackURL = BridgeConfiguration.defaultBridgeURL(environment: LifecycleEnvironment())
     throw BridgeBootstrapError.couldNotStart(fallbackURL)
   }
 
@@ -36,7 +36,7 @@ enum BridgeBootstrap {
       return discovered
     }
 
-    let fallbackURL = URL(string: "http://127.0.0.1:0")!
+    let fallbackURL = BridgeConfiguration.defaultBridgeURL(environment: LifecycleEnvironment())
     throw BridgeBootstrapError.couldNotStart(fallbackURL)
   }
 
@@ -67,10 +67,12 @@ enum BridgeBootstrap {
         return nil
       }
 
-      if let discovery = await registrationDiscovery(), await isHealthy(discovery.url) {
+      let defaultURL = BridgeConfiguration.defaultBridgeURL(environment: environment)
+      if await isHealthy(defaultURL) {
+        let discovery = BridgeDiscovery(url: defaultURL, pid: registrationPID(environment: environment))
         AppLog.debug(
           .bridge,
-          "Resolved bridge from registration",
+          "Resolved bridge from fixed local port",
           metadata: [
             "url": discovery.url.absoluteString,
             "pid": discovery.pid.map(String.init) ?? "unknown",
@@ -89,7 +91,8 @@ enum BridgeBootstrap {
 
       for _ in 0..<BridgeConfiguration.bootstrapAttempts {
         try await Task.sleep(nanoseconds: BridgeConfiguration.bootstrapWaitNanoseconds)
-        if let discovery = await registrationDiscovery(), await isHealthy(discovery.url) {
+        if await isHealthy(defaultURL) {
+          let discovery = BridgeDiscovery(url: defaultURL, pid: registrationPID(environment: environment))
           AppLog.notice(
             .bridge,
             "Local bridge became healthy after startup",
@@ -124,19 +127,15 @@ enum BridgeBootstrap {
     }
   }
 
-  private static func registrationDiscovery() async -> BridgeDiscovery? {
-    let environment = LifecycleEnvironment()
-    guard let url = try? BridgeConfiguration.bridgeRegistrationURL(environment: environment) else {
-      return nil
-    }
-
-    guard let data = try? Data(contentsOf: url),
-          let discovery = bridgeDiscovery(fromRegistrationData: data)
+  private static func registrationPID(environment: LifecycleEnvironment) -> Int? {
+    guard let url = try? BridgeConfiguration.bridgeRegistrationURL(environment: environment),
+          let data = try? Data(contentsOf: url),
+          let registration = try? JSONDecoder().decode(BridgeRegistration.self, from: data)
     else {
       return nil
     }
 
-    return discovery
+    return registration.pid
   }
 
   static func bridgeRegistrationPath(environment: [String: String]) -> String {

@@ -31,6 +31,14 @@ Two projections are supported conceptually:
 
 The same groups and surfaces should be renderable in either mode.
 
+Desktop spatial mode currently renders groups as movable, resizable cards on a zoomable infinite plane.
+
+Spatial canvas rules:
+
+1. persisted spatial state is the per-group frame (`x`, `y`, `width`, `height`, `zIndex`)
+2. viewport pan and zoom are client-local view state
+3. new groups created from split/drop actions should get a nearby spatial frame instead of falling back to a disconnected default pile
+
 ## Runtime boundary
 
 The bridge informs runtime facts. It does not own canvas structure.

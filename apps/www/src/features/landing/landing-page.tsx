@@ -15,25 +15,25 @@ const manifestSnippet = `{
       }
     ]
   },
-  "environment": {
-    "api": {
-      "kind": "service",
-      "runtime": "process",
-      "command": "bun run dev",
-      "cwd": "apps/control-plane",
-      "startup_timeout_seconds": 30,
-      "health_check": {
-        "kind": "http",
-        "url": "http://\${LIFECYCLE_SERVICE_API_ADDRESS}/health",
-        "timeout_seconds": 5
+  "stack": {
+    "nodes": {
+      "api": {
+        "kind": "process",
+        "command": "bun run dev",
+        "cwd": "apps/control-plane",
+        "startup_timeout_seconds": 30,
+        "health_check": {
+          "kind": "http",
+          "url": "http://\${LIFECYCLE_SERVICE_API_ADDRESS}/health",
+          "timeout_seconds": 5
+        }
+      },
+      "web": {
+        "kind": "process",
+        "command": "bun run dev",
+        "cwd": "apps/web",
+        "depends_on": ["api"]
       }
-    },
-    "web": {
-      "kind": "service",
-      "runtime": "process",
-      "command": "bun run dev",
-      "cwd": "apps/web",
-      "depends_on": ["api"]
     }
   }
 }`;
@@ -138,8 +138,8 @@ export function LandingPage() {
           <code className="rounded-md bg-[var(--muted)] px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--foreground)]">
             lifecycle.json
           </code>{" "}
-          to your repo. Lifecycle reads the repo contract directly: prepare steps, services, and
-          dependency edges live in source control instead of shell glue.
+          to your repo. Lifecycle reads the repo contract directly: workspace prepare steps, stack
+          nodes, and dependency edges live in source control instead of shell glue.
         </p>
 
         <pre className="mt-5">

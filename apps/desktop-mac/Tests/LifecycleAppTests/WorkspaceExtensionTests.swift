@@ -79,7 +79,7 @@ final class WorkspaceExtensionTests: XCTestCase {
     )
     XCTAssertEqual(
       model.extensionSidebarWidth(for: "workspace-1", availableWidth: availableWidth),
-      280
+      279
     )
   }
 
@@ -93,21 +93,110 @@ final class WorkspaceExtensionTests: XCTestCase {
     XCTAssertEqual(model.extensionSidebarWidth(for: "workspace-2", availableWidth: 1200), 380)
   }
 
-  func testStackExtensionUsesCompactLayoutAtDefaultSidebarWidths() {
-    XCTAssertTrue(
-      stackExtensionUsesCompactLayout(availableWidth: defaultWorkspaceExtensionSidebarWidth)
+  func testExtensionSidebarPreferredWidthSurvivesTightWindowClamp() {
+    let model = AppModel()
+
+    model.setExtensionSidebarWidth(380, workspaceID: "workspace-1", availableWidth: 1200)
+
+    XCTAssertEqual(model.extensionSidebarWidth(for: "workspace-1", availableWidth: 700), 260)
+    XCTAssertEqual(model.extensionSidebarWidth(for: "workspace-1", availableWidth: 1200), 380)
+  }
+
+  func testStackExtensionServiceMetadataKeepsRowsSingleLine() {
+    let node = BridgeStackNode(
+      workspaceID: "workspace-1",
+      name: "api",
+      kind: "process",
+      dependsOn: ["postgres", "migrate"],
+      status: "ready",
+      statusReason: nil,
+      assignedPort: 3000,
+      previewURL: nil,
+      createdAt: nil,
+      updatedAt: nil,
+      runOn: nil,
+      command: nil,
+      writeFilesCount: nil
     )
-    XCTAssertTrue(
-      stackExtensionUsesCompactLayout(availableWidth: minimumWorkspaceExtensionSidebarWidth)
+
+    XCTAssertEqual(
+      stackExtensionServiceMetadata(node),
+      ":3000  depends on postgres, migrate"
     )
   }
 
-  func testStackExtensionUsesTableLayoutOnlyWhenSidebarIsWideEnough() {
-    XCTAssertFalse(
-      stackExtensionUsesCompactLayout(availableWidth: stackExtensionMinimumTableWidth)
+  func testStackExtensionTaskMetadataSummarizesTriggerDependenciesAndWrites() {
+    let node = BridgeStackNode(
+      workspaceID: "workspace-1",
+      name: "seed",
+      kind: "task",
+      dependsOn: ["postgres"],
+      status: nil,
+      statusReason: nil,
+      assignedPort: nil,
+      previewURL: nil,
+      createdAt: nil,
+      updatedAt: nil,
+      runOn: "start",
+      command: "bun run seed",
+      writeFilesCount: 3
     )
-    XCTAssertFalse(
-      stackExtensionUsesCompactLayout(availableWidth: maximumWorkspaceExtensionSidebarWidth)
+
+    XCTAssertEqual(
+      stackExtensionTaskMetadata(node),
+      "run_on start  depends on postgres  write_files 3"
+    )
+  }
+
+  func testStackExtensionServiceStatusLabelPrefersStoppingPhase() {
+    let node = BridgeStackNode(
+      workspaceID: "workspace-1",
+      name: "api",
+      kind: "process",
+      dependsOn: [],
+      status: "ready",
+      statusReason: nil,
+      assignedPort: nil,
+      previewURL: nil,
+      createdAt: nil,
+      updatedAt: nil,
+      runOn: nil,
+      command: nil,
+      writeFilesCount: nil
+    )
+
+    XCTAssertEqual(
+      stackExtensionServiceStatusLabel(node, phase: .stopping),
+      "stopping"
+    )
+  }
+
+  func testStackExtensionSanitizedLogTextStripsANSIEscapeSequences() {
+    XCTAssertEqual(
+      stackExtensionSanitizedLogText("\u{001B}[38;2;255;136;0mready\u{001B}[39m"),
+      "ready"
+    )
+  }
+
+  func testStackExtensionLogPlainTextCombinesSanitizedLines() {
+    let lines = [
+      BridgeWorkspaceLogLine(
+        service: "www",
+        stream: "stdout",
+        text: "\u{001B}[90mhello\u{001B}[39m",
+        timestamp: "2026-04-11T18:00:00.000Z"
+      ),
+      BridgeWorkspaceLogLine(
+        service: "www",
+        stream: "stderr",
+        text: "warn\r",
+        timestamp: "2026-04-11T18:00:01.000Z"
+      ),
+    ]
+
+    XCTAssertEqual(
+      stackExtensionLogPlainText(lines),
+      "hello\nwarn"
     )
   }
 
@@ -117,8 +206,8 @@ final class WorkspaceExtensionTests: XCTestCase {
       state: "ready",
       errors: [],
       nodes: [
-        stackNode(name: "api", kind: "service"),
-        stackNode(name: "web", kind: "service"),
+        stackNode(name: "api", kind: "process"),
+        stackNode(name: "web", kind: "process"),
         stackNode(name: "seed", kind: "task"),
       ]
     )
@@ -137,7 +226,183 @@ final class WorkspaceExtensionTests: XCTestCase {
 
     XCTAssertEqual(
       stackExtensionSummarySubtitle(summary: summary),
+      "No lifecycle.json found for this workspace."
+    )
+  }
+
+  func testStackExtensionSummarySubtitleUsesUnconfiguredCopy() {
+    let summary = BridgeWorkspaceStackSummary(
+      workspaceID: "workspace-1",
+      state: "unconfigured",
+      errors: [],
+      nodes: []
+    )
+
+    XCTAssertEqual(
+      stackExtensionSummarySubtitle(summary: summary),
       "No stack configured for this workspace."
+    )
+  }
+
+  func testStackExtensionSummarySubtitleUsesInvalidCopy() {
+    let summary = BridgeWorkspaceStackSummary(
+      workspaceID: "workspace-1",
+      state: "invalid",
+      errors: ["nodes.api.command is required"],
+      nodes: []
+    )
+
+    XCTAssertEqual(
+      stackExtensionSummarySubtitle(summary: summary),
+      "Lifecycle couldn't parse this workspace's stack configuration. Fix lifecycle.json and reload the workspace."
+    )
+  }
+
+  func testStackExtensionEmptyStateContentIncludesInvalidDetails() {
+    let summary = BridgeWorkspaceStackSummary(
+      workspaceID: "workspace-1",
+      state: "invalid",
+      errors: [
+        "nodes.api.command is required",
+        "nodes.web.depends_on references missing node 'db'",
+      ],
+      nodes: []
+    )
+
+    XCTAssertEqual(
+      stackExtensionEmptyStateContent(summary: summary),
+      StackExtensionEmptyStateContent(
+        symbolName: "exclamationmark.triangle.fill",
+        title: "Stack config is invalid",
+        description: "Lifecycle couldn't parse this workspace's stack configuration. Fix lifecycle.json and reload the workspace.",
+        tone: .error,
+        details: [
+          "nodes.api.command is required",
+          "nodes.web.depends_on references missing node 'db'",
+        ]
+      )
+    )
+  }
+
+  func testStackExtensionEmptyStateContentReturnsNilForReadySummary() {
+    let summary = BridgeWorkspaceStackSummary(
+      workspaceID: "workspace-1",
+      state: "ready",
+      errors: [],
+      nodes: [stackNode(name: "api", kind: "process")]
+    )
+
+    XCTAssertNil(stackExtensionEmptyStateContent(summary: summary))
+  }
+
+  func testWorkspaceExtensionEmptyStateVisualConfigurationUsesToneAccent() {
+    let theme = AppThemeCatalog.defaultPreset.theme
+
+    XCTAssertEqual(
+      workspaceExtensionEmptyStateVisualConfiguration(
+        theme: theme,
+        tone: .warning,
+        reduceMotion: false
+      ),
+      WorkspaceExtensionEmptyStateVisualConfiguration(
+        accentHex: theme.statusWarning,
+        backgroundHex: theme.background,
+        animationSpeed: 0.9,
+        intensity: 0.94
+      )
+    )
+  }
+
+  func testWorkspaceExtensionEmptyStateVisualConfigurationDisablesAnimationForReducedMotion() {
+    let theme = AppThemeCatalog.defaultPreset.theme
+
+    XCTAssertEqual(
+      workspaceExtensionEmptyStateVisualConfiguration(
+        theme: theme,
+        tone: .error,
+        reduceMotion: true
+      ),
+      WorkspaceExtensionEmptyStateVisualConfiguration(
+        accentHex: theme.statusDanger,
+        backgroundHex: theme.background,
+        animationSpeed: 0,
+        intensity: 0.82
+      )
+    )
+  }
+
+  func testWorkspaceExtensionEmptyStateGlyphStyleMatchesKnownStates() {
+    XCTAssertEqual(
+      workspaceExtensionEmptyStateGlyphStyle(
+        symbolName: "shippingbox.circle.fill",
+        tone: .warning
+      ),
+      .manifestMissing
+    )
+    XCTAssertEqual(
+      workspaceExtensionEmptyStateGlyphStyle(
+        symbolName: "shippingbox.circle",
+        tone: .neutral
+      ),
+      .stackUnconfigured
+    )
+    XCTAssertEqual(
+      workspaceExtensionEmptyStateGlyphStyle(
+        symbolName: "exclamationmark.triangle.fill",
+        tone: .error
+      ),
+      .invalid
+    )
+  }
+
+  func testWorkspaceExtensionEmptyStateAsciiAnimationUsesConsistentFrameGeometry() {
+    let animation = workspaceExtensionEmptyStateAsciiAnimation(style: .manifestMissing)
+    let expectedLineCount = animation.frames.first?.lines.count
+    let expectedLineWidth = animation.frames.first?.lines.first?.count
+
+    XCTAssertNotNil(expectedLineCount)
+    XCTAssertNotNil(expectedLineWidth)
+    XCTAssertEqual(animation.stillFrameIndex, 0)
+
+    for frame in animation.frames {
+      XCTAssertEqual(frame.lines.count, expectedLineCount)
+      XCTAssertTrue(frame.lines.allSatisfy { $0.count == expectedLineWidth })
+    }
+  }
+
+  func testWorkspaceExtensionEmptyStateAsciiFrameUsesManifestFrameSequence() {
+    XCTAssertEqual(
+      workspaceExtensionEmptyStateAsciiFrame(
+        style: .manifestMissing,
+        step: 0,
+        reduceMotion: false
+      ),
+      WorkspaceExtensionEmptyStateAsciiFrame(
+        lines: ["  .--. ", " /_  / ", "| {} | ", "| ?? | ", "`----' "]
+      )
+    )
+    XCTAssertEqual(
+      workspaceExtensionEmptyStateAsciiFrame(
+        style: .manifestMissing,
+        step: 3,
+        reduceMotion: false
+      ),
+      WorkspaceExtensionEmptyStateAsciiFrame(
+        lines: ["  .--. ", " /_  / ", "| {} | ", "| _  | ", "`----' "]
+      )
+    )
+  }
+
+  func testWorkspaceExtensionEmptyStateAsciiFrameFreezesOnStillFrameForReducedMotion() {
+    XCTAssertEqual(
+      workspaceExtensionEmptyStateAsciiFrame(
+        style: .invalid,
+        step: 99,
+        reduceMotion: true
+      ),
+      WorkspaceExtensionEmptyStateAsciiFrame(
+        lines: ["  .--. ", " /_  / ", "| !! | ", "| xx | ", "`----' "]
+      )
     )
   }
 
@@ -147,8 +412,8 @@ final class WorkspaceExtensionTests: XCTestCase {
       state: "ready",
       errors: [],
       nodes: [
-        stackNode(name: "api", kind: "service"),
-        stackNode(name: "web", kind: "service"),
+        stackNode(name: "api", kind: "process"),
+        stackNode(name: "web", kind: "process"),
         stackNode(name: "seed", kind: "task"),
       ]
     )
@@ -214,8 +479,7 @@ final class WorkspaceExtensionTests: XCTestCase {
       name: name,
       kind: kind,
       dependsOn: [],
-      runtime: kind == "service" ? "process" : nil,
-      status: kind == "service" ? "ready" : nil,
+      status: kind == "task" ? nil : "ready",
       statusReason: nil,
       assignedPort: nil,
       previewURL: nil,

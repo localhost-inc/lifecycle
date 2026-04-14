@@ -12,7 +12,12 @@ pub fn render(frame: &mut Frame, area: Rect, panel: &EnvironmentPanel, _focused:
     if panel.collapsed {
         let header = Paragraph::new(Line::from(vec![
             Span::styled(" ▶ ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Environment", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Environment",
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]));
         frame.render_widget(header, area);
         return;
@@ -20,26 +25,45 @@ pub fn render(frame: &mut Frame, area: Rect, panel: &EnvironmentPanel, _focused:
 
     let sections = Layout::vertical([
         Constraint::Length(2), // tab bar
-        Constraint::Min(0),   // content
+        Constraint::Min(0),    // content
     ])
     .split(area);
 
     // Tab bar — title line + tabs on second line
     let title = Paragraph::new(Line::from(vec![
         Span::styled(" ▼ ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Environment", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Environment",
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
     ]));
-    let title_area = Rect { height: 1, ..sections[0] };
+    let title_area = Rect {
+        height: 1,
+        ..sections[0]
+    };
     frame.render_widget(title, title_area);
 
     let tab_titles: Vec<&str> = EnvTab::ALL.iter().map(|t| t.label()).collect();
-    let selected = EnvTab::ALL.iter().position(|t| *t == panel.active_tab).unwrap_or(0);
+    let selected = EnvTab::ALL
+        .iter()
+        .position(|t| *t == panel.active_tab)
+        .unwrap_or(0);
     let tabs = Tabs::new(tab_titles)
         .select(selected)
         .style(Style::default().fg(Color::DarkGray))
-        .highlight_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .highlight_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .divider("│");
-    let tab_area = Rect { y: sections[0].y + 1, height: 1, ..sections[0] };
+    let tab_area = Rect {
+        y: sections[0].y + 1,
+        height: 1,
+        ..sections[0]
+    };
     frame.render_widget(tabs, tab_area);
 
     // Content
@@ -90,7 +114,10 @@ fn render_services(frame: &mut Frame, area: Rect, panel: &EnvironmentPanel, scro
             ];
 
             if let Some(port) = s.port {
-                spans.push(Span::styled(format!("  :{port}"), Style::default().fg(Color::DarkGray)));
+                spans.push(Span::styled(
+                    format!("  :{port}"),
+                    Style::default().fg(Color::DarkGray),
+                ));
             }
 
             Line::from(spans)
@@ -123,7 +150,10 @@ fn render_logs(frame: &mut Frame, area: Rect, panel: &EnvironmentPanel, scroll: 
                 Style::default().fg(Color::Gray)
             };
             Line::from(vec![
-                Span::styled(format!("{:<8}", l.service), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("{:<8}", l.service),
+                    Style::default().fg(Color::DarkGray),
+                ),
                 Span::styled(&l.text, style),
             ])
         })

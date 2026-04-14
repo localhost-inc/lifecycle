@@ -1,6 +1,6 @@
-mod debug;
 mod app;
 mod bridge;
+mod debug;
 mod events;
 mod panels;
 mod selection;
@@ -295,11 +295,9 @@ fn handle_mouse(app: &mut App, mouse: MouseEvent, total_width: u16) {
         }
     }
 
-    if let Some(events) = translate_canvas_mouse_event(
-        app.canvas_inner_rect(),
-        mouse,
-        app.focus == Focus::Canvas,
-    ) {
+    if let Some(events) =
+        translate_canvas_mouse_event(app.canvas_inner_rect(), mouse, app.focus == Focus::Canvas)
+    {
         app.focus = Focus::Canvas;
         for event in &events {
             app.write_mouse_to_pty(event);
@@ -311,10 +309,7 @@ fn handle_mouse(app: &mut App, mouse: MouseEvent, total_width: u16) {
         MouseEventKind::Down(MouseButton::Left) => {
             // Header button clicks (git, stack)
             let gr = app.git_button_rect;
-            if mouse.row == gr.y
-                && mouse.column >= gr.x
-                && mouse.column < gr.x + gr.width
-            {
+            if mouse.row == gr.y && mouse.column >= gr.x && mouse.column < gr.x + gr.width {
                 if matches!(app.dialog, app::AppDialog::GitCommit(_)) {
                     app.dialog = app::AppDialog::None;
                 } else {
@@ -323,10 +318,7 @@ fn handle_mouse(app: &mut App, mouse: MouseEvent, total_width: u16) {
                 return;
             }
             let sr = app.stack_button_rect;
-            if mouse.row == sr.y
-                && mouse.column >= sr.x
-                && mouse.column < sr.x + sr.width
-            {
+            if mouse.row == sr.y && mouse.column >= sr.x && mouse.column < sr.x + sr.width {
                 app.toggle_stack();
                 return;
             }

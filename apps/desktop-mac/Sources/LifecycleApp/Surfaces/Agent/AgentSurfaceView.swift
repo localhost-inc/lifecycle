@@ -357,11 +357,11 @@ private struct AgentUnavailableStateView: View {
   var body: some View {
     VStack(spacing: 12) {
       Text("Agent unavailable")
-        .font(.system(size: 16, weight: .semibold))
+        .font(.lc(size: 16, weight: .semibold))
         .foregroundStyle(theme.primaryTextColor)
 
       Text("The bridge has not loaded transcript data for this agent yet.")
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .font(.lc(size: 11, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.mutedColor)
         .multilineTextAlignment(.center)
     }

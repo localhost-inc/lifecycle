@@ -6,10 +6,11 @@ const VALID_MANIFEST = JSON.stringify({
     prepare: [{ name: "install", command: "bun install", timeout_seconds: 120 }],
   },
   stack: {
-    api: {
-      kind: "service",
-      runtime: "process",
-      command: "bun run dev",
+    nodes: {
+      api: {
+        kind: "process",
+        command: "bun run dev",
+      },
     },
   },
 });

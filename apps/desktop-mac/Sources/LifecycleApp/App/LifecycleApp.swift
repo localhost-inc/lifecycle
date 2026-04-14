@@ -19,6 +19,7 @@ final class LifecycleAppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     _ = notification
+    _ = AppResources.registerBundledFonts()
     AppLog.notice(.app, "LifecycleApp finished launching")
     NSApp.setActivationPolicy(.regular)
     NSApp.activate(ignoringOtherApps: true)

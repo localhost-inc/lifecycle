@@ -3,6 +3,13 @@ import XCTest
 @testable import LifecycleApp
 
 final class TerminalSurfaceViewTests: XCTestCase {
+  func testTerminalSurfacePresentationFontSizeTracksScale() {
+    XCTAssertEqual(terminalSurfacePresentationFontSize(for: 0.45), 6, accuracy: 0.001)
+    XCTAssertEqual(terminalSurfacePresentationFontSize(for: 1), 13, accuracy: 0.001)
+    XCTAssertEqual(terminalSurfacePresentationFontSize(for: 1.6), 20.8, accuracy: 0.001)
+    XCTAssertEqual(terminalSurfacePresentationFontSize(for: 3), 24, accuracy: 0.001)
+  }
+
   func testTerminalSurfaceConfigurationBuildsHostConfiguration() {
     let configuration = TerminalSurfaceConfiguration(
       workingDirectory: "/tmp/workspace",

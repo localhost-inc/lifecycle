@@ -9,8 +9,10 @@ struct StackExtensionDefinition: WorkspaceExtensionDefinition {
       switch summary.state {
       case "ready":
         subtitle = "\(summary.nodes.count) nodes"
-      case "missing":
+      case "unconfigured":
         subtitle = "unconfigured"
+      case "missing":
+        subtitle = "missing"
       case "invalid":
         subtitle = "invalid"
       default:

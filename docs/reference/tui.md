@@ -16,7 +16,7 @@ Rules:
 2. The TUI does not shell out to fresh `lifecycle` subprocesses for core workspace operations when the bridge is available.
 3. The bridge is the source of runtime truth.
 4. The TUI does not resolve workspace host placement or pick host adapters on its own.
-5. If the pinned bridge endpoint dies or the bridge registration in `~/.lifecycle/bridge.json` changes, the TUI must rediscover the current bridge endpoint and retry bridge reads and mutations instead of staying pinned to a dead URL.
+5. If the pinned bridge endpoint dies, the TUI must retry the fixed local bridge endpoint (or explicit override), restart the bridge when needed, and use `~/.lifecycle/bridge.json` only for pid diagnostics instead of endpoint discovery.
 6. When bridge-side runtime state changes, the bridge streams lifecycle events over WebSocket and the TUI updates UI state from those events.
 7. The TUI owns only presentation state such as selection, focus, layout, scrolling, and dialogs.
 

@@ -104,9 +104,9 @@ describe("readWorkspaceLogs", () => {
 
     await upsertStackRuntimeService(workspace.id, {
       assigned_port: 3000,
+      kind: "process",
       name: "web",
       pid: process.pid,
-      runtime: "process",
       status: "ready",
       status_reason: null,
       created_at: now,
@@ -129,10 +129,11 @@ describe("readWorkspaceLogs", () => {
       JSON.stringify({
         workspace: { prepare: [] },
         stack: {
-          web: {
-            kind: "service",
-            runtime: "process",
-            command: "bun run dev",
+          nodes: {
+            web: {
+              kind: "process",
+              command: "bun run dev",
+            },
           },
         },
       }),

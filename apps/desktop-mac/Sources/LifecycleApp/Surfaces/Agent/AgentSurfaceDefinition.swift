@@ -29,8 +29,7 @@ struct AgentSurfaceDefinition: SurfaceDefinition {
     }
 
     let tab = SurfaceTabPresentation(
-      title: agent.map(resolvedAgentTitle) ?? record.title,
-      subtitle: agent?.status ?? binding.agentID,
+      label: agent.map(resolvedAgentTitle) ?? record.title,
       icon: "sparkles"
     )
 

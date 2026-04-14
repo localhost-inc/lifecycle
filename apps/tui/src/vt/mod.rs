@@ -1,5 +1,5 @@
-use ratatui::style::Color;
 use crossterm::event::KeyEvent;
+use ratatui::style::Color;
 
 #[cfg(feature = "vt-ghostty")]
 pub mod ghostty;

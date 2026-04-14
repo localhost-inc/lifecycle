@@ -48,7 +48,7 @@ private struct AgentContentGroupView: View {
     if showsBullet {
       HStack(alignment: .top, spacing: 8) {
         Text("•")
-          .font(.system(size: 18, weight: .medium, design: .monospaced))
+          .font(.lc(size: 18, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.mutedColor.opacity(0.6))
           .padding(.top, -1)
 
@@ -91,10 +91,10 @@ private struct AgentToolGroupView: View {
         } label: {
           HStack(spacing: 6) {
             Image(systemName: "chevron.right")
-              .font(.system(size: 10, weight: .semibold))
+              .font(.lc(size: 10, weight: .semibold))
               .rotationEffect(.degrees(isExpanded ? 90 : 0))
             Text(verbatim: summaryText(summary))
-              .font(.system(size: 12, weight: .medium, design: .monospaced))
+              .font(.lc(size: 12, weight: .medium, design: .monospaced))
           }
           .foregroundStyle(theme.mutedColor)
         }
@@ -189,7 +189,7 @@ private struct AgentTextPartView: View {
   var body: some View {
     if !text.isEmpty {
       Text(verbatim: text)
-        .font(.system(size: 13, weight: .medium, design: .monospaced))
+        .font(.lc(size: 13, weight: .medium, design: .monospaced))
         .lineSpacing(5)
         .foregroundStyle(theme.primaryTextColor)
         .textSelection(.enabled)
@@ -215,10 +215,10 @@ private struct AgentThinkingPartView: View {
         } label: {
           HStack(spacing: 6) {
             Image(systemName: "chevron.right")
-              .font(.system(size: 10, weight: .semibold))
+              .font(.lc(size: 10, weight: .semibold))
               .rotationEffect(.degrees(isExpanded ? 90 : 0))
             Text(verbatim: label(for: context.date))
-              .font(.system(size: 12, weight: .medium, design: .monospaced))
+              .font(.lc(size: 12, weight: .medium, design: .monospaced))
           }
           .foregroundStyle(theme.mutedColor)
         }
@@ -227,7 +227,7 @@ private struct AgentThinkingPartView: View {
 
         if isExpanded {
           Text(verbatim: text)
-            .font(.system(size: 12, weight: .medium, design: .monospaced))
+            .font(.lc(size: 12, weight: .medium, design: .monospaced))
             .foregroundStyle(theme.mutedColor)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
@@ -263,7 +263,7 @@ private struct AgentStatusPartView: View {
 
   var body: some View {
     Text(verbatim: text)
-      .font(.system(size: 11, weight: .medium, design: .monospaced))
+      .font(.lc(size: 11, weight: .medium, design: .monospaced))
       .foregroundStyle(theme.mutedColor)
       .textSelection(.enabled)
   }
@@ -301,7 +301,7 @@ private struct AgentToolCallPartView: View {
             isExpanded.toggle()
           } label: {
             Image(systemName: "chevron.right")
-              .font(.system(size: 10, weight: .semibold))
+              .font(.lc(size: 10, weight: .semibold))
               .rotationEffect(.degrees(isExpanded ? 90 : 0))
               .foregroundStyle(theme.mutedColor)
           }
@@ -332,7 +332,7 @@ private struct AgentToolCallPartView: View {
           Text("└")
           Text(verbatim: summary)
         }
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .font(.lc(size: 11, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.mutedColor.opacity(0.65))
         .padding(.leading, 18)
       }
@@ -343,7 +343,7 @@ private struct AgentToolCallPartView: View {
 
       if isExpanded, let prompt = display.agentPrompt, !prompt.isEmpty {
         Text(verbatim: prompt)
-          .font(.system(size: 12, weight: .medium, design: .monospaced))
+          .font(.lc(size: 12, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.mutedColor)
           .textSelection(.enabled)
           .fixedSize(horizontal: false, vertical: true)
@@ -364,7 +364,7 @@ private struct AgentToolCallPartView: View {
               Text("exit \(exitCode)")
             }
           }
-          .font(.system(size: 11, weight: .medium, design: .monospaced))
+          .font(.lc(size: 11, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.mutedColor)
           .padding(.horizontal, 12)
           .padding(.vertical, 6)
@@ -390,18 +390,18 @@ private struct AgentToolCallPartView: View {
   private func toolLabel(display: AgentToolCallDisplayModel) -> some View {
     HStack(spacing: 0) {
       Text(verbatim: display.verb)
-        .font(.system(size: 12, weight: .medium, design: .monospaced))
+        .font(.lc(size: 12, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.primaryTextColor)
 
       if let subject = display.subject, !subject.isEmpty {
         Text(verbatim: "(")
-          .font(.system(size: 12, weight: .medium, design: .monospaced))
+          .font(.lc(size: 12, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.mutedColor.opacity(0.6))
         Text(verbatim: subject)
-          .font(.system(size: 12, weight: .medium, design: .monospaced))
+          .font(.lc(size: 12, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.mutedColor)
         Text(verbatim: ")")
-          .font(.system(size: 12, weight: .medium, design: .monospaced))
+          .font(.lc(size: 12, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.mutedColor.opacity(0.6))
       }
     }
@@ -424,19 +424,19 @@ private struct AgentApprovalPartView: View {
     VStack(alignment: .leading, spacing: 10) {
       if let message = part.message, !message.isEmpty {
         Text(verbatim: message)
-          .font(.system(size: 12, weight: .medium, design: .monospaced))
+          .font(.lc(size: 12, weight: .medium, design: .monospaced))
           .foregroundStyle(theme.primaryTextColor)
           .fixedSize(horizontal: false, vertical: true)
       }
 
       HStack(spacing: 8) {
         Text(verbatim: part.status ?? "pending")
-          .font(.system(size: 11, weight: .medium, design: .monospaced))
+          .font(.lc(size: 11, weight: .medium, design: .monospaced))
           .foregroundStyle(isPending ? theme.warningColor : theme.successColor)
 
         if let decision = part.decision, !decision.isEmpty {
           Text(verbatim: "decision: \(decision)")
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .font(.lc(size: 11, weight: .medium, design: .monospaced))
             .foregroundStyle(theme.mutedColor)
         }
       }
@@ -450,7 +450,7 @@ private struct AgentApprovalPartView: View {
               }
             } label: {
               Text(shortApprovalLabel(decision))
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .font(.lc(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(decision == .reject ? theme.errorColor : theme.primaryTextColor)
             }
             .buttonStyle(.plain)
@@ -490,10 +490,10 @@ private struct AgentInlineMetaPartView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
       Text(verbatim: title.uppercased())
-        .font(.system(size: 10, weight: .medium, design: .monospaced))
+        .font(.lc(size: 10, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.mutedColor.opacity(0.78))
       Text(verbatim: text)
-        .font(.system(size: 12, weight: .medium, design: .monospaced))
+        .font(.lc(size: 12, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.mutedColor)
         .textSelection(.enabled)
         .fixedSize(horizontal: false, vertical: true)
@@ -537,7 +537,7 @@ private struct AgentOutputBlock: View {
   var body: some View {
     ScrollView(.horizontal, showsIndicators: false) {
       Text(verbatim: text)
-        .font(.system(size: 12, weight: .medium, design: .monospaced))
+        .font(.lc(size: 12, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.primaryTextColor)
         .textSelection(.enabled)
         .fixedSize()

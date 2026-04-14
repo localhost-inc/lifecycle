@@ -156,6 +156,10 @@ private func defaultCanvasSpatialLayout(groupIDs: [String]) -> CanvasSpatialLayo
   )
 }
 
+public let minimumCanvasSpatialGroupWidth: Double = 420
+public let minimumCanvasSpatialGroupHeight: Double = 300
+private let canvasSpatialAdjacentGroupOffset: Double = 40
+
 private func defaultCanvasSpatialFrame(index: Int, zIndex: Double) -> CanvasSpatialFrame {
   let offset = Double(index) * 48
   return CanvasSpatialFrame(
@@ -164,6 +168,87 @@ private func defaultCanvasSpatialFrame(index: Int, zIndex: Double) -> CanvasSpat
     width: 960,
     height: 640,
     zIndex: zIndex
+  )
+}
+
+public func canvasSpatialLayoutUpdatingFrame(
+  _ layout: CanvasSpatialLayout,
+  groupID: String,
+  frame: CanvasSpatialFrame
+) -> CanvasSpatialLayout {
+  var framesByGroupID = layout.framesByGroupID
+  framesByGroupID[groupID] = CanvasSpatialFrame(
+    x: frame.x,
+    y: frame.y,
+    width: max(frame.width, minimumCanvasSpatialGroupWidth),
+    height: max(frame.height, minimumCanvasSpatialGroupHeight),
+    zIndex: frame.zIndex
+  )
+  return CanvasSpatialLayout(framesByGroupID: framesByGroupID)
+}
+
+public func canvasSpatialLayoutBringingGroupToFront(
+  _ layout: CanvasSpatialLayout,
+  groupID: String
+) -> CanvasSpatialLayout {
+  guard let frame = layout.framesByGroupID[groupID] else {
+    return layout
+  }
+
+  let nextZIndex = (layout.framesByGroupID.values.map(\.zIndex).max() ?? frame.zIndex) + 1
+  return canvasSpatialLayoutUpdatingFrame(
+    layout,
+    groupID: groupID,
+    frame: CanvasSpatialFrame(
+      x: frame.x,
+      y: frame.y,
+      width: frame.width,
+      height: frame.height,
+      zIndex: nextZIndex
+    )
+  )
+}
+
+public func canvasSpatialLayoutPlacingGroup(
+  _ layout: CanvasSpatialLayout,
+  groupID: String,
+  adjacentTo anchorGroupID: String,
+  direction: CanvasTiledLayoutSplit.Direction,
+  placeBefore: Bool
+) -> CanvasSpatialLayout {
+  guard let anchorFrame = layout.framesByGroupID[anchorGroupID] else {
+    return canvasSpatialLayoutBringingGroupToFront(layout, groupID: groupID)
+  }
+
+  let nextZIndex = (layout.framesByGroupID.values.map(\.zIndex).max() ?? anchorFrame.zIndex) + 1
+  let width = max(anchorFrame.width * 0.88, minimumCanvasSpatialGroupWidth)
+  let height = max(anchorFrame.height * 0.88, minimumCanvasSpatialGroupHeight)
+  let x: Double
+  let y: Double
+
+  switch direction {
+  case .row:
+    x = placeBefore
+      ? anchorFrame.x - width - canvasSpatialAdjacentGroupOffset
+      : anchorFrame.x + anchorFrame.width + canvasSpatialAdjacentGroupOffset
+    y = anchorFrame.y + max((anchorFrame.height - height) * 0.18, 0)
+  case .column:
+    x = anchorFrame.x + max((anchorFrame.width - width) * 0.18, 0)
+    y = placeBefore
+      ? anchorFrame.y - height - canvasSpatialAdjacentGroupOffset
+      : anchorFrame.y + anchorFrame.height + canvasSpatialAdjacentGroupOffset
+  }
+
+  return canvasSpatialLayoutUpdatingFrame(
+    layout,
+    groupID: groupID,
+    frame: CanvasSpatialFrame(
+      x: x,
+      y: y,
+      width: width,
+      height: height,
+      zIndex: nextZIndex
+    )
   )
 }
 
@@ -749,6 +834,13 @@ public func moveSurfaceToEdge(
   let splitID = createCanvasSplitID(for: workspaceID)
   let first: CanvasTiledLayoutNode = newGroupFirst ? .group(newGroupID) : .group(targetGroupID)
   let second: CanvasTiledLayoutNode = newGroupFirst ? .group(targetGroupID) : .group(newGroupID)
+  let nextSpatialLayout = canvasSpatialLayoutPlacingGroup(
+    document.spatialLayout,
+    groupID: newGroupID,
+    adjacentTo: targetGroupID,
+    direction: direction,
+    placeBefore: newGroupFirst
+  )
 
   let replacement = CanvasTiledLayoutNode.split(
     CanvasTiledLayoutSplit(
@@ -770,7 +862,7 @@ public func moveSurfaceToEdge(
       targetGroupID: targetGroupID,
       replacement: replacement
     ),
-    spatialLayout: document.spatialLayout
+    spatialLayout: nextSpatialLayout
   )
 }
 
@@ -812,6 +904,9 @@ private func moveSurfaceToGroup(
     surfacesByID: document.surfacesByID,
     activeLayoutMode: document.activeLayoutMode,
     tiledLayout: document.tiledLayout,
-    spatialLayout: document.spatialLayout
+    spatialLayout: canvasSpatialLayoutBringingGroupToFront(
+      document.spatialLayout,
+      groupID: targetGroupID
+    )
   )
 }

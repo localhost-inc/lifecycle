@@ -2,10 +2,10 @@ import SwiftUI
 import LifecyclePresentation
 
 struct WorkspaceCanvasView: View {
-  @Environment(\.appTheme) private var theme
   @ObservedObject var model: AppModel
   let workspaceID: String
   let canvasState: CanvasState
+  let isActiveWorkspace: Bool
 
   var body: some View {
     Group {
@@ -19,9 +19,12 @@ struct WorkspaceCanvasView: View {
           activeGroupID: canvasState.activeGroupID
         )
       case .spatial:
-        Text("Spatial canvas mode is not implemented yet")
-          .foregroundStyle(theme.mutedColor)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
+        WorkspaceSpatialCanvasView(
+          model: model,
+          workspaceID: workspaceID,
+          canvasState: canvasState,
+          isActiveWorkspace: isActiveWorkspace
+        )
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

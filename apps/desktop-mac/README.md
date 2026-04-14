@@ -105,13 +105,14 @@ Ghostty bootstrap:
 Bridge behavior:
 
 1. If `LIFECYCLE_BRIDGE_URL` is set, the app uses it.
-2. Otherwise it reads the bridge registration path resolved from `LIFECYCLE_BRIDGE_REGISTRATION`, then `LIFECYCLE_RUNTIME_ROOT`, then `~/.lifecycle/bridge.json`.
-3. If no healthy bridge is available, it attempts `lifecycle bridge start` from `PATH`.
-4. Set `LIFECYCLE_BRIDGE_START_COMMAND` to override that startup command for nonstandard environments.
-5. After startup, the app keeps monitoring bridge discovery and automatically reconnects when the bridge registration URL or PID changes, which lets it survive TUI-driven bridge restarts.
-6. In repo development mode, `LIFECYCLE_BRIDGE_URL=http://127.0.0.1:52222` means the app treats the bridge as externally owned and waits/reconnects instead of trying to supervise it itself.
-7. The bridge publishes `GET /openapi.json`, and the Swift package builds its generated client from `Sources/LifecycleApp/openapi.json`.
-8. `Sources/LifecycleApp/openapi.json` is a symlink to the canonical bridge artifact at `apps/cli/src/bridge/openapi.json`, so the bridge route and the Swift generator read the same document.
+2. Otherwise it targets the fixed local bridge URL from `LIFECYCLE_BRIDGE_PORT`, defaulting to `http://127.0.0.1:52300`.
+3. The bridge registration path resolved from `LIFECYCLE_BRIDGE_REGISTRATION`, then `LIFECYCLE_RUNTIME_ROOT`, then `~/.lifecycle/bridge.json` is used only for pid and diagnostics.
+4. If no healthy bridge is available, it attempts `lifecycle bridge start` from `PATH`.
+5. Set `LIFECYCLE_BRIDGE_START_COMMAND` to override that startup command for nonstandard environments.
+6. After startup, the app keeps monitoring bridge health and pid changes so it can reconnect across bridge restarts on the fixed port.
+7. In repo development mode, `LIFECYCLE_BRIDGE_URL=http://127.0.0.1:52300` means the app treats the bridge as externally owned and waits/reconnects instead of trying to supervise it itself.
+8. The bridge publishes `GET /openapi.json`, and the Swift package builds its generated client from `Sources/LifecycleApp/openapi.json`.
+9. `Sources/LifecycleApp/openapi.json` is a symlink to the canonical bridge artifact at `apps/cli/src/bridge/openapi.json`, so the bridge route and the Swift generator read the same document.
 
 Debugging:
 
@@ -124,6 +125,7 @@ Debugging:
 7. The monorepo dev supervisor writes stable state and logs under the per-repo runtime root returned by `scripts/dev-runtime-root` (with supervisor state in `<runtime-root>/dev`), so `./scripts/dev status` and `./scripts/dev logs <service>` always point at the live runtime.
 8. When bridge route contracts change, regenerate `apps/cli/src/bridge/routed.gen.ts` from `apps/cli` with `bunx routedjs generate` and keep `apps/cli/src/bridge/openapi.json` in sync before building directly in Xcode outside the repo scripts.
 9. Do not create a second copy of `openapi.json` under the app target. The app target should keep pointing at the bridge artifact via symlink so SwiftPM sees exactly one source of truth.
+10. The desktop hot-reload loop coalesces rapid file edits. A newer reload request cancels the in-flight `swift build` runner and restarts from the latest tree instead of draining every queued build.
 
 Diagnostics:
 

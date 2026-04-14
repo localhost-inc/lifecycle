@@ -2020,20 +2020,24 @@
         "enum": [
           "ready",
           "missing",
-          "invalid"
+          "invalid",
+          "unconfigured"
         ]
       },
       "WorkspaceStackNode": {
         "oneOf": [
           {
-            "$ref": "#/components/schemas/WorkspaceStackServiceNode"
+            "$ref": "#/components/schemas/WorkspaceStackProcessNode"
+          },
+          {
+            "$ref": "#/components/schemas/WorkspaceStackImageNode"
           },
           {
             "$ref": "#/components/schemas/WorkspaceStackTaskNode"
           }
         ]
       },
-      "WorkspaceStackServiceNode": {
+      "WorkspaceStackProcessNode": {
         "type": "object",
         "properties": {
           "workspace_id": {
@@ -2051,11 +2055,8 @@
           "kind": {
             "type": "string",
             "enum": [
-              "service"
+              "process"
             ]
-          },
-          "runtime": {
-            "$ref": "#/components/schemas/WorkspaceStackServiceRuntime"
           },
           "status": {
             "$ref": "#/components/schemas/ServiceStatus"
@@ -2090,7 +2091,6 @@
           "name",
           "depends_on",
           "kind",
-          "runtime",
           "status",
           "status_reason",
           "assigned_port",
@@ -2099,13 +2099,6 @@
           "updated_at"
         ],
         "additionalProperties": false
-      },
-      "WorkspaceStackServiceRuntime": {
-        "type": "string",
-        "enum": [
-          "process",
-          "image"
-        ]
       },
       "ServiceStatus": {
         "type": "string",
@@ -2125,6 +2118,69 @@
           "service_port_unreachable",
           "unknown"
         ]
+      },
+      "WorkspaceStackImageNode": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "depends_on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "image"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ServiceStatus"
+          },
+          "status_reason": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ServiceStatusReason"
+              }
+            ]
+          },
+          "assigned_port": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "preview_url": {
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "name",
+          "depends_on",
+          "kind",
+          "status",
+          "status_reason",
+          "assigned_port",
+          "preview_url",
+          "created_at",
+          "updated_at"
+        ],
+        "additionalProperties": false
       },
       "WorkspaceStackTaskNode": {
         "type": "object",

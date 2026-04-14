@@ -4,10 +4,12 @@ use crossterm::event::{
 };
 use ratatui::style::Color;
 
-use libghostty_vt::key::{Action as KeyAction, Encoder as KeyEncoder, Event as KeyEvent, Key, Mods};
+use libghostty_vt::key::{
+    Action as KeyAction, Encoder as KeyEncoder, Event as KeyEvent, Key, Mods,
+};
 use libghostty_vt::mouse::{
-    self, Action as MouseAction, Button as MouseButton, Encoder as MouseEncoder,
-    EncoderSize, Event as MouseEvent,
+    self, Action as MouseAction, Button as MouseButton, Encoder as MouseEncoder, EncoderSize,
+    Event as MouseEvent,
 };
 use libghostty_vt::render::{CellIterator, Dirty, RenderState, RowIterator};
 use libghostty_vt::{Terminal, TerminalOptions};
@@ -249,7 +251,9 @@ impl VtBackend for GhosttyBackend {
         ) && is_tracking;
 
         if !should_emit {
-            crate::debug::log(format!("ghostty encode_mouse skipped tracking={is_tracking}"));
+            crate::debug::log(format!(
+                "ghostty encode_mouse skipped tracking={is_tracking}"
+            ));
             return Vec::new();
         }
 
@@ -265,8 +269,14 @@ impl VtBackend for GhosttyBackend {
         }
 
         let any_button_pressed = match (event.action, event.button) {
-            (VtMouseAction::Press, Some(VtMouseButton::Left | VtMouseButton::Right | VtMouseButton::Middle)) => true,
-            (VtMouseAction::Release, Some(VtMouseButton::Left | VtMouseButton::Right | VtMouseButton::Middle)) => false,
+            (
+                VtMouseAction::Press,
+                Some(VtMouseButton::Left | VtMouseButton::Right | VtMouseButton::Middle),
+            ) => true,
+            (
+                VtMouseAction::Release,
+                Some(VtMouseButton::Left | VtMouseButton::Right | VtMouseButton::Middle),
+            ) => false,
             _ => self.mouse_button_down,
         };
 
@@ -384,9 +394,7 @@ fn map_crossterm_key_event(key: CrosstermKeyEvent) -> Option<MappedKeyEvent> {
         CrosstermKeyCode::F(n) => (map_function_key(n)?, '\0'),
         CrosstermKeyCode::Char(c) => {
             let (mapped_key, unshifted) = map_char_key(c)?;
-            if !matches!(action, KeyAction::Release)
-                && !mods.intersects(Mods::CTRL | Mods::SUPER)
-            {
+            if !matches!(action, KeyAction::Release) && !mods.intersects(Mods::CTRL | Mods::SUPER) {
                 utf8 = Some(c.to_string());
                 if mods.contains(Mods::SHIFT) {
                     consumed_mods |= Mods::SHIFT;
@@ -488,7 +496,10 @@ fn map_modifier_key(key: ModifierKeyCode) -> Option<Key> {
 fn map_char_key(c: char) -> Option<(Key, char)> {
     Some(match c {
         'a'..='z' => (map_alpha_key(c)?, c),
-        'A'..='Z' => (map_alpha_key(c.to_ascii_lowercase())?, c.to_ascii_lowercase()),
+        'A'..='Z' => (
+            map_alpha_key(c.to_ascii_lowercase())?,
+            c.to_ascii_lowercase(),
+        ),
         '0'..='9' => (map_digit_key(c)?, c),
         ' ' => (Key::Space, ' '),
         '-' | '_' => (Key::Minus, '-'),

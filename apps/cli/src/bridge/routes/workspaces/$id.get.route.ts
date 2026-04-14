@@ -16,8 +16,7 @@ const WorkspaceStackNodeSchema = z
         workspace_id: z.string(),
         name: z.string(),
         depends_on: z.array(z.string()),
-        kind: z.literal("service"),
-        runtime: z.enum(["process", "image"]).meta({ id: "WorkspaceStackServiceRuntime" }),
+        kind: z.literal("process"),
         status: ServiceStatusSchema,
         status_reason: ServiceStatusReasonSchema.nullable(),
         assigned_port: z.number().int().nullable(),
@@ -25,7 +24,21 @@ const WorkspaceStackNodeSchema = z
         created_at: z.string(),
         updated_at: z.string(),
       })
-      .meta({ id: "WorkspaceStackServiceNode" }),
+      .meta({ id: "WorkspaceStackProcessNode" }),
+    z
+      .object({
+        workspace_id: z.string(),
+        name: z.string(),
+        depends_on: z.array(z.string()),
+        kind: z.literal("image"),
+        status: ServiceStatusSchema,
+        status_reason: ServiceStatusReasonSchema.nullable(),
+        assigned_port: z.number().int().nullable(),
+        preview_url: z.string().nullable(),
+        created_at: z.string(),
+        updated_at: z.string(),
+      })
+      .meta({ id: "WorkspaceStackImageNode" }),
     z
       .object({
         workspace_id: z.string(),
@@ -43,7 +56,9 @@ const WorkspaceStackNodeSchema = z
 const WorkspaceStackSummarySchema = z
   .object({
     workspace_id: z.string(),
-    state: z.enum(["ready", "missing", "invalid"]).meta({ id: "WorkspaceStackState" }),
+    state: z.enum(["ready", "missing", "invalid", "unconfigured"]).meta({
+      id: "WorkspaceStackState",
+    }),
     errors: z.array(z.string()),
     nodes: z.array(WorkspaceStackNodeSchema),
   })

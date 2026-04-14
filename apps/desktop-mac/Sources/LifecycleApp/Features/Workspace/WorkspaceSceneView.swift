@@ -36,10 +36,10 @@ struct WorkspaceSceneView: View {
       } else {
         VStack(spacing: 16) {
           Text("Select a workspace")
-            .font(.system(size: 24, weight: .semibold))
+            .font(.lc(size: 24, weight: .semibold))
             .foregroundStyle(theme.primaryTextColor)
           Text("Choose a workspace from the sidebar to get started.")
-            .font(.system(size: 13, weight: .medium))
+            .font(.lc(size: 13, weight: .medium))
             .foregroundStyle(theme.mutedColor)
             .multilineTextAlignment(.center)
         }
@@ -56,8 +56,6 @@ private struct WorkspaceContentCardView: View {
   let workspace: BridgeWorkspaceSummary
   @State private var dragStartSidebarWidth: CGFloat?
   @State private var liveSidebarWidth: CGFloat?
-  @State private var isHoveringSidebarDivider = false
-  @State private var isDraggingSidebarDivider = false
 
   var body: some View {
     GeometryReader { geometry in
@@ -69,32 +67,28 @@ private struct WorkspaceContentCardView: View {
         liveSidebarWidth ?? persistedSidebarWidth,
         availableWidth: geometry.size.width
       )
-      let dividerOffset = workspaceExtensionDividerOffset(
-        totalWidth: geometry.size.width,
-        sidebarWidth: sidebarWidth
-      )
 
-      VStack(spacing: 0) {
-        HStack(spacing: 0) {
-          WorkspaceCanvasContainerView(model: model, workspace: workspace)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+      HStack(spacing: 0) {
+        WorkspaceCanvasContainerView(model: model, workspace: workspace)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-          WorkspaceExtensionSidebarView(model: model, workspace: workspace)
-            .frame(width: sidebarWidth)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .leading) {
-          workspaceExtensionDivider(
-            availableWidth: geometry.size.width,
-            sidebarWidth: sidebarWidth
-          )
-          .offset(x: dividerOffset)
-        }
+        WorkspaceExtensionSidebarView(model: model, workspace: workspace)
+          .frame(width: sidebarWidth)
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .overlay(alignment: .leading) {
+        workspaceExtensionDivider(
+          availableWidth: geometry.size.width,
+          sidebarWidth: sidebarWidth
+        )
+        .offset(x: workspaceExtensionDividerOffset(
+          totalWidth: geometry.size.width,
+          sidebarWidth: sidebarWidth
+        ))
       }
       .onChange(of: workspace.id) { _ in
         liveSidebarWidth = nil
         dragStartSidebarWidth = nil
-        isDraggingSidebarDivider = false
       }
     }
     .background(theme.surfaceBackground)
@@ -114,49 +108,39 @@ private struct WorkspaceContentCardView: View {
       Color.clear
 
       Rectangle()
-        .fill(
-          (isDraggingSidebarDivider || isHoveringSidebarDivider) ? theme.accentColor : theme.borderColor
-        )
+        .fill(theme.borderColor)
         .frame(width: 1)
     }
-    .frame(width: workspaceExtensionSidebarDividerThickness)
-    .contentShape(Rectangle())
-    .lcResizeCursor(horizontal: true)
-    .onHover { hovering in
-      isHoveringSidebarDivider = hovering
-    }
-    .gesture(
-      DragGesture(minimumDistance: 0)
-        .onChanged { value in
-          if dragStartSidebarWidth == nil {
-            dragStartSidebarWidth = sidebarWidth
-          }
+      .frame(width: workspaceExtensionSidebarDividerHitThickness)
+      .contentShape(Rectangle())
+      .lcResizeCursor(horizontal: true)
+      .gesture(
+        DragGesture(minimumDistance: 0)
+          .onChanged { value in
+            if dragStartSidebarWidth == nil {
+              dragStartSidebarWidth = sidebarWidth
+            }
 
-          isDraggingSidebarDivider = true
-
-          liveSidebarWidth = clampedWorkspaceExtensionSidebarWidth(
-            max((dragStartSidebarWidth ?? sidebarWidth) - value.translation.width, 0),
-            availableWidth: availableWidth
-          )
-        }
-        .onEnded { _ in
-          if let liveSidebarWidth {
-            model.setExtensionSidebarWidth(
-              liveSidebarWidth,
-              workspaceID: workspace.id,
+            liveSidebarWidth = clampedWorkspaceExtensionSidebarWidth(
+              max((dragStartSidebarWidth ?? sidebarWidth) - value.translation.width, 0),
               availableWidth: availableWidth
             )
           }
-          dragStartSidebarWidth = nil
-          liveSidebarWidth = nil
-          isDraggingSidebarDivider = false
-        }
-    )
+          .onEnded { _ in
+            if let liveSidebarWidth {
+              model.setExtensionSidebarWidth(
+                liveSidebarWidth,
+                workspaceID: workspace.id,
+                availableWidth: availableWidth
+              )
+            }
+            dragStartSidebarWidth = nil
+            liveSidebarWidth = nil
+          }
+      )
   }
 
   private func workspaceExtensionDividerOffset(totalWidth: CGFloat, sidebarWidth: CGFloat) -> CGFloat {
-    let seamX = totalWidth - sidebarWidth
-    let offset = seamX - (workspaceExtensionSidebarDividerThickness / 2)
-    return min(max(offset, 0), max(totalWidth - workspaceExtensionSidebarDividerThickness, 0))
+    max(totalWidth - sidebarWidth - (workspaceExtensionSidebarDividerHitThickness / 2), 0)
   }
 }

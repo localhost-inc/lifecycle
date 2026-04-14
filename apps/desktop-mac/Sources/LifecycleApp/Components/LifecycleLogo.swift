@@ -16,9 +16,9 @@ enum LifecycleLogoSize {
   var fallbackFont: Font {
     switch self {
     case .small:
-      .system(size: 11, weight: .semibold, design: .monospaced)
+      .lc(size: 11, weight: .semibold, design: .monospaced)
     case .medium:
-      .system(size: 12, weight: .semibold, design: .monospaced)
+      .lc(size: 12, weight: .semibold, design: .monospaced)
     }
   }
 }
@@ -28,6 +28,7 @@ struct LifecycleLogo: View {
 
   var size: LifecycleLogoSize = .medium
   var foregroundOpacity: Double = 0.72
+  var foregroundColor: Color? = nil
 
   var body: some View {
     Group {
@@ -49,6 +50,10 @@ struct LifecycleLogo: View {
       height: size.dimensions.height,
       alignment: .leading
     )
-    .foregroundStyle(theme.sidebarMutedForegroundColor.opacity(foregroundOpacity))
+    .foregroundStyle(resolvedForegroundColor)
+  }
+
+  private var resolvedForegroundColor: Color {
+    foregroundColor ?? theme.sidebarMutedForegroundColor.opacity(foregroundOpacity)
   }
 }

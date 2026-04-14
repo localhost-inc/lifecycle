@@ -21,8 +21,7 @@ struct SurfaceResolutionContext {
 // MARK: - Surface Tab Presentation
 
 struct SurfaceTabPresentation {
-  let title: String
-  let subtitle: String?
+  let label: String
   let icon: String
 }
 
@@ -37,6 +36,7 @@ struct ResolvedSurface {
 struct SurfaceRenderState: Equatable {
   let isFocused: Bool
   let isVisible: Bool
+  let presentationScale: CGFloat
 }
 
 // MARK: - AnySurfaceContent

@@ -237,7 +237,7 @@ apps/cli/
       errors.ts              # typed CLI-facing errors
     clients/
       bridge/
-        ensure.ts            # registration, startup, health
+        ensure.ts            # fixed-port startup and health
         client.ts            # typed HTTP client construction
         resolve.ts           # workspace/terminal scope resolution
       control-plane/

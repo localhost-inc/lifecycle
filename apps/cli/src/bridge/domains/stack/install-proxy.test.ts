@@ -62,10 +62,10 @@ describe("proxy install helpers", () => {
     const launchDaemonPath = join(dir, "launchd.plist");
     const statePath = join(dir, "install.json");
 
-    await writeFile(pfConfPath, "scrub-anchor \"com.apple/*\"\n", "utf8");
+    await writeFile(pfConfPath, 'scrub-anchor "com.apple/*"\n', "utf8");
 
     const environment = {
-      LIFECYCLE_PREVIEW_PROXY_PORT: "52444",
+      LIFECYCLE_BRIDGE_PORT: "52444",
       LIFECYCLE_PROXY_DARWIN_ANCHOR_PATH: anchorPath,
       LIFECYCLE_PROXY_DARWIN_LAUNCH_DAEMON_PATH: launchDaemonPath,
       LIFECYCLE_PROXY_DARWIN_PF_CONF: pfConfPath,

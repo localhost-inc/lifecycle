@@ -1,160 +1,343 @@
 import SwiftUI
 
-private let appWelcomeTitle = "lifecycle"
-private let appWelcomeTypingInterval: TimeInterval = 0.12
-private let appWelcomeLogoSettleDelay: TimeInterval = 0.28
-private let appWelcomeSubtitleDelay: TimeInterval = 0.45
-
 struct AppWelcomeView: View {
   @Environment(\.appTheme) private var theme
-  @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   let errorMessage: String?
+  let onAddRepository: () -> Void
+  let showsDeveloperDismissButton: Bool
+  let onDismissDeveloperOverride: () -> Void
 
-  @State private var didStartAnimation = false
-  @State private var logoSettled = false
-  @State private var logoFloating = false
-  @State private var typedCount = 0
-  @State private var showSubtitle = false
-  @State private var cursorVisible = true
+  @State private var didBeginDependencyCheck = false
+  @State private var isCheckingDependencies = false
+  @State private var dependencyResults = appWelcomeInitialDependencyResults()
+  @State private var didBeginIntro = false
+  @State private var showsLogo = false
+  @State private var showsPrimaryAction = false
+  @State private var introTask: Task<Void, Never>?
+
+  private static let welcomeWordmark = "lifecycle"
+  private static let wordmarkCharacterDelay = 0.082
+  private static let wordmarkStartDelay = 0.34
+  private static let buttonFadeDelay =
+    wordmarkStartDelay
+    + (wordmarkCharacterDelay * Double(max(welcomeWordmark.count - 1, 0)))
+    + 0.18
+
+  private var requiredDependenciesReady: Bool {
+    appWelcomeRequiredDependenciesReady(dependencyResults)
+  }
+
+  private var missingDependencies: [AppWelcomeDependencyResult] {
+    appWelcomeMissingDependencies(dependencyResults)
+  }
+
+  private var hasBlockingMissingDependencies: Bool {
+    missingDependencies.contains { $0.requirement.isRequired }
+  }
+
+  private var canChooseRepository: Bool {
+    !isCheckingDependencies && requiredDependenciesReady
+  }
 
   var body: some View {
-    ZStack {
-      appWelcomeBackground
+    GeometryReader { geometry in
+      let horizontalPadding = max(24.0, geometry.size.width * 0.04)
+      let contentWidth = min(460.0, geometry.size.width - (horizontalPadding * 2))
+
+      ScrollView(showsIndicators: false) {
+        VStack {
+          Spacer(minLength: 0)
+
+          VStack(spacing: missingDependencies.isEmpty ? 18 : 24) {
+            VStack(spacing: 14) {
+              LifecycleLogo(
+                size: .medium,
+                foregroundColor: theme.primaryColor
+              )
+                .opacity(showsLogo ? 1 : 0)
+                .scaleEffect(showsLogo ? 1 : 0.94)
+                .offset(y: showsLogo ? 0 : 8)
+
+              TypewriterText(
+                text: Self.welcomeWordmark,
+                characterDelay: Self.wordmarkCharacterDelay,
+                startDelay: Self.wordmarkStartDelay,
+                showsCursor: false
+              )
+                .font(.lcPixel(size: 34))
+                .foregroundStyle(theme.primaryTextColor)
+            }
+            .frame(maxWidth: .infinity)
+
+            if !missingDependencies.isEmpty {
+              appWelcomePreflightGroup
+            }
+
+            VStack(spacing: 12) {
+              LCButton(
+                label: "Add repository",
+                variant: .primary,
+                isEnabled: canChooseRepository,
+                action: onAddRepository
+              )
+
+              if isCheckingDependencies {
+                Text("Checking required tools…")
+                  .font(.lc(size: 12, weight: .medium))
+                  .foregroundStyle(theme.mutedColor)
+              }
+
+              if let errorMessage, !errorMessage.isEmpty {
+                Text(errorMessage)
+                  .font(.lc(size: 12, weight: .medium))
+                  .foregroundStyle(theme.errorColor)
+                  .multilineTextAlignment(.center)
+                  .fixedSize(horizontal: false, vertical: true)
+              }
+            }
+            .frame(maxWidth: .infinity)
+            .opacity(showsPrimaryAction ? 1 : 0)
+            .offset(y: showsPrimaryAction ? 0 : 8)
+            .allowsHitTesting(showsPrimaryAction)
+          }
+          .frame(width: contentWidth)
+          .padding(.vertical, 32)
+
+          Spacer(minLength: 0)
+        }
+        .frame(minHeight: geometry.size.height)
+      }
+      .padding(.horizontal, horizontalPadding)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .overlay(alignment: .bottomLeading) {
+        if showsDeveloperDismissButton {
+          LCButton(
+            label: "Back to app",
+            variant: .ghost,
+            size: .small,
+            action: onDismissDeveloperOverride
+          )
+          .padding(.leading, 12)
+          .padding(.bottom, 12)
+          .opacity(showsPrimaryAction ? 1 : 0)
+          .offset(y: showsPrimaryAction ? 0 : 8)
+          .allowsHitTesting(showsPrimaryAction)
+        }
+      }
+    }
+    .background(theme.shellBackground.ignoresSafeArea())
+    .onAppear {
+      beginDependencyCheckIfNeeded()
+      beginIntroIfNeeded()
+    }
+    .onDisappear {
+      introTask?.cancel()
+      introTask = nil
+    }
+  }
+
+  private var appWelcomePreflightGroup: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      VStack(alignment: .leading, spacing: 6) {
+        Text(hasBlockingMissingDependencies ? "Missing required tools" : "Optional tools not found")
+          .font(.lc(size: 13, weight: .semibold))
+          .foregroundStyle(theme.primaryTextColor)
+
+        Text(
+          hasBlockingMissingDependencies
+            ? "Install these before adding a repository."
+            : "You can continue without these, or install them now."
+        )
+        .font(.lc(size: 12, weight: .medium))
+        .foregroundStyle(theme.mutedColor)
+        .fixedSize(horizontal: false, vertical: true)
+      }
+      .padding(.horizontal, 18)
+      .padding(.top, 18)
+      .padding(.bottom, 14)
+
+      Divider()
+        .overlay(theme.borderColor.opacity(0.62))
 
       VStack(spacing: 0) {
-        appWelcomeLogo
+        ForEach(Array(missingDependencies.enumerated()), id: \.element.id) { index, result in
+          AppWelcomeDependencyRow(result: result)
 
-        VStack(spacing: 10) {
-          appWelcomeTitleView
-
-          if showSubtitle {
-            Text("No repositories configured.")
-              .font(.system(size: 13, weight: .medium))
-              .foregroundStyle(theme.mutedColor)
-              .multilineTextAlignment(.center)
-              .transition(.opacity.combined(with: .move(edge: .bottom)))
-          }
-
-          if let errorMessage, !errorMessage.isEmpty {
-            Text(errorMessage)
-              .font(.system(size: 11, weight: .medium, design: .monospaced))
-              .foregroundStyle(theme.errorColor)
-              .multilineTextAlignment(.center)
-              .frame(maxWidth: 420)
-              .transition(.opacity)
-              .padding(.top, 4)
+          if index < missingDependencies.count - 1 {
+            Divider()
+              .overlay(theme.borderColor.opacity(0.6))
           }
         }
-        .offset(y: logoSettled ? -18 : 0)
       }
-      .padding(.horizontal, 32)
-      .padding(.bottom, 36)
+
+      Divider()
+        .overlay(theme.borderColor.opacity(0.62))
+
+      HStack {
+        Spacer(minLength: 0)
+
+        LCButton(
+          label: isCheckingDependencies ? "Checking…" : "Check Again",
+          variant: .surface,
+          isEnabled: !isCheckingDependencies
+        ) {
+          runDependencyCheck()
+        }
+      }
+      .padding(18)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(theme.shellBackground)
-    .onAppear {
-      startWelcomeAnimationIfNeeded()
+    .background(
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .fill(theme.surfaceBackground)
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .strokeBorder(theme.borderColor.opacity(0.66))
+    )
+    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+  }
+
+  private func beginDependencyCheckIfNeeded() {
+    guard !didBeginDependencyCheck else {
+      return
     }
-    .onReceive(Timer.publish(every: appWelcomeTypingInterval, on: .main, in: .common).autoconnect()) { _ in
-      guard didStartAnimation,
-            !accessibilityReduceMotion,
-            typedCount < appWelcomeTitle.count
-      else {
+
+    didBeginDependencyCheck = true
+    runDependencyCheck()
+  }
+
+  private func beginIntroIfNeeded() {
+    guard !didBeginIntro else {
+      return
+    }
+
+    didBeginIntro = true
+
+    guard !reduceMotion else {
+      showsLogo = true
+      showsPrimaryAction = true
+      return
+    }
+
+    withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
+      showsLogo = true
+    }
+
+    introTask = Task { @MainActor in
+      try? await Task.sleep(nanoseconds: UInt64(Self.buttonFadeDelay * 1_000_000_000))
+      guard !Task.isCancelled else {
         return
       }
 
-      typedCount += 1
+      withAnimation(.easeOut(duration: 0.24)) {
+        showsPrimaryAction = true
+      }
+    }
+  }
 
-      if typedCount == appWelcomeTitle.count {
-        DispatchQueue.main.asyncAfter(deadline: .now() + appWelcomeSubtitleDelay) {
-          withAnimation(.easeOut(duration: 0.35)) {
-            showSubtitle = true
-          }
+  private func runDependencyCheck() {
+    guard !isCheckingDependencies else {
+      return
+    }
+
+    isCheckingDependencies = true
+    dependencyResults = appWelcomeInitialDependencyResults()
+
+    Task {
+      let results = await resolveAppWelcomeDependencies()
+      await MainActor.run {
+        withAnimation(.easeOut(duration: 0.18)) {
+          dependencyResults = results
+          isCheckingDependencies = false
         }
       }
     }
   }
+}
 
-  private var appWelcomeBackground: some View {
-    ZStack {
-      theme.shellBackground
+private struct AppWelcomeDependencyRow: View {
+  @Environment(\.appTheme) private var theme
 
-      Circle()
-        .fill(theme.accentColor.opacity(0.08))
-        .frame(width: 360, height: 360)
-        .blur(radius: 90)
-        .offset(x: -220, y: -120)
+  let result: AppWelcomeDependencyResult
 
-      Circle()
-        .fill(theme.primaryTextColor.opacity(0.05))
-        .frame(width: 260, height: 260)
-        .blur(radius: 80)
-        .offset(x: 240, y: 140)
-    }
-    .ignoresSafeArea()
-  }
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(alignment: .firstTextBaseline, spacing: 10) {
+        Circle()
+          .fill(statusColor)
+          .frame(width: 7, height: 7)
 
-  @ViewBuilder
-  private var appWelcomeLogo: some View {
-    if let logo = AppResources.lifecycleLogoImage {
-      Image(nsImage: logo)
-        .renderingMode(.template)
-        .resizable()
-        .scaledToFit()
-        .frame(width: 220, height: 220)
-        .foregroundStyle(theme.primaryTextColor)
-        .scaleEffect(logoSettled ? 0.58 : 1)
-        .offset(y: logoSettled ? (logoFloating ? -44 : -34) : 0)
-        .shadow(color: theme.cardShadowColor.opacity(0.35), radius: 24, x: 0, y: 10)
-        .animation(.spring(response: 0.7, dampingFraction: 0.82), value: logoSettled)
-        .animation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true), value: logoFloating)
-    }
-  }
+        Text(result.requirement.title)
+          .font(.lc(size: 14, weight: .semibold))
+          .foregroundStyle(theme.primaryTextColor)
 
-  private var appWelcomeTitleView: some View {
-    HStack(spacing: 0) {
-      Text(String(appWelcomeTitle.prefix(typedCount)))
-        .font(.system(size: 38, weight: .bold, design: .monospaced))
-        .foregroundStyle(theme.primaryTextColor)
+        Text(result.requirement.isRequired ? "required" : "optional")
+          .font(.lc(size: 10, weight: .bold, design: .monospaced))
+          .foregroundStyle(theme.mutedColor.opacity(0.72))
 
-      Rectangle()
-        .fill(theme.primaryTextColor)
-        .frame(width: 5, height: 30)
-        .offset(y: 1)
-        .opacity(cursorVisible ? 1 : 0.12)
-        .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: cursorVisible)
-    }
-    .frame(height: 48)
-  }
+        Spacer(minLength: 8)
 
-  private func startWelcomeAnimationIfNeeded() {
-    guard !didStartAnimation else {
-      return
-    }
-
-    didStartAnimation = true
-    cursorVisible = false
-
-    if accessibilityReduceMotion {
-      logoSettled = true
-      typedCount = appWelcomeTitle.count
-      showSubtitle = true
-      return
-    }
-
-    withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-      cursorVisible = true
-    }
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + appWelcomeLogoSettleDelay) {
-      withAnimation(.spring(response: 0.7, dampingFraction: 0.82)) {
-        logoSettled = true
+        Text(statusLabel)
+          .font(.lc(size: 10, weight: .bold, design: .monospaced))
+          .foregroundStyle(statusColor)
       }
 
-      withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) {
-        logoFloating = true
+      Text(detailText)
+        .font(.lc(size: 11, weight: .medium, design: .monospaced))
+        .foregroundStyle(detailColor)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.leading, 17)
+    }
+    .padding(.horizontal, 18)
+    .padding(.vertical, 16)
+  }
+
+  private var statusLabel: String {
+    switch result.state {
+    case .checking:
+      "checking"
+    case .installed:
+      "installed"
+    case .missing:
+      "missing"
+    }
+  }
+
+  private var statusColor: Color {
+    switch result.state {
+    case .checking:
+      theme.accentColor
+    case .installed:
+      theme.successColor
+    case .missing:
+      result.requirement.isRequired ? theme.errorColor : theme.warningColor
+    }
+  }
+
+  private var detailText: String {
+    switch result.state {
+    case .checking:
+      return result.requirement.summary
+    case let .installed(version):
+      return version
+    case let .missing(details):
+      if let details, !details.isEmpty {
+        return "\(details)\n\(result.requirement.installHint)"
       }
+      return result.requirement.installHint
+    }
+  }
+
+  private var detailColor: Color {
+    switch result.state {
+    case .checking:
+      theme.mutedColor.opacity(0.86)
+    case .installed:
+      theme.primaryTextColor.opacity(0.86)
+    case .missing:
+      theme.mutedColor.opacity(0.9)
     }
   }
 }

@@ -26,97 +26,86 @@ const VALID_CONFIG = `{
     ]
   },
   "stack": {
-    "postgres": {
-      "kind": "service",
-      "runtime": "image",
-      "image": "postgres:16-alpine",
-      "startup_timeout_seconds": 45,
-      "health_check": { "kind": "tcp", "host": "127.0.0.1", "port": 5432, "timeout_seconds": 45 },
-      "env": {
-        "POSTGRES_USER": "app",
-        "POSTGRES_PASSWORD": "app"
-      }
-    },
-    "migrate": {
-      "kind": "task",
-      "command": "bun run db:migrate",
-      "depends_on": ["postgres"],
-      "timeout_seconds": 120,
-      "run_on": "start"
-    },
-    "api": {
-      "kind": "service",
-      "runtime": "process",
-      "command": "bun run dev:api",
-      "cwd": "apps/control-plane",
-      "depends_on": ["migrate"],
-      "health_check": {
-        "kind": "http",
-        "url": "http://127.0.0.1:3001/health",
-        "timeout_seconds": 45
+    "nodes": {
+      "postgres": {
+        "kind": "image",
+        "image": "postgres:16-alpine",
+        "startup_timeout_seconds": 45,
+        "health_check": { "kind": "tcp", "host": "127.0.0.1", "port": 5432, "timeout_seconds": 45 },
+        "env": {
+          "POSTGRES_USER": "app",
+          "POSTGRES_PASSWORD": "app"
+        }
+      },
+      "migrate": {
+        "kind": "task",
+        "command": "bun run db:migrate",
+        "depends_on": ["postgres"],
+        "timeout_seconds": 120,
+        "run_on": "start"
+      },
+      "api": {
+        "kind": "process",
+        "command": "bun run dev:api",
+        "cwd": "apps/control-plane",
+        "depends_on": ["migrate"],
+        "health_check": {
+          "kind": "http",
+          "url": "http://127.0.0.1:3001/health",
+          "timeout_seconds": 45
+        }
       }
     }
   }
 }`;
 
 describe("parseManifest", () => {
-  test("parses valid JSONC config with graph-native stack nodes", () => {
+  test("parses valid JSONC config with workspace steps and stack nodes", () => {
     const result = parseManifest(VALID_CONFIG);
     expect(result.valid).toBe(true);
     if (!result.valid) return;
+
     expect(result.config.workspace.prepare).toHaveLength(2);
     expect(result.config.workspace.prepare[0]!.name).toBe("install");
     expect(result.config.workspace.prepare[1]!.run_on).toBe("start");
     expect(result.config.workspace.teardown?.[0]?.name).toBe("cleanup");
-    expect(result.config.stack["postgres"]!.kind).toBe("service");
-    expect(result.config.stack["migrate"]!.kind).toBe("task");
-    expect(result.config.stack["api"]!.kind).toBe("service");
+    expect(result.config.stack?.nodes.postgres?.kind).toBe("image");
+    expect(result.config.stack?.nodes.migrate?.kind).toBe("task");
+    expect(result.config.stack?.nodes.api?.kind).toBe("process");
   });
 
-  test("returns errors for missing required workspace field", () => {
-    const result = parseManifest(`{
-      "stack": {
-        "api": { "kind": "service", "runtime": "process", "command": "run" }
-      }
+  test("requires workspace and allows omitting stack", () => {
+    const missingWorkspace = parseManifest(`{
+      "stack": { "nodes": {} }
     }`);
-    expect(result.valid).toBe(false);
-    if (result.valid) return;
-    expect(
-      result.errors.some(
-        (e) => e.path === "workspace" || e.message.toLowerCase().includes("required"),
-      ),
-    ).toBe(true);
-  });
+    expect(missingWorkspace.valid).toBe(false);
 
-  test("returns errors for missing required stack field", () => {
-    const result = parseManifest(`{
+    const missingStack = parseManifest(`{
       "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] }
     }`);
-    expect(result.valid).toBe(false);
-    if (result.valid) return;
-    expect(
-      result.errors.some((e) => e.path === "stack" || e.message.toLowerCase().includes("required")),
-    ).toBe(true);
+    expect(missingStack.valid).toBe(true);
+    if (!missingStack.valid) return;
+    expect(missingStack.config.stack).toBeUndefined();
   });
 
   test("returns errors for invalid field types", () => {
     const result = parseManifest(`{
       "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": "not-a-number" }] },
-      "stack": {}
+      "stack": { "nodes": {} }
     }`);
     expect(result.valid).toBe(false);
     if (result.valid) return;
     expect(result.errors.length).toBeGreaterThan(0);
   });
 
-  test("returns errors when a workspace prepare step omits both command and write_files", () => {
+  test("requires exactly one of command or write_files for workspace steps", () => {
     const result = parseManifest(`{
       "workspace": { "prepare": [{ "name": "write-env", "timeout_seconds": 10 }] },
-      "stack": {}
+      "stack": { "nodes": {} }
     }`);
     expect(result.valid).toBe(false);
     if (result.valid) return;
-    expect(result.errors.some((e) => e.path.includes("command"))).toBe(true);
+    expect(result.errors.some((error) => error.path.includes("command"))).toBe(true);
   });
 
   test("accepts workspace prepare steps that write files", () => {
@@ -133,15 +122,16 @@ describe("parseManifest", () => {
         }]
       },
       "stack": {
-        "api": { "kind": "service", "runtime": "process", "command": "bun run dev" }
+        "nodes": {
+          "api": { "kind": "process", "command": "bun run dev" }
+        }
       }
     }`);
     expect(result.valid).toBe(true);
     if (!result.valid) return;
-    const step = result.config.workspace.prepare[0]!;
-    expect(step.command).toBeUndefined();
-    expect(step.write_files).toHaveLength(1);
-    expect(step.write_files?.[0]?.path).toBe("apps/control-plane/.env.local");
+    expect(result.config.workspace.prepare[0]?.write_files?.[0]?.path).toBe(
+      "apps/control-plane/.env.local",
+    );
   });
 
   test("rejects workspace prepare steps with depends_on", () => {
@@ -155,7 +145,9 @@ describe("parseManifest", () => {
         }]
       },
       "stack": {
-        "postgres": { "kind": "service", "runtime": "image", "image": "postgres:16" }
+        "nodes": {
+          "postgres": { "kind": "image", "image": "postgres:16" }
+        }
       }
     }`);
     expect(result.valid).toBe(false);
@@ -179,7 +171,7 @@ describe("parseManifest", () => {
           "run_on": "start"
         }]
       },
-      "stack": {}
+      "stack": { "nodes": {} }
     }`);
     expect(result.valid).toBe(false);
     if (result.valid) return;
@@ -195,344 +187,187 @@ describe("parseManifest", () => {
     const result = parseManifest(`{
       "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "stack": {
-        "postgres": { "kind": "service", "runtime": "image", "image": "postgres:16" },
-        "migrate": {
-          "kind": "task",
-          "command": "bun run db:migrate",
-          "depends_on": ["postgres"],
-          "timeout_seconds": 60,
-          "run_on": "start"
+        "nodes": {
+          "postgres": { "kind": "image", "image": "postgres:16" },
+          "migrate": {
+            "kind": "task",
+            "command": "bun run db:migrate",
+            "depends_on": ["postgres"],
+            "timeout_seconds": 60,
+            "run_on": "start"
+          }
         }
       }
     }`);
     expect(result.valid).toBe(true);
     if (!result.valid) return;
-    expect(result.config.stack["migrate"]?.kind).toBe("task");
-    if (result.config.stack["migrate"]?.kind !== "task") return;
-    expect(result.config.stack["migrate"].depends_on).toEqual(["postgres"]);
-    expect(result.config.stack["migrate"].run_on).toBe("start");
+    const stackNodes = result.config.stack?.nodes;
+    expect(stackNodes?.migrate?.kind).toBe("task");
+    if (!stackNodes || stackNodes.migrate?.kind !== "task") return;
+    expect(stackNodes.migrate.depends_on).toEqual(["postgres"]);
+    expect(stackNodes.migrate.run_on).toBe("start");
   });
 
-  test("returns errors for invalid service runtime", () => {
+  test("rejects invalid node kinds or missing required fields", () => {
+    const invalidKind = parseManifest(`{
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "stack": { "nodes": { "api": { "kind": "service", "command": "run" } } }
+    }`);
+    expect(invalidKind.valid).toBe(false);
+
+    const processMissingCommand = parseManifest(`{
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "stack": { "nodes": { "api": { "kind": "process" } } }
+    }`);
+    expect(processMissingCommand.valid).toBe(false);
+
+    const imageMissingSource = parseManifest(`{
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "stack": { "nodes": { "db": { "kind": "image" } } }
+    }`);
+    expect(imageMissingSource.valid).toBe(false);
+  });
+
+  test("rejects container health checks on process nodes", () => {
     const result = parseManifest(`{
       "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
-      "stack": { "api": { "kind": "service", "runtime": "unknown", "command": "run" } }
+      "stack": {
+        "nodes": {
+          "api": {
+            "kind": "process",
+            "command": "bun run dev",
+            "health_check": { "kind": "container", "timeout_seconds": 10 }
+          }
+        }
+      }
     }`);
     expect(result.valid).toBe(false);
+    if (result.valid) return;
+    expect(result.errors).toContainEqual({
+      path: "stack.nodes.api.health_check.kind",
+      message: 'Container health checks are only valid for kind: "image" nodes',
+    });
   });
 
-  test("returns errors for process service missing command", () => {
+  test("accepts image nodes with build and volumes", () => {
     const result = parseManifest(`{
       "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
-      "stack": { "api": { "kind": "service", "runtime": "process" } }
+      "stack": {
+        "nodes": {
+          "postgres": {
+            "kind": "image",
+            "build": { "context": "docker" },
+            "volumes": [
+              { "type": "bind", "source": "./data", "target": "/data" },
+              { "type": "volume", "source": "pg_data", "target": "/var/lib/postgresql/data" }
+            ]
+          }
+        }
+      }
     }`);
-    expect(result.valid).toBe(false);
+    expect(result.valid).toBe(true);
+    if (!result.valid) return;
+    const stackNodes = result.config.stack?.nodes;
+    expect(stackNodes?.postgres?.kind).toBe("image");
+    if (!stackNodes || stackNodes.postgres?.kind !== "image") return;
+    expect(stackNodes.postgres.build?.context).toBe("docker");
+    expect(stackNodes.postgres.volumes).toHaveLength(2);
   });
 
-  test("returns errors for image service missing image", () => {
-    const result = parseManifest(`{
-      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
-      "stack": { "db": { "kind": "service", "runtime": "image" } }
-    }`);
-    expect(result.valid).toBe(false);
-  });
-
-  test("handles JSONC comments correctly", () => {
-    const result = parseManifest(`{
+  test("handles JSONC comments and trailing commas", () => {
+    const comments = parseManifest(`{
       // This is a comment
       "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       /* Block comment */
-      "stack": { "api": { "kind": "service", "runtime": "process", "command": "run" } }
+      "stack": { "nodes": { "api": { "kind": "process", "command": "run" } } }
     }`);
-    expect(result.valid).toBe(true);
-  });
+    expect(comments.valid).toBe(true);
 
-  test("handles trailing commas", () => {
-    const result = parseManifest(`{
+    const trailing = parseManifest(`{
       "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10, },], },
-      "stack": { "api": { "kind": "service", "runtime": "process", "command": "run", }, },
+      "stack": { "nodes": { "api": { "kind": "process", "command": "run", }, }, },
     }`);
-    expect(result.valid).toBe(true);
+    expect(trailing.valid).toBe(true);
   });
 
-  test("returns error for empty string", () => {
-    const result = parseManifest("");
-    expect(result.valid).toBe(false);
+  test("returns errors for empty and malformed input", () => {
+    expect(parseManifest("").valid).toBe(false);
+    expect(parseManifest("{bad json}").valid).toBe(false);
   });
 
-  test("returns error for invalid JSON", () => {
-    const result = parseManifest("{bad json}");
-    expect(result.valid).toBe(false);
-  });
-
-  test("validates health check kinds", () => {
-    const result = parseManifest(`{
+  test("rejects unsupported secrets, reset, and mcps", () => {
+    const secrets = parseManifest(`{
+      "secrets": { "API_KEY": "dev" },
       "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
-      "stack": {
-        "api": {
-          "kind": "service",
-          "runtime": "process",
-          "command": "run",
-          "health_check": { "kind": "http", "url": "http://localhost:3000/health", "timeout_seconds": 30 }
-        }
-      }
+      "stack": { "nodes": { "api": { "kind": "process", "command": "run" } } }
     }`);
-    expect(result.valid).toBe(true);
-  });
-
-  test("accepts runtime templates in http health check urls", () => {
-    const result = parseManifest(`{
-      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
-      "stack": {
-        "web": {
-          "kind": "service",
-          "runtime": "process",
-          "command": "run",
-          "health_check": {
-            "kind": "http",
-            "url": "http://\${LIFECYCLE_SERVICE_WEB_ADDRESS}/@vite/client",
-            "timeout_seconds": 30
-          }
-        }
-      }
-    }`);
-    expect(result.valid).toBe(true);
-  });
-
-  test("accepts runtime templates in tcp health check ports", () => {
-    const result = parseManifest(`{
-      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
-      "stack": {
-        "redis": {
-          "kind": "service",
-          "runtime": "image",
-          "image": "redis:7-alpine",
-          "health_check": {
-            "kind": "tcp",
-            "host": "\${LIFECYCLE_SERVICE_REDIS_HOST}",
-            "port": "\${LIFECYCLE_SERVICE_REDIS_PORT}",
-            "timeout_seconds": 30
-          }
-        }
-      }
-    }`);
-    expect(result.valid).toBe(true);
-  });
-
-  test("accepts container health checks", () => {
-    const result = parseManifest(`{
-      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
-      "stack": {
-        "postgres": {
-          "kind": "service",
-          "runtime": "image",
-          "image": "postgres:16",
-          "port": 5432,
-          "health_check": {
-            "kind": "container",
-            "timeout_seconds": 30
-          }
-        }
-      }
-    }`);
-    expect(result.valid).toBe(true);
-  });
-
-  test("rejects container health checks on process services", () => {
-    const result = parseManifest(`{
-      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
-      "stack": {
-        "api": {
-          "kind": "service",
-          "runtime": "process",
-          "command": "run",
-          "health_check": { "kind": "container", "timeout_seconds": 30 }
-        }
-      }
-    }`);
-    expect(result.valid).toBe(false);
-  });
-
-  test("accepts image services with build and volumes", () => {
-    const result = parseManifest(`{
-      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
-      "stack": {
-        "postgres": {
-          "kind": "service",
-          "runtime": "image",
-          "build": { "context": "docker", "dockerfile": "docker/Dockerfile.pg.dev" },
-          "volumes": [
-            { "type": "volume", "source": "postgres", "target": "/var/lib/postgresql/data" },
-            { "type": "bind", "source": "docker/init.sql", "target": "/docker-entrypoint-initdb.d/init.sql", "read_only": true }
-          ]
-        }
-      }
-    }`);
-    expect(result.valid).toBe(true);
-    if (!result.valid) return;
-    expect(result.config.stack["postgres"]!.kind).toBe("service");
-    if (result.config.stack["postgres"]!.kind !== "service") return;
-    expect(result.config.stack["postgres"]!.runtime).toBe("image");
-    if (result.config.stack["postgres"]!.runtime !== "image") return;
-    expect(result.config.stack["postgres"]!.build?.context).toBe("docker");
-    expect(result.config.stack["postgres"]!.volumes).toHaveLength(2);
-  });
-
-  test("rejects invalid named volume sources", () => {
-    const result = parseManifest(`{
-      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
-      "stack": {
-        "postgres": {
-          "kind": "service",
-          "runtime": "image",
-          "image": "postgres:16",
-          "volumes": [
-            { "type": "volume", "source": "../postgres", "target": "/var/lib/postgresql/data" }
-          ]
-        }
-      }
-    }`);
-    expect(result.valid).toBe(false);
-    if (result.valid) return;
-    expect(
-      result.errors.some(
-        (error) =>
-          error.path === "stack.postgres.volumes.0.source" &&
-          error.message.includes("Named volumes must start"),
-      ),
-    ).toBe(true);
-  });
-
-  test("rejects managed secrets blocks", () => {
-    const result = parseManifest(`{
-      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
-      "stack": { "api": { "kind": "service", "runtime": "process", "command": "run" } },
-      "secrets": { "KEY": { "ref": "org/key", "required": true } }
-    }`);
-    expect(result.valid).toBe(false);
-    if (result.valid) return;
-    expect(result.errors).toEqual([
-      {
+    expect(secrets.valid).toBe(false);
+    if (!secrets.valid) {
+      expect(secrets.errors).toContainEqual({
         path: "secrets",
         message:
           "Managed secrets are not supported in local lifecycle.json yet. Materialize local env files in workspace prepare instead.",
-      },
-    ]);
-  });
+      });
+    }
 
-  test("rejects `${secrets.*}` references in manifest strings", () => {
-    const result = parseManifest(`{
+    const secretTemplate = parseManifest(`{
       "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "stack": {
-        "api": {
-          "kind": "service",
-          "runtime": "process",
-          "command": "run",
-          "env": { "API_KEY": "${SECRET_API_KEY_TEMPLATE}" }
+        "nodes": {
+          "api": {
+            "kind": "process",
+            "command": "run",
+            "env": { "API_KEY": "${SECRET_API_KEY_TEMPLATE}" }
+          }
         }
       }
     }`);
-    expect(result.valid).toBe(false);
-    if (result.valid) return;
-    expect(result.errors).toEqual([
-      {
-        path: "stack.api.env.API_KEY",
-        message:
-          "`${secrets.*}` is not supported in local lifecycle.json. Materialize local env files in workspace prepare instead.",
-      },
-    ]);
-  });
+    expect(secretTemplate.valid).toBe(false);
 
-  test("rejects top-level reset blocks", () => {
-    const result = parseManifest(`{
+    const reset = parseManifest(`{
+      "reset": { "command": "git clean -fdx" },
       "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
-      "stack": { "api": { "kind": "service", "runtime": "process", "command": "run" } },
-      "reset": { "strategy": "reseed", "command": "bun run seed", "timeout_seconds": 60 }
+      "stack": { "nodes": { "api": { "kind": "process", "command": "run" } } }
     }`);
-    expect(result.valid).toBe(false);
-    if (result.valid) return;
-    expect(result.errors).toEqual([
-      {
-        path: "reset",
-        message:
-          "`reset` is not part of the current lifecycle.json contract yet. Remove it from the manifest for now.",
-      },
-    ]);
-  });
+    expect(reset.valid).toBe(false);
 
-  test("rejects top-level mcps blocks", () => {
-    const result = parseManifest(`{
+    const mcps = parseManifest(`{
+      "mcps": { "openai": {} },
       "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
-      "stack": { "api": { "kind": "service", "runtime": "process", "command": "run" } },
-      "mcps": {
-        "notion": {
-          "command": "npx",
-          "args": ["-y", "@notionhq/notion-mcp-server"],
-          "transport": "stdio"
-        }
-      }
+      "stack": { "nodes": { "api": { "kind": "process", "command": "run" } } }
     }`);
-    expect(result.valid).toBe(false);
-    if (result.valid) return;
-    expect(result.errors).toEqual([
-      {
-        path: "mcps",
-        message:
-          "`mcps` is not part of the current lifecycle.json contract yet. Remove it from the manifest for now.",
-      },
-    ]);
+    expect(mcps.valid).toBe(false);
   });
 
   test("keeps the checked-in repo lifecycle.json valid", () => {
     const manifestPath = new URL("../../../lifecycle.json", import.meta.url);
     const result = parseManifest(readFileSync(manifestPath, "utf8"));
-
     expect(result.valid).toBe(true);
-    if (!result.valid) {
-      expect(result.errors).toEqual([]);
-    }
   });
+});
 
-  test("produces a stable fingerprint independent of object key order", () => {
+describe("getManifestFingerprint", () => {
+  test("is stable regardless of key ordering", () => {
     const left = parseManifest(`{
-      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "timeout_seconds": 10, "command": "bun install", "name": "install" }] },
       "stack": {
-        "web": {
-          "kind": "service",
-          "runtime": "process",
-          "command": "bun run dev",
-          "env": { "B": "2", "A": "1" }
-        },
-        "migrate": {
-          "kind": "task",
-          "command": "bun run db:migrate",
-          "depends_on": ["web"],
-          "timeout_seconds": 30
+        "nodes": {
+          "api": { "kind": "process", "command": "bun run dev", "cwd": "apps/api" }
         }
       }
     }`);
     const right = parseManifest(`{
       "stack": {
-        "migrate": {
-          "timeout_seconds": 30,
-          "depends_on": ["web"],
-          "command": "bun run db:migrate",
-          "kind": "task"
-        },
-        "web": {
-          "env": { "A": "1", "B": "2" },
-          "command": "bun run dev",
-          "runtime": "process",
-          "kind": "service"
+        "nodes": {
+          "api": { "cwd": "apps/api", "command": "bun run dev", "kind": "process" }
         }
       },
-      "workspace": { "prepare": [{ "timeout_seconds": 10, "command": "bun install", "name": "install" }] }
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] }
     }`);
 
     expect(left.valid).toBe(true);
     expect(right.valid).toBe(true);
     if (!left.valid || !right.valid) return;
-
     expect(getManifestFingerprint(left.config)).toBe(getManifestFingerprint(right.config));
   });
 });

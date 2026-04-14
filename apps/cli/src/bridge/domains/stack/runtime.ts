@@ -1,7 +1,7 @@
 import type { LifecycleConfig, ServiceRecord } from "@lifecycle/contracts";
 
 const PREVIEW_HOST_SUFFIX = ["lifecycle", "localhost"] as const;
-export const DEFAULT_PREVIEW_PROXY_PORT = 52300;
+export const DEFAULT_BRIDGE_PORT = 52300;
 
 export function uppercaseEnvKey(value: string): string {
   let result = "";
@@ -46,15 +46,15 @@ export function slugify(value: string): string {
   return slug || "unnamed";
 }
 
-export function resolvePreviewProxyPort(environment: NodeJS.ProcessEnv = process.env): number {
-  const configured = environment.LIFECYCLE_PREVIEW_PROXY_PORT?.trim();
+export function resolveBridgePort(environment: NodeJS.ProcessEnv = process.env): number {
+  const configured = environment.LIFECYCLE_BRIDGE_PORT?.trim();
   if (!configured) {
-    return DEFAULT_PREVIEW_PROXY_PORT;
+    return DEFAULT_BRIDGE_PORT;
   }
 
   const parsed = Number.parseInt(configured, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`LIFECYCLE_PREVIEW_PROXY_PORT must be a positive integer: ${configured}`);
+    throw new Error(`LIFECYCLE_BRIDGE_PORT must be a positive integer: ${configured}`);
   }
 
   return parsed;
@@ -65,17 +65,11 @@ export function previewHostnameForService(hostLabel: string, serviceName: string
   return [serviceLabel, hostLabel, ...PREVIEW_HOST_SUFFIX].join(".");
 }
 
-export function previewUrlForService(
-  hostLabel: string,
-  serviceName: string,
-  port: number,
-): string {
+export function previewUrlForService(hostLabel: string, serviceName: string, port: number): string {
   return `http://${previewHostnameForService(hostLabel, serviceName)}:${port}`;
 }
 
-export function parsePreviewHost(
-  host: string,
-): { hostLabel: string; serviceLabel: string } | null {
+export function parsePreviewHost(host: string): { hostLabel: string; serviceLabel: string } | null {
   const normalized = host.trim().toLowerCase().replace(/:\d+$/, "");
   const suffix = `.${PREVIEW_HOST_SUFFIX.join(".")}`;
   if (!normalized.endsWith(suffix)) {
@@ -96,41 +90,44 @@ export function injectAssignedPortsIntoManifest(
   config: LifecycleConfig,
   assignedPorts: Record<string, number>,
 ): LifecycleConfig {
-  const nextStack = Object.fromEntries(
-    Object.entries(config.stack).map(([name, node]) => {
+  if (!config.stack) {
+    return config;
+  }
+
+  const nextNodes = Object.fromEntries(
+    Object.entries(config.stack.nodes).map(([name, node]) => {
       const assignedPort = assignedPorts[name];
-      if (assignedPort === undefined || node.kind !== "service") {
+      if (assignedPort === undefined || node.kind !== "process") {
         return [name, node];
       }
 
-      if (node.runtime === "process") {
-        return [
-          name,
-          {
-            ...node,
-            env: {
-              ...node.env,
-              PORT: String(assignedPort),
-            },
+      return [
+        name,
+        {
+          ...node,
+          env: {
+            ...node.env,
+            PORT: String(assignedPort),
           },
-        ];
-      }
-
-      return [name, node];
+        },
+      ];
     }),
   );
 
   return {
     ...config,
-    stack: nextStack,
+    stack: {
+      ...config.stack,
+      nodes: nextNodes,
+    },
   };
 }
 
 export function buildStackEnv(input: {
+  bridgePort: number;
   stackId: string;
   hostLabel: string;
   name: string;
-  previewProxyPort: number;
   rootPath: string;
   services: Pick<ServiceRecord, "assigned_port" | "name">[];
   sourceRef: string;
@@ -157,8 +154,7 @@ export function buildStackEnv(input: {
 
     env[`LIFECYCLE_SERVICE_${key}_PORT`] = String(service.assigned_port);
     env[`LIFECYCLE_SERVICE_${key}_ADDRESS`] = `127.0.0.1:${service.assigned_port}`;
-    const previewPort =
-      input.previewProxyPort > 0 ? input.previewProxyPort : service.assigned_port;
+    const previewPort = input.bridgePort > 0 ? input.bridgePort : service.assigned_port;
     env[`LIFECYCLE_SERVICE_${key}_URL`] = previewUrlForService(
       input.hostLabel,
       service.name,

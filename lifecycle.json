@@ -13,29 +13,29 @@
   // Service graph. Lifecycle assigns the effective port at runtime, and the
   // app entrypoints read it from PORT/LIFECYCLE_SERVICE_* env.
   "stack": {
-    "api": {
-      "kind": "service",
-      "runtime": "process",
-      "command": "bun run dev",
-      "cwd": "apps/control-plane",
-      "startup_timeout_seconds": 30,
-      "health_check": {
-        "kind": "http",
-        "url": "http://${LIFECYCLE_SERVICE_API_ADDRESS}/health",
-        "timeout_seconds": 5
-      }
-    },
-    "www": {
-      "kind": "service",
-      "runtime": "process",
-      "command": "bun run dev",
-      "cwd": "apps/www",
-      "depends_on": ["api"],
-      "startup_timeout_seconds": 30,
-      "health_check": {
-        "kind": "http",
-        "url": "http://${LIFECYCLE_SERVICE_WWW_ADDRESS}",
-        "timeout_seconds": 5
+    "nodes": {
+      "api": {
+        "kind": "process",
+        "command": "bun run dev",
+        "cwd": "apps/control-plane",
+        "startup_timeout_seconds": 30,
+        "health_check": {
+          "kind": "http",
+          "url": "http://${LIFECYCLE_SERVICE_API_ADDRESS}/health",
+          "timeout_seconds": 5
+        }
+      },
+      "www": {
+        "kind": "process",
+        "command": "bun run dev",
+        "cwd": "apps/www",
+        "depends_on": ["api"],
+        "startup_timeout_seconds": 30,
+        "health_check": {
+          "kind": "http",
+          "url": "http://${LIFECYCLE_SERVICE_WWW_ADDRESS}",
+          "timeout_seconds": 5
+        }
       }
     }
   }

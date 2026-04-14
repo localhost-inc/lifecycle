@@ -31,9 +31,9 @@ describe("stack runtime state", () => {
     await upsertStackRuntimeService("workspace_1", {
       assigned_port: 43123,
       created_at: "2026-04-07T10:00:00.000Z",
+      kind: "process",
       name: "api",
       pid: 12345,
-      runtime: "process",
       status: "ready",
       status_reason: null,
       updated_at: "2026-04-07T10:01:00.000Z",
@@ -45,9 +45,9 @@ describe("stack runtime state", () => {
     expect(state.services.api).toEqual({
       assigned_port: 43123,
       created_at: "2026-04-07T10:00:00.000Z",
+      kind: "process",
       name: "api",
       pid: 12345,
-      runtime: "process",
       status: "ready",
       status_reason: null,
       updated_at: "2026-04-07T10:01:00.000Z",
@@ -62,9 +62,9 @@ describe("stack runtime state", () => {
     await upsertStackRuntimeService("workspace_1", {
       assigned_port: 43123,
       created_at: "2026-04-07T10:00:00.000Z",
+      kind: "process",
       name: "api",
       pid: 12345,
-      runtime: "process",
       status: "ready",
       status_reason: null,
       updated_at: "2026-04-07T10:01:00.000Z",

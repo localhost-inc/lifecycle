@@ -4,7 +4,7 @@ import type { LifecycleConfig } from "@lifecycle/contracts";
 // Types
 // ---------------------------------------------------------------------------
 
-export type StackNodeKind = "task" | "service";
+export type StackNodeKind = "task" | "process" | "image";
 
 export interface StackNode {
   name: string;
@@ -38,15 +38,21 @@ export class GraphError extends Error {
   }
 }
 
+type StackNodes = NonNullable<LifecycleConfig["stack"]>["nodes"];
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function nodeKind(node: LifecycleConfig["stack"][string]): StackNodeKind {
-  return node.kind === "task" ? "task" : "service";
+function stackNodes(config: LifecycleConfig): StackNodes {
+  return (config.stack?.nodes ?? {}) as StackNodes;
 }
 
-function nodeDependsOn(node: LifecycleConfig["stack"][string]): string[] {
+function nodeKind(node: StackNodes[string]): StackNodeKind {
+  return node.kind;
+}
+
+function nodeDependsOn(node: StackNodes[string]): string[] {
   return node.depends_on ?? [];
 }
 
@@ -60,7 +66,7 @@ function shouldRun(runOn: "create" | "start" | undefined, prepared: boolean): bo
 // ---------------------------------------------------------------------------
 
 function collectTransitiveDeps(
-  stack: LifecycleConfig["stack"],
+  stack: StackNodes,
   name: string,
   selected: Set<string>,
   satisfied: Set<string>,
@@ -70,7 +76,7 @@ function collectTransitiveDeps(
     throw new GraphError(`node '${name}' is not declared in stack`, name);
   }
 
-  if (nodeKind(node) === "service" && satisfied.has(name)) return;
+  if (nodeKind(node) !== "task" && satisfied.has(name)) return;
   if (selected.has(name)) return;
   selected.add(name);
 
@@ -86,26 +92,27 @@ function collectTransitiveDeps(
 export function lowerStackGraph(config: LifecycleConfig, options: LowerOptions): LoweredGraph {
   const { prepared, satisfiedServices } = options;
   const satisfied = satisfiedServices ?? new Set<string>();
+  const nodesByName = stackNodes(config);
 
   // Resolve which nodes to include when targeting specific services.
   let selectedNames: Set<string> | null = null;
   if (options.targetServices && options.targetServices.length > 0) {
     selectedNames = new Set<string>();
     for (const name of options.targetServices) {
-      const node = config.stack[name];
+      const node = nodesByName[name];
       if (!node) {
         throw new GraphError(`unknown service '${name}'`, name);
       }
-      if (nodeKind(node) !== "service") {
+      if (nodeKind(node) === "task") {
         throw new GraphError(`'${name}' is not a service node`, name);
       }
-      collectTransitiveDeps(config.stack, name, selectedNames, satisfied);
+      collectTransitiveDeps(nodesByName, name, selectedNames, satisfied);
     }
   }
 
   // Build the set of satisfied/skipped nodes.
   const satisfiedNodes = new Set<string>(satisfied);
-  for (const [name, node] of Object.entries(config.stack)) {
+  for (const [name, node] of Object.entries(nodesByName)) {
     if (node.kind === "task" && !shouldRun(node.run_on, prepared)) {
       satisfiedNodes.add(name);
     }
@@ -119,7 +126,7 @@ export function lowerStackGraph(config: LifecycleConfig, options: LowerOptions):
   // Build stack nodes.
   const nodes = new Map<string, StackNode>();
 
-  for (const [name, nodeConfig] of Object.entries(config.stack)) {
+  for (const [name, nodeConfig] of Object.entries(nodesByName)) {
     if (selectedNames && !selectedNames.has(name)) continue;
 
     const kind = nodeKind(nodeConfig);
@@ -225,7 +232,7 @@ export function resolveStartOrder(
 // ---------------------------------------------------------------------------
 
 export function declaredServiceNames(config: LifecycleConfig): string[] {
-  return Object.entries(config.stack)
-    .filter(([, node]) => nodeKind(node) === "service")
+  return Object.entries(stackNodes(config))
+    .filter(([, node]) => nodeKind(node) !== "task")
     .map(([name]) => name);
 }

@@ -2,7 +2,7 @@
 
 Lifecycle is a terminal-native workspace runtime for software teams. It manages development workspaces across local machines, containers, remote servers, and cloud sandboxes so the same shell, stack, and service graph can move cleanly from local work to cloud-hosted runtime.
 
-`lifecycle.json` is the project contract. The `lifecycle` CLI is the primary control surface. The bridge is the workspace-host authority for clients. The control plane on Cloudflare Workers manages cloud workspaces, terminal routing, and a routable `opencode serve` endpoint for remote harnesses. Sandbox providers (`local`, `docker`, `remote`, `cloud`) run the same workspace contract everywhere.
+`lifecycle.json` is the project contract. It declares workspace prepare steps and can optionally declare a managed stack DAG (`process`, `image`, `task` nodes). The `lifecycle` CLI is the primary control surface. The bridge is the workspace-host authority for clients. The control plane on Cloudflare Workers manages cloud workspaces, terminal routing, and a routable `opencode serve` endpoint for remote harnesses. Sandbox providers (`local`, `docker`, `remote`, `cloud`) run the same workspace contract everywhere.
 
 ## Status
 
@@ -61,7 +61,7 @@ Lifecycle clients do not invent their own authority paths.
 5. **Contracts package** (`packages/contracts`) — shared domain types, manifest parsing, Zod validation
 6. **DB package** (`packages/db`) — control-plane persistence (Turso/SQLite)
 7. **API scaffold** (`apps/control-plane`) — Hono-based backend
-8. **Bridge runtime** (`apps/cli/src/bridge`) — bridge runtime, authority routing, routes, registration, client bootstrap
+8. **Bridge runtime** (`apps/cli/src/bridge`) — fixed-port bridge runtime, authority routing, routes, pid registration, client bootstrap
 9. **Native desktop app** (`apps/desktop-mac`) — Swift/AppKit client
 10. **Landing page** (`apps/www`)
 

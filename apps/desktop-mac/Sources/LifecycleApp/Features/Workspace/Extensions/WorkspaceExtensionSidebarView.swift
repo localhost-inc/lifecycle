@@ -29,8 +29,9 @@ struct WorkspaceExtensionSidebarView: View {
                 }
               }
             }
-            .frame(height: 40)
-            .background(theme.panelBackground)
+            .frame(height: theme.sizing.workspaceTabRailHeight)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(theme.shellBackground)
             .coordinateSpace(name: "workspaceExtensionRail")
           }
           .overlay(alignment: .bottomLeading) {
@@ -50,10 +51,10 @@ struct WorkspaceExtensionSidebarView: View {
       } else {
         VStack(spacing: 12) {
           Text("Extensions")
-            .font(.system(size: 18, weight: .semibold))
+            .font(.lc(size: 18, weight: .semibold))
             .foregroundStyle(theme.primaryTextColor)
           Text("No workspace extensions are available for this workspace.")
-            .font(.system(size: 12, weight: .medium, design: .monospaced))
+            .font(.lc(size: 12, weight: .medium, design: .monospaced))
             .foregroundStyle(theme.mutedColor)
             .multilineTextAlignment(.center)
         }

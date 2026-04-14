@@ -98,7 +98,7 @@ struct CommandPaletteView: View {
     VStack(spacing: 0) {
       HStack(spacing: 10) {
         Image(systemName: "magnifyingglass")
-          .font(.system(size: 13, weight: .semibold))
+          .font(.lc(size: 13, weight: .semibold))
           .foregroundStyle(theme.mutedColor)
 
         TextField(
@@ -108,7 +108,7 @@ struct CommandPaletteView: View {
             .foregroundColor(theme.mutedColor)
         )
         .textFieldStyle(.plain)
-        .font(.system(size: 14, weight: .medium))
+        .font(.lc(size: 14, weight: .medium))
         .foregroundStyle(theme.primaryTextColor)
         .focused($isQueryFieldFocused)
         .onSubmit {
@@ -124,7 +124,7 @@ struct CommandPaletteView: View {
             activeIndex = 0
           } label: {
             Image(systemName: "xmark.circle.fill")
-              .font(.system(size: 13, weight: .medium))
+              .font(.lc(size: 13, weight: .medium))
               .foregroundStyle(theme.mutedColor.opacity(0.85))
           }
           .buttonStyle(.plain)
@@ -143,10 +143,10 @@ struct CommandPaletteView: View {
           if filteredCommands.isEmpty {
             VStack(spacing: 8) {
               Image(systemName: "magnifyingglass")
-                .font(.system(size: 18, weight: .medium))
+                .font(.lc(size: 18, weight: .medium))
                 .foregroundStyle(theme.mutedColor.opacity(0.7))
               Text("No matching commands")
-                .font(.system(size: 13, weight: .medium))
+                .font(.lc(size: 13, weight: .medium))
                 .foregroundStyle(theme.mutedColor)
             }
             .frame(maxWidth: .infinity)
@@ -157,7 +157,7 @@ struct CommandPaletteView: View {
                 VStack(alignment: .leading, spacing: 6) {
                   if let label = section.label {
                     Text(label)
-                      .font(.system(size: 11, weight: .semibold))
+                      .font(.lc(size: 11, weight: .semibold))
                       .foregroundStyle(theme.mutedColor)
                       .padding(.horizontal, 14)
                       .padding(.top, 8)
@@ -258,18 +258,18 @@ private struct CommandPaletteRow: View {
     Button(action: onSelect) {
       HStack(spacing: 12) {
         Image(systemName: command.systemImage)
-          .font(.system(size: 12, weight: .semibold))
+          .font(.lc(size: 12, weight: .semibold))
           .foregroundStyle(isActive ? theme.primaryTextColor : theme.mutedColor)
           .frame(width: 18)
 
         VStack(alignment: .leading, spacing: 2) {
           Text(command.title)
-            .font(.system(size: 13, weight: .semibold))
+            .font(.lc(size: 13, weight: .semibold))
             .foregroundStyle(theme.primaryTextColor)
 
           if let subtitle = command.subtitle, !subtitle.isEmpty {
             Text(subtitle)
-              .font(.system(size: 11, weight: .medium))
+              .font(.lc(size: 11, weight: .medium))
               .foregroundStyle(theme.mutedColor)
               .lineLimit(1)
           }
@@ -279,7 +279,7 @@ private struct CommandPaletteRow: View {
 
         if let shortcut = command.shortcut {
           Text(shortcut)
-            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .font(.lc(size: 10, weight: .semibold, design: .monospaced))
             .foregroundStyle(theme.mutedColor.opacity(0.9))
         }
       }

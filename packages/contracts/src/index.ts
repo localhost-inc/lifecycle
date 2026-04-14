@@ -41,8 +41,10 @@ export { WorkspaceRecordSchema } from "./db";
 export type { WorkspaceRecord } from "./db";
 export type {
   ServiceRecord,
+  StackImageRecord,
+  StackManagedRecord,
   StackNodeRecord,
-  StackServiceRecord,
+  StackProcessRecord,
   StackSummaryRecord,
   StackSummaryState,
   StackTaskRecord,

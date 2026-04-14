@@ -12,7 +12,7 @@ export interface ServiceRecord {
   updated_at: string;
 }
 
-export type StackSummaryState = "ready" | "missing" | "invalid";
+export type StackSummaryState = "ready" | "missing" | "invalid" | "unconfigured";
 
 interface StackNodeRecordBase {
   workspace_id: string;
@@ -20,15 +20,21 @@ interface StackNodeRecordBase {
   depends_on: string[];
 }
 
-export interface StackServiceRecord extends StackNodeRecordBase {
-  kind: "service";
-  runtime: "process" | "image";
+interface StackManagedRecordBase extends StackNodeRecordBase {
   status: ServiceStatus;
   status_reason: ServiceStatusReason | null;
   assigned_port: number | null;
   preview_url: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface StackProcessRecord extends StackManagedRecordBase {
+  kind: "process";
+}
+
+export interface StackImageRecord extends StackManagedRecordBase {
+  kind: "image";
 }
 
 export interface StackTaskRecord extends StackNodeRecordBase {
@@ -38,7 +44,8 @@ export interface StackTaskRecord extends StackNodeRecordBase {
   write_files_count: number;
 }
 
-export type StackNodeRecord = StackServiceRecord | StackTaskRecord;
+export type StackManagedRecord = StackProcessRecord | StackImageRecord;
+export type StackNodeRecord = StackManagedRecord | StackTaskRecord;
 
 export interface StackSummaryRecord {
   workspace_id: string;

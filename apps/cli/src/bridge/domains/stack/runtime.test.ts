@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
-  DEFAULT_PREVIEW_PROXY_PORT,
+  DEFAULT_BRIDGE_PORT,
   buildStackEnv,
   expandRuntimeTemplates,
   injectAssignedPortsIntoManifest,
   parsePreviewHost,
   previewHostnameForService,
   previewUrlForService,
-  resolvePreviewProxyPort,
+  resolveBridgePort,
   resolveServiceEnv,
   slugify,
   uppercaseEnvKey,
@@ -47,24 +47,26 @@ describe("environment runtime", () => {
     expect(parsePreviewHost("127.0.0.1")).toBeNull();
   });
 
-  test("resolvePreviewProxyPort uses the configured environment or the default", () => {
-    expect(resolvePreviewProxyPort({})).toBe(DEFAULT_PREVIEW_PROXY_PORT);
-    expect(resolvePreviewProxyPort({ LIFECYCLE_PREVIEW_PROXY_PORT: "52444" })).toBe(52444);
+  test("resolveBridgePort uses the configured environment or the default", () => {
+    expect(resolveBridgePort({})).toBe(DEFAULT_BRIDGE_PORT);
+    expect(resolveBridgePort({ LIFECYCLE_BRIDGE_PORT: "52444" })).toBe(52444);
   });
 
   test("injectAssignedPortsIntoManifest adds PORT to process services", () => {
     const config = {
       workspace: { prepare: [] },
       stack: {
-        web: { kind: "service", runtime: "process", command: "bun run web" },
-        migrate: { kind: "task", command: "bun run migrate", timeout_seconds: 60 },
+        nodes: {
+          web: { kind: "process", command: "bun run web" },
+          migrate: { kind: "task", command: "bun run migrate", timeout_seconds: 60 },
+        },
       },
     } satisfies LifecycleConfig;
 
     const next = injectAssignedPortsIntoManifest(config, { web: 43123 });
-    const webNode = next.stack.web;
-    expect(webNode?.kind).toBe("service");
-    if (webNode?.kind === "service" && webNode.runtime === "process") {
+    const webNode = next.stack?.nodes.web;
+    expect(webNode?.kind).toBe("process");
+    if (webNode?.kind === "process") {
       expect(webNode.env?.PORT).toBe("43123");
     }
   });
@@ -100,10 +102,10 @@ describe("environment runtime", () => {
 
   test("buildStackEnv generates LIFECYCLE_ prefixed env vars", () => {
     const env = buildStackEnv({
+      bridgePort: 52300,
       stackId: "env_1",
       hostLabel: "my-project-abc123",
       name: "My Project",
-      previewProxyPort: 52300,
       rootPath: "/tmp/root",
       services: [{ assigned_port: 43123, name: "web" }],
       sourceRef: "main",
@@ -121,10 +123,10 @@ describe("environment runtime", () => {
 
   test("buildStackEnv falls back to the assigned service port when no preview proxy port exists", () => {
     const env = buildStackEnv({
+      bridgePort: 0,
       stackId: "env_1",
       hostLabel: "my-project-abc123",
       name: "My Project",
-      previewProxyPort: 0,
       rootPath: "/tmp/root",
       services: [{ assigned_port: 43123, name: "web" }],
       sourceRef: "main",
