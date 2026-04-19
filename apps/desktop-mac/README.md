@@ -30,64 +30,46 @@ What it does today:
 Launch:
 
 ```bash
-bun run dev
-```
-
-Explicit desktop loop:
-
-```bash
-bun run dev:desktop
-```
-
-Canonical monorepo entrypoint:
-
-```bash
-./scripts/dev desktop
-```
-
-Inspect current dev state:
-
-```bash
-./scripts/dev status
-```
-
-Stop the current dev loop cleanly:
-
-```bash
-./scripts/dev stop
-```
-
-Tail a specific service log:
-
-```bash
-./scripts/dev logs bridge
-./scripts/dev logs control-plane
-./scripts/dev logs desktop-mac
-./scripts/dev logs desktop-mac-app
+just dev
 ```
 
 Bridge + control-plane only, for Xcode debugging:
 
 ```bash
-bun run dev:desktop:services
+just dev desktop-services
 ```
 
-Or launch only the app:
+Inspect current dev state:
 
 ```bash
-bun run desktop:mac
+just status
 ```
 
-Directly:
+Stop the current dev loop cleanly:
 
 ```bash
-./apps/desktop-mac/scripts/open.sh
+just stop
+```
+
+Tail a specific service log:
+
+```bash
+just logs bridge
+just logs control-plane
+just logs desktop-mac
+just logs desktop-mac-app
+```
+
+Launch only the app:
+
+```bash
+just desktop
 ```
 
 Print the canonical Xcode Run environment:
 
 ```bash
-bun run desktop:mac:xcode-env
+just xcode-env
 ```
 
 Bundle output:
@@ -116,14 +98,14 @@ Bridge behavior:
 
 Debugging:
 
-1. Use `bun run dev:desktop` or `./scripts/dev desktop` when you want the whole repo-backed app loop. The root `scripts/dev` entrypoint is the canonical monorepo supervisor and owns bridge, control-plane, and the mac app process together.
-2. Use `bun run dev:desktop:services` when you want Xcode to launch only the native app while bridge and control-plane keep running from the repo.
+1. Use `just dev` when you want the whole repo-backed app loop. The root `justfile` is the documented workflow entrypoint and delegates to the canonical monorepo supervisor for bridge, control-plane, and the mac app process together.
+2. Use `just dev desktop-services` when you want Xcode to launch only the native app while bridge and control-plane keep running from the repo.
 3. Open `apps/desktop-mac/Package.swift` in Xcode and run the auto-generated `LifecycleMac` scheme.
-4. Paste the output of `bun run desktop:mac:xcode-env` into the scheme's Run environment variables so Xcode uses the same bridge/runtime contract as `bun run dev:desktop`.
+4. Paste the output of `just xcode-env` into the scheme's Run environment variables so Xcode uses the same bridge/runtime contract as `just dev`.
 5. Treat Xcode as the canonical path for breakpoints, sanitizers, Instruments, and crash debugging.
-6. Use `bun run desktop:mac:smoke` or `./scripts/dev desktop-smoke` to verify the desktop dev loop contract end to end: startup, bridge restart, control-plane restart, and desktop hot reload.
-7. The monorepo dev supervisor writes stable state and logs under the per-repo runtime root returned by `scripts/dev-runtime-root` (with supervisor state in `<runtime-root>/dev`), so `./scripts/dev status` and `./scripts/dev logs <service>` always point at the live runtime.
-8. When bridge route contracts change, regenerate `apps/cli/src/bridge/routed.gen.ts` from `apps/cli` with `bunx routedjs generate` and keep `apps/cli/src/bridge/openapi.json` in sync before building directly in Xcode outside the repo scripts.
+6. Use `just smoke` to verify the desktop dev loop contract end to end: startup, bridge restart, control-plane restart, and desktop hot reload.
+7. The monorepo dev supervisor writes stable state and logs under the per-repo runtime root returned by `scripts/dev-runtime-root` (with supervisor state in `<runtime-root>/dev`), so `just status` and `just logs <service>` always point at the live runtime.
+8. When bridge route contracts change, run `just bridge-generate` so `apps/cli/src/bridge/routed.gen.ts` and `apps/cli/src/bridge/openapi.json` stay in sync before building directly in Xcode outside the repo scripts.
 9. Do not create a second copy of `openapi.json` under the app target. The app target should keep pointing at the bridge artifact via symlink so SwiftPM sees exactly one source of truth.
 10. The desktop hot-reload loop coalesces rapid file edits. A newer reload request cancels the in-flight `swift build` runner and restarts from the latest tree instead of draining every queued build.
 

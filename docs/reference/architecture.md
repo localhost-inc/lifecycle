@@ -16,7 +16,7 @@ Rules:
 4. If the contacted bridge is not authoritative for a workspace, the bridge layer resolves the owning bridge and forwards the request or returns explicit authority information.
 5. The authoritative bridge owns host-local orchestration: shell attach, stack/service runtime control, preview proxy routing, git status, activity, and host-aware execution.
 6. When an authoritative bridge-handled request needs cloud or organization authority above the workspace runtime, the bridge calls the control plane.
-7. When bridge-side runtime state changes, the bridge emits lifecycle events over WebSocket and clients update UI state from those events. Routed OpenCode/provider traffic is a secondary integration surface.
+7. When bridge-side runtime state changes, the bridge emits lifecycle events over WebSocket and clients update UI state from those events. The socket supports topic-scoped subscriptions for workspace lifecycle streams plus global invalidation events. Bridge-owned agent sessions also stream through that socket; routed OpenCode/provider traffic remains a secondary integration surface.
 8. Interactive bridge clients must self-heal bridge discovery. If the pinned bridge endpoint dies, clients retry the fixed local bridge endpoint (or an explicit override), may start the bridge when no healthy instance exists, and may use `~/.lifecycle/bridge.json` only for pid and diagnostics rather than endpoint discovery.
 9. Clients own presentation state such as selection, focus, and layout. They do not create alternate authority paths by shelling out to ad hoc `lifecycle` subprocesses or bypassing the bridge for normal runtime operations.
 
@@ -69,7 +69,7 @@ In repository development mode, the control plane defaults to the local API dev 
 
 Operation naming should stay consistent at the semantic layer. Bridge and control-plane methods use singular dotted names such as `workspace.get`, `workspace.list`, `workspace.activity`, `workspace.shell`, `service.get`, `service.list`, and `repo.list`. CLI commands and MCP tools keep the filesystem command tree, but they should map cleanly onto the same underlying operations.
 
-Bridge eventing follows the same rule: bridge-side changes stream as lifecycle events first. Raw OpenCode/provider passthrough may also be exposed on the same socket for secondary harness integrations or transcript UIs, but those are not the primary product model.
+Bridge eventing follows the same rule: bridge-side changes stream as lifecycle events first. That includes stack/service lifecycle, workspace activity, snapshot invalidation events, and bridge-owned agent session events. Clients may subscribe to workspace-scoped topics and a global bridge topic instead of treating the socket as one undifferentiated broadcast stream. Raw OpenCode/provider passthrough may also be exposed on the same socket for secondary harness integrations or transcript UIs, but those are not the primary product model.
 
 ### 2. Bridge
 
@@ -84,9 +84,11 @@ The bridge is the authoritative runtime process for Lifecycle clients, running o
 5. Stack and service runtime operations
 6. Preview proxy routing for stable `*.lifecycle.localhost` service hosts
 7. Git and activity reads
-8. Local DB-backed state and runtime coordination
-9. WebSocket lifecycle streaming to clients
-10. Upstream calls to the control plane when a request needs cloud or organization authority above the workspace runtime
+8. Shared install/setup planning for machine- and repo-scoped Lifecycle integration so CLI, TUI, and desktop can reuse one authority surface
+9. Bridge-owned agent session orchestration, transcript persistence, and normalized agent event streaming
+10. Local DB-backed state and runtime coordination
+11. WebSocket lifecycle streaming to clients
+12. Upstream calls to the control plane when a request needs cloud or organization authority above the workspace runtime
 
 The local bridge binds one fixed loopback port by default: `127.0.0.1:52300`. That single listener serves both bridge API traffic and host-based `*.lifecycle.localhost` preview routing. Preview install helpers only change machine-level HTTP routing; they do not start a second proxy runtime.
 
@@ -181,7 +183,7 @@ This sandbox bridge is still part of the same bridge concept: it is the runtime-
 
 ## OpenCode
 
-OpenCode is the default remote harness endpoint Lifecycle stands up in cloud workspaces. Lifecycle does not build custom agent provider integrations or a first-party chat surface. Harness vendors own agent UX; Lifecycle owns the runtime they attach to.
+OpenCode is the default remote harness endpoint Lifecycle stands up in cloud workspaces. Lifecycle may keep a bridge-owned agent session runtime for workspace-aware automation, but that remains secondary to the core runtime model. Harness vendors still own their own agent UX; Lifecycle owns the runtime they attach to.
 
 **Interactive mode:** A developer may run `opencode` directly in their tmux session, just like any other terminal tool.
 
@@ -230,6 +232,21 @@ provisioning → preparing → running → stopping → stopped → destroyed
 ```
 
 All transitions are explicit and typed. No silent state drift.
+
+### Workspace Paths
+
+Lifecycle uses two path concepts and they must not be conflated:
+
+1. `repository.path` is the durable source checkout path on the authoritative bridge host. Local workspace lifecycle operations such as creating, renaming, or removing worktrees use this path.
+2. `workspace.workspace_root` is the live runtime working directory for one concrete workspace. Runtime reads and mutations such as shell attach, terminal control, stack execution, file reads, and git status use this path.
+
+Rules:
+
+1. `checkout_type=root` means the workspace runs directly in the repository checkout, so `workspace.workspace_root` equals `repository.path`.
+2. `checkout_type=worktree` means the workspace runs in its own checkout rooted at `workspace.workspace_root`; the repository path remains the source checkout used to manage that worktree.
+3. Clients should treat `workspace.workspace_root` as the only cwd-like field in the public runtime contract.
+4. Host adapters should use repository paths only for host-local lifecycle mutations, not as a substitute runtime cwd.
+5. Cloud hosts may not expose a meaningful local repository path to the client surface; the runtime contract still centers the workspace root.
 
 ### Environment
 

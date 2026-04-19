@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync } from "node:fs";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { createWorkspaceHostRegistry } from "./index";
 import type { WorkspaceHostAdapter } from "./host";
@@ -16,7 +17,7 @@ describe("workspace contract", () => {
       checkout_type: "worktree",
       source_ref: "lifecycle/workspace-1",
       git_sha: null,
-      workspace_root: "/tmp/project_1/.worktrees/ws_1",
+      workspace_root: REPO_PATH,
       host: "local",
       manifest_fingerprint: "manifest_1",
       created_at: "2026-03-12T00:00:00.000Z",
@@ -31,6 +32,8 @@ describe("workspace contract", () => {
   }
 
   const REPO_PATH = "/tmp/project_1/.worktrees/ws_1";
+  const SYSTEM_SH_PROGRAM = Bun.which("sh") ?? "/bin/sh";
+  mkdirSync(REPO_PATH, { recursive: true });
 
   test("defines the expected workspace method names", () => {
     const requiredMethods: Array<keyof WorkspaceHostAdapter> = [
@@ -389,7 +392,7 @@ describe("workspace contract", () => {
   test("local host client resolves a managed tmux runtime with a Lifecycle-owned profile", async () => {
     const spawnSyncMock = ((program: string, args?: readonly string[]) => {
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         args?.[0] === "-lc" &&
         args[1]?.includes("command -v '/opt/lifecycle/bin/tmux'")
       ) {
@@ -509,7 +512,7 @@ describe("workspace contract", () => {
       calls.push({ program, args: commandArgs });
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("command -v 'tmux'")
       ) {
@@ -517,7 +520,7 @@ describe("workspace contract", () => {
       }
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("'tmux' 'has-session'")
       ) {
@@ -565,8 +568,16 @@ describe("workspace contract", () => {
 
   test("local host client returns an isolated spawn connection for a terminal", async () => {
     const spawnSyncMock = ((program: string, args?: readonly string[]) => {
-      if (program === "sh" && args?.[0] === "-lc" && args[1]?.includes("command -v 'tmux'")) {
+      if (
+        program === SYSTEM_SH_PROGRAM &&
+        args?.[0] === "-lc" &&
+        args[1]?.includes("command -v 'tmux'")
+      ) {
         return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (program === "tmux" && args?.[0] === "capture-pane") {
+        return { error: undefined, status: 0, stderr: "", stdout: "previous shell output\n" };
       }
 
       return { error: undefined, status: 0, stderr: "", stdout: "" };
@@ -586,10 +597,11 @@ describe("workspace contract", () => {
 
     expect(connection.launchError).toBeNull();
     expect(connection.connectionId).toBe("lc-local-session--conn--surface-A--_2");
+    expect(connection.initialAnsi).toBe("previous shell output\n");
     expect(connection.transport).toEqual({
       kind: "spawn",
       prepare: {
-        program: "sh",
+        program: SYSTEM_SH_PROGRAM,
         args: ["-lc", expect.stringContaining("lc-local-session--conn--surface-A--_2")],
         cwd: REPO_PATH,
         env: [["TERM", "xterm-256color"]],
@@ -605,8 +617,16 @@ describe("workspace contract", () => {
 
   test("local host client canonicalizes polluted terminal ids before connecting", async () => {
     const spawnSyncMock = ((program: string, args?: readonly string[]) => {
-      if (program === "sh" && args?.[0] === "-lc" && args[1]?.includes("command -v 'tmux'")) {
+      if (
+        program === SYSTEM_SH_PROGRAM &&
+        args?.[0] === "-lc" &&
+        args[1]?.includes("command -v 'tmux'")
+      ) {
         return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (program === "tmux" && args?.[0] === "capture-pane") {
+        return { error: undefined, status: 0, stderr: "", stdout: "buffer\n" };
       }
 
       return { error: undefined, status: 0, stderr: "", stdout: "" };
@@ -626,10 +646,11 @@ describe("workspace contract", () => {
 
     expect(connection.terminalId).toBe("@8");
     expect(connection.connectionId).toBe("lc-local-session--conn--surface-A--_8");
+    expect(connection.initialAnsi).toBe("buffer\n");
     expect(connection.transport).toEqual({
       kind: "spawn",
       prepare: {
-        program: "sh",
+        program: SYSTEM_SH_PROGRAM,
         args: [
           "-lc",
           expect.stringContaining(
@@ -651,11 +672,15 @@ describe("workspace contract", () => {
   test("local host client scrubs outer tmux env for managed terminal connections", async () => {
     const spawnSyncMock = ((program: string, args?: readonly string[]) => {
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         args?.[0] === "-lc" &&
         args[1]?.includes("command -v '/opt/lifecycle/bin/tmux'")
       ) {
         return { error: undefined, status: 0, stderr: "", stdout: "" };
+      }
+
+      if (program === "/opt/lifecycle/bin/tmux" && args?.[4] === "capture-pane") {
+        return { error: undefined, status: 0, stderr: "", stdout: "managed history\n" };
       }
 
       return { error: undefined, status: 0, stderr: "", stdout: "" };
@@ -675,10 +700,11 @@ describe("workspace contract", () => {
       persistenceExecutablePath: "/opt/lifecycle/bin/tmux",
     });
 
+    expect(connection.initialAnsi).toBe("managed history\n");
     expect(connection.transport).toEqual({
       kind: "spawn",
       prepare: {
-        program: "sh",
+        program: SYSTEM_SH_PROGRAM,
         args: ["-lc", expect.stringContaining("lc-local-session--conn--surface-A--_2")],
         cwd: REPO_PATH,
         env: [
@@ -715,7 +741,7 @@ describe("workspace contract", () => {
       calls.push({ program, args: commandArgs });
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("command -v '/opt/lifecycle/bin/tmux'")
       ) {
@@ -723,7 +749,7 @@ describe("workspace contract", () => {
       }
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes(
           `'/opt/lifecycle/bin/tmux' '-L' '${MANAGED_TMUX_SOCKET_NAME}' '-f' '/dev/null' 'has-session'`,
@@ -777,7 +803,7 @@ describe("workspace contract", () => {
       const commandArgs = [...(args ?? [])];
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("command -v 'tmux'")
       ) {
@@ -785,7 +811,7 @@ describe("workspace contract", () => {
       }
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("'tmux' 'has-session'")
       ) {
@@ -836,7 +862,7 @@ describe("workspace contract", () => {
       const commandArgs = [...(args ?? [])];
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("command -v 'tmux'")
       ) {
@@ -844,7 +870,7 @@ describe("workspace contract", () => {
       }
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("'tmux' 'has-session'")
       ) {
@@ -898,7 +924,7 @@ describe("workspace contract", () => {
       calls.push({ program, args: commandArgs });
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("command -v 'tmux'")
       ) {
@@ -906,7 +932,7 @@ describe("workspace contract", () => {
       }
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("'tmux' 'has-session'")
       ) {
@@ -972,7 +998,7 @@ describe("workspace contract", () => {
       const commandArgs = [...(args ?? [])];
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("command -v 'tmux'")
       ) {
@@ -980,7 +1006,7 @@ describe("workspace contract", () => {
       }
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("'tmux' 'has-session'")
       ) {
@@ -1032,7 +1058,7 @@ describe("workspace contract", () => {
       const commandArgs = [...(args ?? [])];
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("command -v 'tmux'")
       ) {
@@ -1040,7 +1066,7 @@ describe("workspace contract", () => {
       }
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("'tmux' 'has-session'")
       ) {
@@ -1094,7 +1120,7 @@ describe("workspace contract", () => {
       calls.push({ program, args: commandArgs });
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes("command -v '/usr/local/bin/tmux'")
       ) {
@@ -1141,7 +1167,7 @@ describe("workspace contract", () => {
       }
 
       if (
-        program === "sh" &&
+        program === SYSTEM_SH_PROGRAM &&
         commandArgs[0] === "-lc" &&
         commandArgs[1]?.includes(`'/usr/local/bin/tmux' '-L' '${MANAGED_TMUX_SOCKET_NAME}'`)
       ) {
@@ -1228,10 +1254,10 @@ describe("workspace contract", () => {
 
   test("cloud host client returns an ssh-backed spawn connection for a terminal", async () => {
     const client = new CloudWorkspaceHost({
-      execWorkspaceCommand: async () => ({
+      execWorkspaceCommand: async (_workspaceId, command) => ({
         exitCode: 0,
         stderr: "",
-        stdout: "",
+        stdout: command[0] === "tmux" && command[1] === "capture-pane" ? "cloud history\n" : "",
       }),
       getShellConnection: async () => ({
         cwd: "/workspace/repo",
@@ -1251,6 +1277,7 @@ describe("workspace contract", () => {
 
     expect(connection.launchError).toBeNull();
     expect(connection.connectionId).toBe("lc-cloud-session--conn--surface-B--_4");
+    expect(connection.initialAnsi).toBe("cloud history\n");
     expect(connection.transport?.kind).toBe("spawn");
     if (!connection.transport || connection.transport.kind !== "spawn") {
       throw new Error("Expected a spawn transport for the cloud terminal connection.");
@@ -1371,7 +1398,7 @@ describe("workspace contract", () => {
 
     const result = await client.ensureWorkspace({
       workspace: target,
-      projectPath: "/tmp/project_1",
+      repositoryPath: "/tmp/project_1",
       baseRef: "main",
       worktreeRoot: "/tmp/project_1/.worktrees",
       manifestFingerprint: "manifest_next",

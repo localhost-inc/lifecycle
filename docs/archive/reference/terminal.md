@@ -4,7 +4,7 @@ Canonical contract for terminal-related state in Lifecycle.
 
 ## Current Scope
 
-Lifecycle currently ships an interactive terminal surface through the TUI in `apps/tui`. Live shell attach, tmux persistence, input routing, and workspace activity rules live in [TUI](./tui.md) and in the host-aware `WorkspaceClient` shell runtime contract.
+Lifecycle currently ships an interactive terminal surface through the CLI-owned TUI. Live shell attach, tmux persistence, input routing, and workspace activity rules live in [TUI](./tui.md) and in the host-aware `WorkspaceClient` shell runtime contract.
 
 The persisted `terminal` table is still legacy data from earlier desktop terminal work. It is no longer the source of truth for the live shell runtime.
 

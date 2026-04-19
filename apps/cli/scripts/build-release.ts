@@ -10,7 +10,7 @@ const repoRoot = resolve(packageDir, "../..");
 const outputDir = resolve(packageDir, "dist", "release");
 const cliEntrypoint = resolve(packageDir, "src", "index.ts");
 const bunRuntimePath = resolve(outputDir, "bun");
-const cliBundlePath = resolve(outputDir, "lifecycle.js");
+const cliBundlePath = resolve(outputDir, "index.js");
 const cliLauncherPath = resolve(outputDir, "lifecycle");
 
 function tursoSyncNativePackageName(): string {
@@ -27,7 +27,55 @@ function tursoSyncNativePackageName(): string {
   );
 }
 
-async function stageRuntimeDependency(packageName: string): Promise<void> {
+function openTuiNativePackageName(): string {
+  if (process.platform === "darwin" && process.arch === "arm64") {
+    return "@opentui/core-darwin-arm64";
+  }
+
+  if (process.platform === "darwin" && process.arch === "x64") {
+    return "@opentui/core-darwin-x64";
+  }
+
+  if (process.platform === "linux" && process.arch === "arm64") {
+    return "@opentui/core-linux-arm64";
+  }
+
+  if (process.platform === "linux" && process.arch === "x64") {
+    return "@opentui/core-linux-x64";
+  }
+
+  if (process.platform === "win32" && process.arch === "arm64") {
+    return "@opentui/core-win32-arm64";
+  }
+
+  if (process.platform === "win32" && process.arch === "x64") {
+    return "@opentui/core-win32-x64";
+  }
+
+  throw new Error(
+    `Unsupported release host for bundled OpenTUI native addon: ${process.platform}-${process.arch}`,
+  );
+}
+
+function bunPtyLibraryName(): string {
+  if (process.platform === "darwin") {
+    return process.arch === "arm64" ? "librust_pty_arm64.dylib" : "librust_pty.dylib";
+  }
+
+  if (process.platform === "linux") {
+    return process.arch === "arm64" ? "librust_pty_arm64.so" : "librust_pty.so";
+  }
+
+  if (process.platform === "win32") {
+    return "rust_pty.dll";
+  }
+
+  throw new Error(
+    `Unsupported release host for bundled bun-pty native library: ${process.platform}-${process.arch}`,
+  );
+}
+
+async function resolveInstalledPackagePath(packageName: string): Promise<string> {
   const sourceSymlinkPath = resolve(
     repoRoot,
     "node_modules",
@@ -35,11 +83,27 @@ async function stageRuntimeDependency(packageName: string): Promise<void> {
     "node_modules",
     ...packageName.split("/"),
   );
-  const sourcePath = await realpath(sourceSymlinkPath);
+  return await realpath(sourceSymlinkPath);
+}
+
+async function stageRuntimeDependency(packageName: string): Promise<void> {
+  const sourcePath = await resolveInstalledPackagePath(packageName);
   const destinationPath = resolve(outputDir, "node_modules", ...packageName.split("/"));
 
   await mkdir(dirname(destinationPath), { recursive: true });
   await cp(sourcePath, destinationPath, { recursive: true });
+}
+
+async function stagePackageFile(
+  packageName: string,
+  relativePath: string,
+  destinationPath: string,
+): Promise<void> {
+  const packagePath = await resolveInstalledPackagePath(packageName);
+  const sourcePath = resolve(packagePath, relativePath);
+
+  await mkdir(dirname(destinationPath), { recursive: true });
+  await copyFile(sourcePath, destinationPath);
 }
 
 async function runCommand(command: string[], cwd: string): Promise<void> {
@@ -59,7 +123,7 @@ async function main(): Promise<void> {
   await rm(outputDir, { force: true, recursive: true });
   await mkdir(outputDir, { recursive: true });
 
-  await runCommand(["bun", "build", "--target", "bun", "--outfile", cliBundlePath, cliEntrypoint], repoRoot);
+  await runCommand(["bun", "build", "--target", "bun", "--outdir", outputDir, cliEntrypoint], repoRoot);
 
   await copyFile(process.execPath, bunRuntimePath);
   await chmod(bunRuntimePath, 0o755);
@@ -70,7 +134,8 @@ async function main(): Promise<void> {
       "#!/bin/sh",
       "set -eu",
       "SCRIPT_DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
-      "exec \"$SCRIPT_DIR/bun\" \"$SCRIPT_DIR/lifecycle.js\" \"$@\"",
+      `export BUN_PTY_LIB="$SCRIPT_DIR/rust-pty/target/release/${bunPtyLibraryName()}"`,
+      "exec \"$SCRIPT_DIR/bun\" \"$SCRIPT_DIR/index.js\" \"$@\"",
       "",
     ].join("\n"),
     "utf8",
@@ -79,6 +144,12 @@ async function main(): Promise<void> {
   await chmod(cliBundlePath, 0o755);
 
   await stageRuntimeDependency(tursoSyncNativePackageName());
+  await stageRuntimeDependency(openTuiNativePackageName());
+  await stagePackageFile(
+    "bun-pty",
+    ["rust-pty", "target", "release", bunPtyLibraryName()].join("/"),
+    resolve(outputDir, "rust-pty", "target", "release", bunPtyLibraryName()),
+  );
 
   await runCommand([cliLauncherPath, "--help"], repoRoot);
   await runCommand([cliLauncherPath, "bridge", "start", "--help"], repoRoot);

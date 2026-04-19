@@ -66,6 +66,7 @@ const BridgeWorkspaceTerminalConnectionEnvelopeSchema = z
     connection: z
       .object({
         connection_id: z.string(),
+        initial_ansi: z.string().nullable(),
         terminal_id: z.string(),
         launch_error: z.string().nullable(),
         transport: BridgeTerminalTransportSchema.nullable().optional(),

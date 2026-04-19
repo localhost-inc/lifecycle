@@ -37,7 +37,7 @@ describe("createWorkspace", () => {
     await applyDbMigrations(db);
 
     const calls: Array<{
-      projectPath: string;
+      repositoryPath: string;
       sourceRef: string;
       name: string;
       worktreeRoot: string | null | undefined;
@@ -60,7 +60,7 @@ describe("createWorkspace", () => {
       getGitCurrentBranch: unsupported,
       async ensureWorkspace(input) {
         calls.push({
-          projectPath: input.projectPath,
+          repositoryPath: input.repositoryPath,
           sourceRef: input.workspace.source_ref,
           name: input.workspace.name,
           worktreeRoot: input.worktreeRoot,
@@ -110,7 +110,7 @@ describe("createWorkspace", () => {
 
     expect(calls).toEqual([
       {
-        projectPath: "/tmp/lifecycle",
+        repositoryPath: "/tmp/lifecycle",
         sourceRef: "feature-x",
         name: "feature-x",
         worktreeRoot: resolveLocalWorktreeRoot({
@@ -247,7 +247,7 @@ describe("archiveWorkspace", () => {
 
     const calls: Array<{
       inspectedWorkspaceId?: string;
-      projectPath: string;
+      repositoryPath: string;
       workspaceId: string;
       workspaceRoot: string | null;
     }> = [];
@@ -272,7 +272,7 @@ describe("archiveWorkspace", () => {
       async inspectArchive(workspace) {
         calls.push({
           inspectedWorkspaceId: workspace.id,
-          projectPath: "",
+          repositoryPath: "",
           workspaceId: workspace.id,
           workspaceRoot: workspace.workspace_root,
         });
@@ -280,7 +280,7 @@ describe("archiveWorkspace", () => {
       },
       async archiveWorkspace(input) {
         calls.push({
-          projectPath: input.projectPath,
+          repositoryPath: input.repositoryPath,
           workspaceId: input.workspace.id,
           workspaceRoot: input.workspace.workspace_root,
         });
@@ -334,12 +334,12 @@ describe("archiveWorkspace", () => {
     expect(calls).toEqual([
       {
         inspectedWorkspaceId: workspaceId,
-        projectPath: "",
+        repositoryPath: "",
         workspaceId,
         workspaceRoot: "/tmp/.lifecycle/worktrees/local/lifecycle/feature-x",
       },
       {
-        projectPath: "/tmp/lifecycle",
+        repositoryPath: "/tmp/lifecycle",
         workspaceId,
         workspaceRoot: "/tmp/.lifecycle/worktrees/local/lifecycle/feature-x",
       },
@@ -368,7 +368,7 @@ describe("archiveWorkspace", () => {
     });
     await applyDbMigrations(db);
 
-    const calls: Array<{ projectPath: string; workspaceId: string }> = [];
+    const calls: Array<{ repositoryPath: string; workspaceId: string }> = [];
     const unsupported = async (): Promise<never> => {
       throw new Error("unsupported in test");
     };
@@ -392,7 +392,7 @@ describe("archiveWorkspace", () => {
       },
       async archiveWorkspace(input) {
         calls.push({
-          projectPath: input.projectPath,
+          repositoryPath: input.repositoryPath,
           workspaceId: input.workspace.id,
         });
       },
@@ -443,7 +443,7 @@ describe("archiveWorkspace", () => {
 
     expect(calls).toEqual([
       {
-        projectPath: "/tmp/lifecycle",
+        repositoryPath: "/tmp/lifecycle",
         workspaceId,
       },
     ]);

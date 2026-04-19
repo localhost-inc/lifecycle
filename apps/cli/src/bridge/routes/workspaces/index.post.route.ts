@@ -29,6 +29,10 @@ export default createRoute({
   handler: async ({ body, ctx }) => {
     const db = ctx.get("db");
     const workspaceRegistry = ctx.get("workspaceRegistry");
+    const [
+      { broadcastMessage, requestWorkspaceWatchSync },
+      { BRIDGE_GLOBAL_TOPIC, buildAppSnapshotInvalidatedMessage },
+    ] = await Promise.all([import("../../lib/server"), import("../../lib/socket-topics")]);
     const createdWorkspace = await createWorkspace(db, workspaceRegistry, {
       repoPath: body.repoPath,
       name: body.name,
@@ -36,6 +40,8 @@ export default createRoute({
       ...(body.sourceRef ? { sourceRef: body.sourceRef } : {}),
     });
 
+    requestWorkspaceWatchSync();
+    broadcastMessage(buildAppSnapshotInvalidatedMessage("workspace.created"), BRIDGE_GLOBAL_TOPIC);
     ctx.status(201);
     return createdWorkspace;
   },

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { applyDbMigrations } from "@lifecycle/db/migrations";
@@ -102,13 +102,15 @@ async function createTestDb() {
     path: "/tmp/lifecycle",
     name: "lifecycle",
   });
+  const workspaceRoot = join(dir, "worktrees", "feature-activity");
+  await mkdir(workspaceRoot, { recursive: true });
   const workspaceId = await insertWorkspace(db, {
     checkoutType: "worktree",
     host: "local",
     name: "feature-activity",
     repositoryId,
     sourceRef: "feature-activity",
-    workspaceRoot: "/tmp/.lifecycle/worktrees/local/lifecycle/feature-activity",
+    workspaceRoot,
   });
 
   return {

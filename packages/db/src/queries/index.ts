@@ -1,4 +1,24 @@
 export {
+  listAgentsByWorkspace,
+  getAgentById,
+  listAgentMessages,
+  listAgentMessageParts,
+  listAgentMessagesWithParts,
+  listAgentEvents,
+  selectMaxAgentEventIndex,
+  upsertAgent,
+  upsertAgentStatement,
+  replaceAgentMessage,
+  replaceAgentMessageStatements,
+  insertAgentEvent,
+  insertAgentEventStatement,
+  type AgentRow,
+  type AgentMessageRow,
+  type AgentMessagePartRow,
+  type AgentEventRow,
+} from "./agents";
+
+export {
   listRepositories,
   getRepositoryById,
   getRepositoryByPath,

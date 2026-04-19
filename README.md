@@ -55,7 +55,7 @@ Lifecycle clients do not invent their own authority paths.
 ## What Exists Today
 
 1. **CLI** (`apps/cli`) — workspace lifecycle, stack/service commands, bridge launcher, shell/runtime control, context dump
-2. **TUI** (`apps/tui`) — Rust terminal UI with tmux-backed shell attach, workspace sidebar, host-aware activity
+2. **TUI** (`apps/cli/src/tui`) — CLI-owned OpenTUI surface with bridge-backed shell attach, workspace sidebar, and host-aware activity
 3. **Bridge workspace runtime** (`apps/cli/src/bridge/domains/workspace`) — host-aware workspace client with `local`, `cloud`, `docker`, `remote` implementations
 4. **Bridge stack runtime** (`apps/cli/src/bridge/domains/stack`) — process supervisor, graph lowering, health checks, logs, port management
 5. **Contracts package** (`packages/contracts`) — shared domain types, manifest parsing, Zod validation
@@ -111,38 +111,47 @@ See [docs/reference/architecture.md](./docs/reference/architecture.md) for the f
 ## Prerequisites
 
 1. Bun `>=1.3.10`
-2. Rust toolchain (`cargo`) for TUI builds
-3. Optional: Docker for container-hosted workspaces
-4. Optional: Daytona for remote workspaces
-5. Optional: Modal for cloud sandboxes
+2. Optional: Docker for container-hosted workspaces
+3. Optional: Daytona for remote workspaces
+4. Optional: Modal for cloud sandboxes
+5. Recommended: `just` for the documented repo workflows (`just setup`, `just check`, `just dev tui`, `just tui-local`)
 
 ## Quick Start
 
 ```bash
 git clone https://github.com/localhost-inc/lifecycle.git
 cd lifecycle
-bun install
-bun run qa
+just setup
+just check
 lifecycle proxy install --dry-run         # inspect machine-scoped preview routing changes
-bun run dev   # desktop loop: bridge + control plane + desktop-mac
+just dev                                  # desktop loop: bridge + control plane + desktop-mac
 ```
 
 ## Common Commands
 
 From repo root:
 
-1. `bun run format` — apply formatting
-2. `bun run lint` — lint checks
-3. `bun run typecheck` — type checks
-4. `bun run test` — JS/TS tests
-5. `bun run test:rust` — TUI Rust tests (`lifecycle-tui`)
-6. `bun run qa` — full quality gate
-7. `bun run build` — workspace builds
-8. `bun run dev` — desktop loop: bridge, control plane, and `desktop-mac`
-9. `bun run dev:desktop` — explicit desktop dev loop
-10. `bun run dev:desktop:services` — bridge + control plane only, for Xcode/native debugging
-11. `bun run dev:tui` — focused TUI dev loop
-12. `bun run desktop:mac:xcode-env` — print the canonical Xcode Run environment for `desktop-mac`
+The root [`justfile`](./justfile) is the canonical workflow layer for documented repo operations. If a workflow becomes part of the standard path, add a `just` recipe for it and document the `just` command rather than the raw underlying invocation.
+
+1. `just --list` — show the available workflows
+2. `just setup` — install dependencies and hooks
+3. `just format` — apply repo formatting
+4. `just lint` — lint checks
+5. `just typecheck` — type checks
+6. `just test` — tests
+7. `just build` — workspace builds
+8. `just check` or `just qa` — full quality gate
+9. `just fix` — format first, then run the full quality gate
+10. `just dev` — desktop loop: bridge, control plane, and `desktop-mac`
+11. `just dev desktop-services` — bridge + control plane only, for Xcode/native debugging
+12. `just dev desktop-app` — desktop app build/reload loop only
+13. `just dev tui` — focused CLI-owned TUI loop with auto-restart against the standard local Lifecycle runtime
+14. `just tui-local` — focused CLI-owned TUI loop with auto-restart against repo-local bridge + control plane
+15. `just desktop` — open the native macOS desktop app
+16. `just smoke` — smoke test the desktop dev loop
+17. `just bridge-generate` — regenerate bridge routed/OpenAPI artifacts after route-contract changes
+18. `just xcode-env` — print the canonical Xcode Run environment for `desktop-mac`
+19. `just status`, `just stop`, `just logs bridge` — inspect and manage the owned dev services
 
 ## Repository Layout
 
@@ -151,7 +160,6 @@ apps/
   cli/          lifecycle CLI + bundled bridge runtime (`apps/cli/src/bridge`)
   control-plane/ Hosted Hono control plane
   desktop-mac/  Native Swift desktop app
-  tui/          Rust TUI — tmux-backed workspace shell
   www/          Landing page
 packages/
   config/       Shared TypeScript config

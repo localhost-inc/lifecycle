@@ -35,10 +35,15 @@ export default createRoute({
   },
   handler: async ({ body, ctx }) => {
     const db = ctx.get("db");
+    const [
+      { broadcastMessage, requestWorkspaceWatchSync },
+      { BRIDGE_GLOBAL_TOPIC, buildAppSnapshotInvalidatedMessage },
+    ] = await Promise.all([import("../lib/server"), import("../lib/socket-topics")]);
     const existing = await getRepositoryByPath(db, body.path);
     const repositoryId =
       existing?.id ?? (await insertRepository(db, { path: body.path, name: body.name }));
 
+    let insertedRootWorkspace = false;
     if (body.rootWorkspace) {
       const workspaces = await listWorkspacesByRepository(db, repositoryId);
       const hasRoot = workspaces.some((ws) => ws.checkout_type === "root");
@@ -52,7 +57,16 @@ export default createRoute({
           checkoutType: "root",
           preparedAt: new Date().toISOString(),
         });
+        insertedRootWorkspace = true;
       }
+    }
+
+    if (!existing || insertedRootWorkspace) {
+      requestWorkspaceWatchSync();
+      broadcastMessage(
+        buildAppSnapshotInvalidatedMessage(!existing ? "repository.created" : "workspace.created"),
+        BRIDGE_GLOBAL_TOPIC,
+      );
     }
 
     ctx.status(existing ? 200 : 201);

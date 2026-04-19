@@ -10,7 +10,7 @@ The plan treats the TUI as a thin shell around one bound workspace scope. In tha
 
 The current TUI embeds one local PTY in the middle column and gives it no persistence beyond the lifetime of the TUI process. That produces three product gaps:
 
-1. Closing `lifecycle-tui` tears down the middle terminal session instead of detaching from it.
+1. Closing the historical standalone TUI tears down the middle terminal session instead of detaching from it.
 2. Users cannot split the middle terminal without Lifecycle building its own inner pane model.
 3. The TUI does not yet have an explicit contract for how the middle and right columns bind to `local`, `docker`, and `cloud` workspaces.
 
@@ -184,7 +184,7 @@ When the tmux-backed TUI contract ships, update the relevant docs in the same ch
 
 ### Local
 
-1. Start a long-running command in a local workspace tmux session, close `lifecycle-tui`, reopen it, and confirm the process survived.
+1. Start a long-running command in a local workspace tmux session, close the historical standalone TUI, reopen it, and confirm the process survived.
 2. Split the tmux session in the middle column and confirm Lifecycle outer-column resize still produces correct terminal resizing.
 3. Confirm explicit kill ends the tmux session while normal exit detaches.
 

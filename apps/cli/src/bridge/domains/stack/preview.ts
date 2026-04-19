@@ -148,11 +148,11 @@ async function proxyHttpRequest(request: Request, target: PreviewTarget): Promis
   const headers = cloneProxyHeaders(request, target.host);
 
   return fetch(upstreamUrl, {
-    body: method === "GET" || method === "HEAD" ? undefined : request.body,
     headers,
     method: request.method,
     redirect: "manual",
     signal: request.signal,
+    ...(method === "GET" || method === "HEAD" ? {} : { body: request.body }),
   });
 }
 

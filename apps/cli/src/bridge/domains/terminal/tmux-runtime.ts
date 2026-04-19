@@ -11,6 +11,7 @@ import type {
 export const TMUX_TERMINAL_RECORD_FORMAT =
   "#{window_id}\t#{window_name}\t#{window_activity_flag}\t#{window_active}";
 const TMUX_CREATED_WINDOW_ID_FORMAT = "#{window_id}";
+const TMUX_SCROLLBACK_CAPTURE_LINES = 2_000;
 const MANAGED_TMUX_PROFILE_VERSION = 2;
 // tmux server options live for the lifetime of the socket. Bump the managed
 // socket namespace when Lifecycle changes its expected managed profile so new
@@ -184,6 +185,22 @@ export function buildTmuxCreateTerminalArgs(
 
 export function buildTmuxCloseTerminalArgs(sessionName: string, terminalId: string): string[] {
   return ["kill-window", "-t", buildTmuxTerminalTarget(sessionName, terminalId)];
+}
+
+export function buildTmuxCaptureHistoryArgs(
+  sessionName: string,
+  terminalId: string,
+  lines = TMUX_SCROLLBACK_CAPTURE_LINES,
+): string[] {
+  return [
+    "capture-pane",
+    "-p",
+    "-e",
+    "-t",
+    buildTmuxTerminalTarget(sessionName, terminalId),
+    "-S",
+    String(-Math.max(1, lines)),
+  ];
 }
 
 export function parseTmuxTerminalRecords(stdout: string): WorkspaceTerminalRecord[] {

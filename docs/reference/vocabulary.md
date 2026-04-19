@@ -385,9 +385,11 @@ Repository records own provider linkage for clone, push, pull request create, an
 
 Repository records carry both a human `name` and a canonical `slug`.
 
-`repo install` is the repo-scoped setup path for Lifecycle-managed harness integration. The current shipped behavior installs merge-only repo-scoped MCP config plus repo-scoped hook integration for supported harnesses.
+`install` is the unified Lifecycle setup path. It is bridge-backed so CLI, TUI, and desktop can share one install/status/apply flow for local preview proxy setup, repo-scoped harness integration, and managed AGENTS.md / CLAUDE.md guidance blocks.
 
-`proxy install` is the machine-scoped setup path for local preview routing. It installs optional clean HTTP support for `*.lifecycle.localhost` on the current machine and is separate from repo-scoped harness integration.
+`repo install` remains the lower-level repo-scoped setup path for Lifecycle-managed harness integration. The current shipped behavior installs merge-only repo-scoped MCP config plus repo-scoped hook integration for supported harnesses.
+
+`proxy install` remains the lower-level machine-scoped setup path for local preview routing. It installs optional clean HTTP support for `*.lifecycle.localhost` on the current machine and is separate from repo-scoped harness integration.
 
 ### Remote collaboration
 
@@ -493,11 +495,32 @@ Examples: project pages, pull request tabs, project activity
 
 ### Workspace-scoped
 
-Live execution or local worktree context tied to one workspace.
+Live execution context tied to one workspace.
 
 Examples: terminals, services and preview surfaces, local changes, workspace canvas layout
 
 Local worktree checkouts live under `~/.lifecycle/worktrees/<org_slug>/<repo_slug>/`, with `local` as the org slug when no active organization is selected.
+
+### Repository path
+
+The durable source checkout path on the authoritative bridge host.
+
+Use this term for:
+
+1. local worktree creation, rename, and archive operations
+2. root-workspace source checkout identity
+
+Do not use this term for runtime cwd once a workspace has been resolved.
+
+### Workspace root
+
+The live runtime working directory for one concrete workspace.
+
+Rules:
+
+1. Runtime reads and mutations such as shell attach, terminal control, stack execution, file IO, and git status use the workspace root.
+2. For `checkout_type=root`, the workspace root equals the repository path.
+3. For `checkout_type=worktree`, the workspace root is the concrete worktree checkout and the repository path remains the source checkout used to manage it.
 
 ## Current vs Target Terms
 

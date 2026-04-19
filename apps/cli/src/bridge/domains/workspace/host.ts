@@ -52,9 +52,12 @@ export interface SubscribeWorkspaceFileEventsInput {
   workspaceRoot?: string | null;
 }
 
+// Host mutations should use repositoryPath only for source-checkout operations such as
+// creating, renaming, or removing a local worktree. Runtime operations should use the
+// workspace record's workspace_root as the authoritative cwd across every host.
 export interface EnsureWorkspaceInput {
   workspace: WorkspaceRecord;
-  projectPath: string;
+  repositoryPath: string;
   baseRef?: string | null;
   worktreeRoot?: string | null;
   manifestFingerprint?: string | null;
@@ -62,7 +65,7 @@ export interface EnsureWorkspaceInput {
 
 export interface RenameWorkspaceInput {
   workspace: WorkspaceRecord;
-  projectPath: string;
+  repositoryPath: string;
   name: string;
 }
 
@@ -72,7 +75,7 @@ export interface WorkspaceArchiveDisposition {
 
 export interface ArchiveWorkspaceInput {
   workspace: WorkspaceRecord;
-  projectPath: string;
+  repositoryPath: string;
 }
 
 export type OpenInAppId =
@@ -181,9 +184,10 @@ export type WorkspaceTerminalTransport =
 
 export interface WorkspaceTerminalConnection {
   connectionId: string;
+  initialAnsi: string | null;
+  launchError: string | null;
   terminalId: string;
   transport: WorkspaceTerminalTransport | null;
-  launchError: string | null;
 }
 
 export interface StopWorkspaceStackInput {

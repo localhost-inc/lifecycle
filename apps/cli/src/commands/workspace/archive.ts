@@ -6,7 +6,7 @@ import { z } from "zod";
 import { failCommand, jsonFlag } from "../_shared";
 
 export default defineCommand({
-  description: "Archive (delete) a local workspace and its git worktree.",
+  description: "Alias for `lifecycle workspace destroy`.",
   input: z.object({
     args: z.array(z.string()).describe("<name>"),
     json: jsonFlag,
@@ -37,7 +37,7 @@ export default defineCommand({
         return 0;
       }
 
-      context.stdout(`Workspace "${result.name}" archived.`);
+      context.stdout(`Workspace "${result.name}" deleted.`);
       return 0;
     } catch (error) {
       return failCommand(error, { json: input.json, stderr: context.stderr });

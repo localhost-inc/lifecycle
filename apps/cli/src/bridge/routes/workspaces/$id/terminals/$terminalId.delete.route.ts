@@ -40,6 +40,19 @@ export default createRoute({
   handler: async ({ params, ctx }) => {
     const db = ctx.get("db");
     const workspaceRegistry = ctx.get("workspaceRegistry");
-    return await closeWorkspaceTerminal(db, workspaceRegistry, params.id, params.terminalId);
+    const [{ broadcastMessage }, { buildWorkspaceSnapshotInvalidatedMessage, workspaceTopic }] =
+      await Promise.all([
+        import("../../../../lib/server"),
+        import("../../../../lib/socket-topics"),
+      ]);
+    const response = await closeWorkspaceTerminal(db, workspaceRegistry, params.id, params.terminalId);
+    broadcastMessage(
+      buildWorkspaceSnapshotInvalidatedMessage({
+        reason: "terminal.closed",
+        workspaceId: params.id,
+      }),
+      workspaceTopic(params.id),
+    );
+    return response;
   },
 });

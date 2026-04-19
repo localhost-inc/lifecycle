@@ -3,9 +3,17 @@ import { spawnSync } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import { ensureLifecycleDb, getLifecycleDb } from "@lifecycle/db";
 import { resolveBridgePort } from "../domains/stack";
-import { createWorkspaceHostRegistry, type WorkspaceHostRegistry } from "../domains/workspace";
+import {
+  createWorkspaceHostRegistry,
+  createWorkspaceWatchManager,
+  type WorkspaceHostRegistry,
+} from "../domains/workspace";
 import { CloudWorkspaceHost } from "../domains/workspace/hosts/cloud";
-import { LocalWorkspaceHost, invokeLocalWorkspaceCommand } from "../domains/workspace/hosts/local";
+import {
+  LocalWorkspaceHost,
+  invokeLocalWorkspaceCommand,
+  watchPath,
+} from "../domains/workspace/hosts/local";
 import { createControlPlaneClient } from "../domains/auth/control-plane";
 import {
   createPreviewRequestRouter,
@@ -20,6 +28,11 @@ import {
   removeBridgeRegistrationAtPath,
   writeBridgeRegistration,
 } from "./registration";
+import {
+  BRIDGE_GLOBAL_TOPIC,
+  buildWorkspaceSnapshotInvalidatedMessage,
+  workspaceTopic,
+} from "./socket-topics";
 
 let _workspaceRegistry: WorkspaceHostRegistry | null = null;
 let workspaceRegistry: WorkspaceHostRegistry | null = null;
@@ -50,12 +63,25 @@ export type BridgeSocketMessage =
 type BridgeHttpServer = ReturnType<typeof Bun.serve<BridgeRuntimeSocketData>>;
 
 const clients = new Set<ServerWebSocket<BridgeSocketData>>();
+const topicAwareClientIds = new Set<string>();
+
+export function shouldDeliverTopicMessage(input: {
+  subscribed: boolean;
+  usesTopicSubscriptions: boolean;
+}): boolean {
+  return !input.usesTopicSubscriptions || input.subscribed;
+}
 
 export function broadcastMessage(message: object, topic?: string): void {
   const payload = JSON.stringify(message);
   if (topic) {
     for (const ws of clients) {
-      if (ws.isSubscribed(topic)) {
+      if (
+        shouldDeliverTopicMessage({
+          subscribed: ws.isSubscribed(topic),
+          usesTopicSubscriptions: topicAwareClientIds.has(ws.data.clientId),
+        })
+      ) {
         ws.send(payload);
       }
     }
@@ -193,6 +219,7 @@ function getBridgeWorkspaceHostRegistry(): WorkspaceHostRegistry {
         },
         readTextFile: (path) => readFile(path, "utf8"),
       },
+      watchPath,
     });
     const cloudClient = new CloudWorkspaceHost({
       execWorkspaceCommand: async (workspaceId, command) => {
@@ -272,6 +299,7 @@ async function startBridgeHttpServer(options: {
 
         const bridgeSocket = ws as ServerWebSocket<BridgeSocketData>;
         clients.add(bridgeSocket);
+        bridgeSocket.subscribe(BRIDGE_GLOBAL_TOPIC);
         bridgeSocket.send(
           JSON.stringify({ type: "connected", clientId: bridgeSocket.data.clientId }),
         );
@@ -287,15 +315,18 @@ async function startBridgeHttpServer(options: {
 
         try {
           const msg = JSON.parse(String(raw)) as BridgeSocketMessage;
+          const bridgeSocket = ws as ServerWebSocket<BridgeSocketData>;
           switch (msg.type) {
             case "subscribe":
-              for (const topic of msg.topics) ws.subscribe(topic);
+              topicAwareClientIds.add(bridgeSocket.data.clientId);
+              for (const topic of msg.topics) bridgeSocket.subscribe(topic);
               break;
             case "unsubscribe":
-              for (const topic of msg.topics) ws.unsubscribe(topic);
+              topicAwareClientIds.add(bridgeSocket.data.clientId);
+              for (const topic of msg.topics) bridgeSocket.unsubscribe(topic);
               break;
             case "ping":
-              ws.send(JSON.stringify({ type: "pong" }));
+              bridgeSocket.send(JSON.stringify({ type: "pong" }));
               break;
           }
         } catch {
@@ -308,7 +339,9 @@ async function startBridgeHttpServer(options: {
           return;
         }
 
-        clients.delete(ws as ServerWebSocket<BridgeSocketData>);
+        const bridgeSocket = ws as ServerWebSocket<BridgeSocketData>;
+        topicAwareClientIds.delete(bridgeSocket.data.clientId);
+        clients.delete(bridgeSocket);
       },
     },
   });
@@ -325,7 +358,12 @@ export interface BridgeServer {
 
 let activeBridgeServer: BridgeHttpServer | null = null;
 let activePreviewRouter: PreviewRequestRouter | null = null;
+let activeWorkspaceWatchManager: ReturnType<typeof createWorkspaceWatchManager> | null = null;
 let bridgeKeepAliveTimer: ReturnType<typeof setInterval> | null = null;
+
+export function requestWorkspaceWatchSync(): void {
+  void activeWorkspaceWatchManager?.sync();
+}
 
 function waitForever(): Promise<never> {
   if (bridgeKeepAliveTimer === null) {
@@ -351,6 +389,20 @@ export async function startBridgeServer(input: { port?: number } = {}): Promise<
   });
   activeBridgeServer = server;
   activePreviewRouter = previewRouter;
+  activeWorkspaceWatchManager = createWorkspaceWatchManager({
+    db: await getLifecycleDb(),
+    workspaceRegistry: getBridgeWorkspaceHostRegistry(),
+    onWorkspaceInvalidated: (workspaceId) => {
+      broadcastMessage(
+        buildWorkspaceSnapshotInvalidatedMessage({
+          reason: "files.changed",
+          workspaceId,
+        }),
+        workspaceTopic(workspaceId),
+      );
+    },
+  });
+  await activeWorkspaceWatchManager.sync();
 
   await writeBridgeRegistration({ pid: process.pid, port: boundPort as number });
 
@@ -368,6 +420,8 @@ export async function startBridgeServer(input: { port?: number } = {}): Promise<
     activeBridgeServer = null;
     activePreviewRouter?.stop();
     activePreviewRouter = null;
+    activeWorkspaceWatchManager?.stop();
+    activeWorkspaceWatchManager = null;
     server.stop(true);
     await removeBridgeRegistration();
   };

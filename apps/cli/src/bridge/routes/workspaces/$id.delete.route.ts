@@ -23,10 +23,20 @@ export default createRoute({
   handler: async ({ params, query, ctx }) => {
     const db = ctx.get("db");
     const workspaceRegistry = ctx.get("workspaceRegistry");
-    return archiveWorkspace(db, workspaceRegistry, {
+    const [
+      { broadcastMessage, requestWorkspaceWatchSync },
+      { BRIDGE_GLOBAL_TOPIC, buildAppSnapshotInvalidatedMessage },
+    ] = await Promise.all([
+      import("../../lib/server"),
+      import("../../lib/socket-topics"),
+    ]);
+    const response = await archiveWorkspace(db, workspaceRegistry, {
       force: query.force === "true",
       workspaceId: params.id,
       ...(query.repoPath ? { repoPath: query.repoPath } : {}),
     });
+    requestWorkspaceWatchSync();
+    broadcastMessage(buildAppSnapshotInvalidatedMessage("workspace.archived"), BRIDGE_GLOBAL_TOPIC);
+    return response;
   },
 });

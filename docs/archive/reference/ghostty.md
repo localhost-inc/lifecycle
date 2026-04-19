@@ -269,17 +269,17 @@ zigup 0.15.0
 
 ### rpath workaround (macOS)
 
-The sys crate links a dynamic library (`libghostty-vt.dylib`) but does not set an rpath. Our `apps/tui/build.rs` fixes this:
+The sys crate links a dynamic library (`libghostty-vt.dylib`) but does not set an rpath. The deleted Rust TUI package used a `build.rs` workaround for this:
 
 1. Adds `-Wl,-headerpad_max_install_names` so `install_name_tool` can work post-build
 2. Finds the sys crate's build output directory containing `ghostty-install/lib`
 3. Adds `-Wl,-rpath,<that directory>` so the binary can find the dylib at runtime
 
-If the binary fails at launch with `dyld: Library not loaded: libghostty-vt.dylib`, the rpath was not set correctly. Check `apps/tui/build.rs` and ensure the sys crate built successfully.
+If the binary fails at launch with `dyld: Library not loaded: libghostty-vt.dylib`, the rpath was not set correctly. Check the historical Rust TUI `build.rs` and ensure the sys crate built successfully.
 
 ### Feature flags
 
-The ghostty backend is feature-gated in `apps/tui/Cargo.toml`:
+The ghostty backend was feature-gated in the deleted Rust TUI package's `Cargo.toml`:
 
 ```toml
 [features]
@@ -292,7 +292,7 @@ Build with `--no-default-features --features vt-vt100` to skip the Zig/Ghostty b
 
 ## Our Usage
 
-The TUI backend lives at `apps/tui/src/vt/ghostty.rs`. It implements the `VtBackend` trait:
+The deleted Rust TUI package used a backend at `src/vt/ghostty.rs`. It implemented the `VtBackend` trait:
 
 ```rust
 pub trait VtBackend {
@@ -312,7 +312,7 @@ Key implementation details:
 
 ## Key Files
 
-- `apps/tui/src/vt/ghostty.rs` -- our backend implementation
-- `apps/tui/src/vt/mod.rs` -- VtBackend trait, VtCell, VtGrid types
-- `apps/tui/build.rs` -- rpath workaround for macOS
-- `apps/tui/Cargo.toml` -- feature flags and git dependency
+- deleted Rust TUI `src/vt/ghostty.rs` -- backend implementation
+- deleted Rust TUI `src/vt/mod.rs` -- VtBackend trait, VtCell, VtGrid types
+- deleted Rust TUI `build.rs` -- rpath workaround for macOS
+- deleted Rust TUI `Cargo.toml` -- feature flags and git dependency

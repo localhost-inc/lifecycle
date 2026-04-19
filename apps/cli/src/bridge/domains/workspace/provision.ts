@@ -128,7 +128,7 @@ export async function createWorkspace(
 
   const ensuredWorkspace = await workspaceHosts.resolve(host).ensureWorkspace({
     workspace: draftWorkspace,
-    projectPath: repoPath,
+    repositoryPath: repoPath,
     worktreeRoot,
   });
 
@@ -224,7 +224,7 @@ export async function archiveWorkspace(
 
   await workspaceHosts.resolve(workspace.host).archiveWorkspace({
     workspace,
-    projectPath: repository.path,
+    repositoryPath: repository.path,
   });
   await markWorkspaceArchived(db, repository.id, workspace.name);
 

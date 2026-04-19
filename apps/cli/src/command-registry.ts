@@ -6,6 +6,7 @@ export const commandRegistry = {
   "bridge/status": async () => (await import("./commands/bridge/status")).default,
   "bridge/stop": async () => (await import("./commands/bridge/stop")).default,
   context: async () => (await import("./commands/context")).default,
+  install: async () => (await import("./commands/install")).default,
   "db/server": async () => (await import("./commands/db/server")).default,
   "mcp/install": async () => (await import("./commands/mcp/install")).default,
   "org/connect/cloudflare": async () => (await import("./commands/org/connect/cloudflare")).default,

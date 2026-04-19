@@ -1,3 +1,4 @@
+import type { GitFileChangeKind, GitLogEntry, GitStatusResult } from "@lifecycle/contracts";
 import { cpSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
@@ -12,6 +13,10 @@ export async function invokeLocalWorkspaceCommand(
   switch (cmd) {
     case "get_git_current_branch":
       return getGitCurrentBranch(requireStringArg(args, "repoPath"));
+    case "get_git_status":
+      return getGitStatus(requireStringArg(args, "repoPath"));
+    case "list_git_log":
+      return listGitLog(requireStringArg(args, "repoPath"), requireNumberArg(args, "limit"));
     case "get_git_sha":
       return getGitSha(requireStringArg(args, "repoPath"), requireStringArg(args, "refName"));
     case "create_git_worktree":
@@ -70,6 +75,14 @@ function optionalBooleanArg(args: InvokeArgs, key: string): boolean | null {
   return typeof value === "boolean" ? value : null;
 }
 
+function requireNumberArg(args: InvokeArgs, key: string): number {
+  const value = args?.[key];
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`Local workspace invoke requires a finite number "${key}".`);
+  }
+  return value;
+}
+
 function runGit(args: string[], options: { cwd: string }): string {
   const result = spawnSync("git", args, {
     cwd: options.cwd,
@@ -85,15 +98,194 @@ function runGit(args: string[], options: { cwd: string }): string {
     throw new Error((result.stderr || `git ${args.join(" ")} failed`).trim());
   }
 
-  return (result.stdout ?? "").trim();
+  return (result.stdout ?? "").trimEnd();
 }
 
 function getGitCurrentBranch(repoPath: string): string {
   return runGit(["rev-parse", "--abbrev-ref", "HEAD"], { cwd: repoPath });
 }
 
+function getGitStatus(repoPath: string): GitStatusResult {
+  const branchSummary = runGit(["status", "--porcelain=2", "--branch"], { cwd: repoPath });
+  let branch: string | null = null;
+  let headSha: string | null = null;
+  let upstream: string | null = null;
+  let ahead = 0;
+  let behind = 0;
+
+  for (const line of branchSummary.split(/\r?\n/)) {
+    if (line.startsWith("# branch.head ")) {
+      const value = line.slice("# branch.head ".length).trim();
+      branch = value && value !== "(detached)" ? value : null;
+      continue;
+    }
+
+    if (line.startsWith("# branch.oid ")) {
+      const value = line.slice("# branch.oid ".length).trim();
+      headSha = value && value !== "(initial)" ? value : null;
+      continue;
+    }
+
+    if (line.startsWith("# branch.upstream ")) {
+      const value = line.slice("# branch.upstream ".length).trim();
+      upstream = value || null;
+      continue;
+    }
+
+    if (line.startsWith("# branch.ab ")) {
+      const match = line.match(/\+(\d+)\s+-(\d+)$/);
+      if (match) {
+        ahead = Number.parseInt(match[1] ?? "0", 10);
+        behind = Number.parseInt(match[2] ?? "0", 10);
+      }
+    }
+  }
+
+  const files = parseGitStatusFiles(runGit(["status", "--porcelain=1"], { cwd: repoPath }));
+
+  return {
+    branch,
+    headSha,
+    upstream,
+    ahead,
+    behind,
+    files,
+  };
+}
+
+function parseGitStatusFiles(output: string): GitStatusResult["files"] {
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      if (line.startsWith("?? ")) {
+        const path = line.slice(3);
+        return {
+          path,
+          originalPath: null,
+          indexStatus: null,
+          worktreeStatus: "untracked",
+          staged: false,
+          unstaged: true,
+          stats: { insertions: null, deletions: null },
+        };
+      }
+
+      if (line.startsWith("!! ")) {
+        const path = line.slice(3);
+        return {
+          path,
+          originalPath: null,
+          indexStatus: null,
+          worktreeStatus: "ignored",
+          staged: false,
+          unstaged: true,
+          stats: { insertions: null, deletions: null },
+        };
+      }
+
+      const xy = line.slice(0, 2);
+      const rawPath = line.slice(3);
+      const renameParts = rawPath.includes(" -> ") ? rawPath.split(" -> ") : null;
+      const originalPath = renameParts?.[0] ?? null;
+      const path = renameParts?.[1] ?? rawPath;
+      const indexStatus = mapGitStatusChar(xy[0] ?? " ");
+      const worktreeStatus = mapGitStatusChar(xy[1] ?? " ");
+
+      return {
+        path,
+        originalPath,
+        indexStatus,
+        worktreeStatus,
+        staged: indexStatus !== null,
+        unstaged: worktreeStatus !== null,
+        stats: { insertions: null, deletions: null },
+      };
+    });
+}
+
+function mapGitStatusChar(value: string): GitFileChangeKind | null {
+  switch (value) {
+    case "M":
+    case "m":
+      return "modified";
+    case "A":
+      return "added";
+    case "D":
+      return "deleted";
+    case "R":
+      return "renamed";
+    case "C":
+      return "copied";
+    case "U":
+      return "unmerged";
+    case "?":
+      return "untracked";
+    case "!":
+      return "ignored";
+    case "T":
+      return "type_changed";
+    case " ":
+    case ".":
+      return null;
+    default:
+      return null;
+  }
+}
+
+function listGitLog(repoPath: string, limit: number): GitLogEntry[] {
+  try {
+    const output = runGit(
+      [
+        "log",
+        "-n",
+        String(Math.max(0, Math.trunc(limit))),
+        "--format=%H%x1f%h%x1f%s%x1f%an%x1f%ae%x1f%cI",
+      ],
+      { cwd: repoPath },
+    );
+
+    if (!output) {
+      return [];
+    }
+
+    return output.split(/\r?\n/).filter(Boolean).map((line) => {
+      const [sha, shortSha, message, author, email, timestamp] = line.split("\u001f");
+      return {
+        sha: sha ?? "",
+        shortSha: shortSha ?? "",
+        message: message ?? "",
+        author: author ?? "",
+        email: email ?? "",
+        timestamp: timestamp ?? "",
+      };
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("does not have any commits yet")) {
+      return [];
+    }
+    throw error;
+  }
+}
+
 function getGitSha(repoPath: string, refName: string): string {
   return runGit(["rev-parse", refName], { cwd: repoPath });
+}
+
+function gitRefExists(repoPath: string, refName: string): boolean {
+  const result = spawnSync("git", ["show-ref", "--verify", "--quiet", refName], {
+    cwd: repoPath,
+    encoding: "utf8",
+    stdio: ["ignore", "ignore", "ignore"],
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  return result.status === 0;
 }
 
 function createGitWorktree(input: {
@@ -108,6 +300,28 @@ function createGitWorktree(input: {
   const worktreeRoot = resolveWorktreeRoot(input.repoPath, input.worktreeRoot);
   mkdirSync(worktreeRoot, { recursive: true });
   const workspaceRoot = join(worktreeRoot, worktreeDirName(input.name, input.id));
+  const branchRef = `refs/heads/${input.branch}`;
+
+  // Prune stale worktree metadata first so an existing workspace branch can
+  // be reattached after its on-disk worktree was deleted.
+  runGit(["worktree", "prune"], { cwd: input.repoPath });
+
+  if (gitRefExists(input.repoPath, branchRef)) {
+    runGit(["worktree", "add", workspaceRoot, input.branch], {
+      cwd: input.repoPath,
+    });
+
+    if (input.copyConfigFiles) {
+      try {
+        copyLocalConfigFiles(input.repoPath, workspaceRoot);
+      } catch (error) {
+        removeGitWorktree(input.repoPath, workspaceRoot);
+        throw error;
+      }
+    }
+
+    return workspaceRoot;
+  }
 
   runGit(["worktree", "add", "--detach", workspaceRoot, input.baseRef], {
     cwd: input.repoPath,

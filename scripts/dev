@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DESKTOP_DEV_SCRIPT="$REPO_ROOT/apps/desktop-mac/scripts/dev.sh"
 DESKTOP_SMOKE_SCRIPT="$REPO_ROOT/apps/desktop-mac/scripts/dev-loop-smoke.sh"
+TUI_DEV_SCRIPT="$REPO_ROOT/apps/cli/scripts/dev-tui.sh"
 DEV_RUNTIME_ROOT="${LIFECYCLE_RUNTIME_ROOT:-$("$REPO_ROOT/scripts/dev-runtime-root")}"
 DEV_STATE_ROOT="${LIFECYCLE_DEV_STATE_ROOT:-$DEV_RUNTIME_ROOT/dev}"
 DEV_LOG_DIR="$DEV_STATE_ROOT/logs"
@@ -171,12 +172,13 @@ show_logs() {
 
 usage() {
   cat <<'EOF'
-usage: scripts/dev [desktop|desktop-services|desktop-app|desktop-smoke|status|stop|logs]
+usage: scripts/dev [desktop|desktop-services|desktop-app|desktop-smoke|tui|status|stop|logs]
 
   desktop           Start the monorepo desktop dev loop.
   desktop-services  Start bridge and control-plane only.
   desktop-app       Start the desktop app build/reload loop only.
   desktop-smoke     Verify the desktop dev loop contract end to end.
+  tui               Start the CLI-owned TUI dev loop.
   status            Show current dev service state and log locations.
   stop              Stop the current desktop dev loop and clear owned listeners.
   logs <service>    Tail a dev service log.
@@ -195,6 +197,10 @@ case "${1:-desktop}" in
     ;;
   desktop-smoke)
     exec "$DESKTOP_SMOKE_SCRIPT"
+    ;;
+  tui)
+    shift
+    exec "$TUI_DEV_SCRIPT" "$@"
     ;;
   status)
     show_status

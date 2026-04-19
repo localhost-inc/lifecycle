@@ -118,7 +118,7 @@ describe("@lifecycle/db", () => {
     expect(workspaceColumns.some((column) => column.name === "host")).toBe(true);
     expect(workspaceColumns.some((column) => column.name === "slug")).toBe(true);
     expect(repositoryColumns.some((column) => column.name === "slug")).toBe(true);
-    expect(migrationVersions.map((row) => row.version)).toEqual([1, 2, 3, 4, 5]);
+    expect(migrationVersions.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6]);
 
     await db.close();
   });

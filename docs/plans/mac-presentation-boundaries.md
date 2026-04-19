@@ -250,7 +250,7 @@ Examples:
 
 ### 3. Directory-Level Lint
 
-Add a small script under `apps/desktop-mac/scripts/` that runs in `bun run qa` and asserts:
+Add a small script under `apps/desktop-mac/scripts/` that runs in `just check` and asserts:
 
 1. no `Task.sleep` inside `Features/` or `Surfaces/`
 2. no `JSONDecoder` usage inside `Features/` or `Surfaces/`

@@ -29,7 +29,9 @@ export type {
 } from "./host";
 export type { ManifestStatus } from "./manifest";
 export type { WorkspaceHostRegistry, WorkspaceHostRegistryAdapters } from "./registry";
+export type { WorkspaceWatchManager } from "./watcher";
 export { createWorkspaceHostRegistry } from "./registry";
+export { createWorkspaceWatchManager } from "./watcher";
 export { buildCloudShellSshArgs, type CloudShellConnection } from "./hosts/cloud";
 export { workspaceHostLabel } from "./policy";
 export { autoWorkspaceName, workspaceBranchName } from "./policy";

@@ -487,6 +487,79 @@
         }
       }
     },
+    "/workspaces/{id}/agents": {
+      "get": {
+        "operationId": "getWorkspacesByIdAgents",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeAgentsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "postWorkspacesByIdAgents",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "$ref": "#/components/schemas/AgentProviderId"
+                  }
+                },
+                "required": [
+                  "provider"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRecord"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workspaces/{id}/stack/start": {
       "post": {
         "operationId": "postWorkspacesByIdStackStart",
@@ -850,7 +923,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeWorkspaceGitResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -1124,6 +1204,276 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BridgeSettingsEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/install/apply": {
+      "post": {
+        "operationId": "postInstallApply",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "document_scope": {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/InstallDocumentScope"
+                      }
+                    ]
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "step_ids": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/InstallStepId"
+                    }
+                  }
+                },
+                "required": [
+                  "step_ids"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallApplyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/install": {
+      "get": {
+        "operationId": "getInstall",
+        "parameters": [
+          {
+            "name": "document_scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/InstallDocumentScope"
+                }
+              ]
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallInspection"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{agentId}/approvals/{approvalId}": {
+      "post": {
+        "operationId": "postAgentsByAgentIdApprovalsByApprovalId",
+        "parameters": [
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "approvalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "approve_once",
+                      "approve_session",
+                      "reject"
+                    ]
+                  }
+                },
+                "required": [
+                  "decision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        }
+      }
+    },
+    "/agents/{agentId}/cancel": {
+      "post": {
+        "operationId": "postAgentsByAgentIdCancel",
+        "parameters": [
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "turnId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRecord"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{agentId}/turns": {
+      "post": {
+        "operationId": "postAgentsByAgentIdTurns",
+        "parameters": [
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "turnId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "turnId",
+                  "text"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRecord"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{agentId}": {
+      "get": {
+        "operationId": "getAgentsByAgentId",
+        "parameters": [
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeAgentSnapshotEnvelope"
                 }
               }
             }
@@ -1678,6 +2028,10 @@
           "connection_id": {
             "type": "string"
           },
+          "initial_ansi": {
+            "nullable": true,
+            "type": "string"
+          },
           "terminal_id": {
             "type": "string"
           },
@@ -1696,6 +2050,7 @@
         },
         "required": [
           "connection_id",
+          "initial_ansi",
           "terminal_id",
           "launch_error"
         ],
@@ -1982,6 +2337,87 @@
           "workspace",
           "runtime",
           "terminal"
+        ],
+        "additionalProperties": false
+      },
+      "AgentRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/AgentProviderId"
+          },
+          "provider_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentStatus"
+          },
+          "last_message_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "provider",
+          "provider_id",
+          "title",
+          "status",
+          "last_message_at",
+          "created_at",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      },
+      "AgentProviderId": {
+        "type": "string",
+        "enum": [
+          "claude",
+          "codex"
+        ]
+      },
+      "AgentStatus": {
+        "type": "string",
+        "enum": [
+          "starting",
+          "idle",
+          "running",
+          "waiting_input",
+          "waiting_approval",
+          "completed",
+          "failed",
+          "cancelled"
+        ]
+      },
+      "BridgeAgentsResponse": {
+        "type": "object",
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentRecord"
+            }
+          }
+        },
+        "required": [
+          "agents"
         ],
         "additionalProperties": false
       },
@@ -2332,6 +2768,405 @@
         "required": [
           "workspace",
           "shell"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeGitStatusResult": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "nullable": true,
+            "type": "string"
+          },
+          "headSha": {
+            "nullable": true,
+            "type": "string"
+          },
+          "upstream": {
+            "nullable": true,
+            "type": "string"
+          },
+          "ahead": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "behind": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BridgeGitFileStatus"
+            }
+          }
+        },
+        "required": [
+          "branch",
+          "headSha",
+          "upstream",
+          "ahead",
+          "behind",
+          "files"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeGitFileStatus": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "originalPath": {
+            "nullable": true,
+            "type": "string"
+          },
+          "indexStatus": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BridgeGitFileChangeKind"
+              }
+            ]
+          },
+          "worktreeStatus": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BridgeGitFileChangeKind"
+              }
+            ]
+          },
+          "staged": {
+            "type": "boolean"
+          },
+          "unstaged": {
+            "type": "boolean"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/BridgeGitFileStats"
+          }
+        },
+        "required": [
+          "path",
+          "indexStatus",
+          "worktreeStatus",
+          "staged",
+          "unstaged",
+          "stats"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeGitFileChangeKind": {
+        "type": "string",
+        "enum": [
+          "modified",
+          "added",
+          "deleted",
+          "renamed",
+          "copied",
+          "unmerged",
+          "untracked",
+          "ignored",
+          "type_changed"
+        ]
+      },
+      "BridgeGitFileStats": {
+        "type": "object",
+        "properties": {
+          "insertions": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "deletions": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "insertions",
+          "deletions"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeGitLogEntry": {
+        "type": "object",
+        "properties": {
+          "sha": {
+            "type": "string"
+          },
+          "shortSha": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sha",
+          "shortSha",
+          "message",
+          "author",
+          "email",
+          "timestamp"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeGitBranchPullRequestResult": {
+        "type": "object",
+        "properties": {
+          "support": {
+            "$ref": "#/components/schemas/BridgeGitPullRequestSupport"
+          },
+          "branch": {
+            "nullable": true,
+            "type": "string"
+          },
+          "upstream": {
+            "nullable": true,
+            "type": "string"
+          },
+          "hasPullRequestChanges": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "suggestedBaseRef": {
+            "nullable": true,
+            "type": "string"
+          },
+          "pullRequest": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BridgeGitPullRequestSummary"
+              }
+            ]
+          }
+        },
+        "required": [
+          "support",
+          "branch",
+          "upstream",
+          "hasPullRequestChanges",
+          "suggestedBaseRef",
+          "pullRequest"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeGitPullRequestSupport": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "provider": {
+            "nullable": true,
+            "type": "string",
+            "enum": [
+              "github"
+            ]
+          },
+          "reason": {
+            "nullable": true,
+            "type": "string",
+            "enum": [
+              "mode_not_supported",
+              "provider_unavailable",
+              "authentication_required",
+              "repository_unavailable",
+              "unsupported_remote"
+            ]
+          },
+          "message": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "provider",
+          "reason",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeGitPullRequestSummary": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed",
+              "merged"
+            ]
+          },
+          "isDraft": {
+            "type": "boolean"
+          },
+          "author": {
+            "type": "string"
+          },
+          "headRefName": {
+            "type": "string"
+          },
+          "baseRefName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "mergeable": {
+            "type": "string",
+            "enum": [
+              "mergeable",
+              "conflicting",
+              "unknown"
+            ]
+          },
+          "mergeStateStatus": {
+            "nullable": true,
+            "type": "string"
+          },
+          "reviewDecision": {
+            "nullable": true,
+            "type": "string",
+            "enum": [
+              "approved",
+              "changes_requested",
+              "review_required"
+            ]
+          },
+          "checks": {
+            "nullable": true,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BridgeGitPullRequestCheckSummary"
+            }
+          }
+        },
+        "required": [
+          "number",
+          "title",
+          "url",
+          "state",
+          "isDraft",
+          "author",
+          "headRefName",
+          "baseRefName",
+          "createdAt",
+          "updatedAt",
+          "mergeable",
+          "mergeStateStatus",
+          "reviewDecision",
+          "checks"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeGitPullRequestCheckSummary": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "success",
+              "failed",
+              "neutral"
+            ]
+          },
+          "workflowName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "detailsUrl": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "workflowName",
+          "detailsUrl"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeGitPullRequestListResult": {
+        "type": "object",
+        "properties": {
+          "support": {
+            "$ref": "#/components/schemas/BridgeGitPullRequestSupport"
+          },
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BridgeGitPullRequestSummary"
+            }
+          }
+        },
+        "required": [
+          "support",
+          "pullRequests"
+        ],
+        "additionalProperties": false
+      },
+      "BridgeWorkspaceGitResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/BridgeGitStatusResult"
+          },
+          "commits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BridgeGitLogEntry"
+            }
+          },
+          "currentBranch": {
+            "$ref": "#/components/schemas/BridgeGitBranchPullRequestResult"
+          },
+          "pullRequests": {
+            "$ref": "#/components/schemas/BridgeGitPullRequestListResult"
+          }
+        },
+        "required": [
+          "status",
+          "commits",
+          "currentBranch",
+          "pullRequests"
         ],
         "additionalProperties": false
       },
@@ -3352,6 +4187,386 @@
             "additionalProperties": false
           }
         },
+        "additionalProperties": false
+      },
+      "InstallDocumentScope": {
+        "type": "string",
+        "enum": [
+          "project",
+          "user"
+        ]
+      },
+      "InstallStepId": {
+        "type": "string",
+        "enum": [
+          "proxy",
+          "claude-code",
+          "codex",
+          "agents-md",
+          "claude-md"
+        ]
+      },
+      "InstallApplyStep": {
+        "type": "object",
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "detail": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/components/schemas/InstallStepId"
+          },
+          "label": {
+            "type": "string"
+          },
+          "path": {
+            "nullable": true,
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/InstallStepScope"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InstallApplyStatus"
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InstallApplyTarget"
+            }
+          }
+        },
+        "required": [
+          "actions",
+          "detail",
+          "id",
+          "label",
+          "path",
+          "scope",
+          "status",
+          "targets"
+        ],
+        "additionalProperties": false
+      },
+      "InstallStepScope": {
+        "type": "string",
+        "enum": [
+          "machine",
+          "repository",
+          "user"
+        ]
+      },
+      "InstallApplyStatus": {
+        "type": "string",
+        "enum": [
+          "applied",
+          "unchanged",
+          "requires_elevation",
+          "unsupported"
+        ]
+      },
+      "InstallApplyTarget": {
+        "type": "object",
+        "properties": {
+          "harness_id": {
+            "type": "string"
+          },
+          "integration": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "path": {
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "harness_id",
+          "integration",
+          "label",
+          "path",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "InstallApplyResponse": {
+        "type": "object",
+        "properties": {
+          "document_scope": {
+            "$ref": "#/components/schemas/InstallDocumentScope"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "repo_path": {
+            "nullable": true,
+            "type": "string"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InstallApplyStep"
+            }
+          }
+        },
+        "required": [
+          "document_scope",
+          "ready",
+          "repo_path",
+          "steps"
+        ],
+        "additionalProperties": false
+      },
+      "InstallInspectStep": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/components/schemas/InstallStepId"
+          },
+          "label": {
+            "type": "string"
+          },
+          "path": {
+            "nullable": true,
+            "type": "string"
+          },
+          "requires_elevation": {
+            "type": "boolean"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/InstallStepScope"
+          },
+          "selected_by_default": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InstallInspectStatus"
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InstallInspectTarget"
+            }
+          }
+        },
+        "required": [
+          "detail",
+          "id",
+          "label",
+          "path",
+          "requires_elevation",
+          "scope",
+          "selected_by_default",
+          "status",
+          "targets"
+        ],
+        "additionalProperties": false
+      },
+      "InstallInspectStatus": {
+        "type": "string",
+        "enum": [
+          "installed",
+          "missing",
+          "outdated",
+          "unsupported"
+        ]
+      },
+      "InstallInspectTarget": {
+        "type": "object",
+        "properties": {
+          "harness_id": {
+            "type": "string"
+          },
+          "integration": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "path": {
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "harness_id",
+          "integration",
+          "label",
+          "path",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "InstallInspection": {
+        "type": "object",
+        "properties": {
+          "document_scope": {
+            "$ref": "#/components/schemas/InstallDocumentScope"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "repo_path": {
+            "nullable": true,
+            "type": "string"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InstallInspectStep"
+            }
+          }
+        },
+        "required": [
+          "document_scope",
+          "ready",
+          "repo_path",
+          "steps"
+        ],
+        "additionalProperties": false
+      },
+      "AgentMessageWithParts": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/AgentMessageRole"
+          },
+          "text": {
+            "type": "string"
+          },
+          "turn_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMessagePartRecord"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "agent_id",
+          "role",
+          "text",
+          "turn_id",
+          "created_at",
+          "parts"
+        ],
+        "additionalProperties": false
+      },
+      "AgentMessageRole": {
+        "type": "string",
+        "enum": [
+          "user",
+          "assistant",
+          "system",
+          "tool"
+        ]
+      },
+      "AgentMessagePartRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "part_index": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "part_type": {
+            "$ref": "#/components/schemas/AgentMessagePartType"
+          },
+          "text": {
+            "nullable": true,
+            "type": "string"
+          },
+          "data": {
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "message_id",
+          "agent_id",
+          "part_index",
+          "part_type",
+          "text",
+          "data",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "AgentMessagePartType": {
+        "type": "string",
+        "enum": [
+          "text",
+          "thinking",
+          "status",
+          "image",
+          "tool_call",
+          "tool_result",
+          "attachment_ref",
+          "approval_ref",
+          "artifact_ref"
+        ]
+      },
+      "BridgeAgentSnapshotEnvelope": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentRecord"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMessageWithParts"
+            }
+          }
+        },
+        "required": [
+          "agent",
+          "messages"
+        ],
         "additionalProperties": false
       },
       "BridgeHealthResponse": {

@@ -18,15 +18,22 @@ export default createRoute({
     }),
   },
   handler: async ({ params, body, ctx }) => {
-    const [{ buildWorkspaceActivitySocketMessage, emitWorkspaceActivity }, { broadcastMessage }] =
-      await Promise.all([
-        import("../../../domains/workspace/activity"),
-        import("../../../lib/server"),
-      ]);
+    const [
+      { buildWorkspaceActivitySocketMessage, emitWorkspaceActivity },
+      { broadcastMessage },
+      { workspaceTopic },
+    ] = await Promise.all([
+      import("../../../domains/workspace/activity"),
+      import("../../../lib/server"),
+      import("../../../lib/socket-topics"),
+    ]);
     const db = ctx.get("db");
     const workspaceRegistry = ctx.get("workspaceRegistry");
     const summary = await emitWorkspaceActivity(db, workspaceRegistry, params.id, body);
-    broadcastMessage(await buildWorkspaceActivitySocketMessage(db, summary));
+    broadcastMessage(
+      await buildWorkspaceActivitySocketMessage(db, summary),
+      workspaceTopic(params.id),
+    );
     return summary;
   },
 });

@@ -42,6 +42,7 @@ import type { ManifestStatus } from "../../manifest";
 import type { StartStackInput, StartStackResult } from "../../../stack";
 import { buildCloudShellSshArgs, type CloudShellConnection } from "./shell";
 import {
+  buildTmuxCaptureHistoryArgs,
   buildTmuxCommand,
   buildTmuxCommandText,
   buildEnsureTmuxConnectionCommand,
@@ -313,6 +314,7 @@ export class CloudWorkspaceHost implements WorkspaceHostAdapter {
     if (input.preferredTransport === "stream") {
       return {
         connectionId,
+        initialAnsi: null,
         terminalId,
         transport: null,
         launchError: "Lifecycle does not support streamed cloud terminal connections yet.",
@@ -336,6 +338,7 @@ export class CloudWorkspaceHost implements WorkspaceHostAdapter {
 
     return {
       connectionId,
+      initialAnsi: await this.captureTerminalHistory(workspace, context, terminalId),
       terminalId,
       transport: {
         kind: "spawn",
@@ -568,6 +571,25 @@ export class CloudWorkspaceHost implements WorkspaceHostAdapter {
       profile: resolveTmuxRuntimeProfile(input),
       sessionName: runtime.runtimeId,
     };
+  }
+
+  private async captureTerminalHistory(
+    workspace: WorkspaceRecord,
+    context: Awaited<ReturnType<CloudWorkspaceHost["requireTerminalContext"]>>,
+    terminalId: string,
+  ): Promise<string | null> {
+    try {
+      const result = await this.execWorkspaceCommand(
+        requireWorkspaceId(workspace),
+        buildTmuxCommand(
+          context.profile,
+          buildTmuxCaptureHistoryArgs(context.sessionName, terminalId),
+        ),
+      );
+      return result.exitCode === 0 ? result.stdout : null;
+    } catch {
+      return null;
+    }
   }
 
   private throwIfCommandFailed(

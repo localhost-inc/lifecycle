@@ -10,14 +10,14 @@ This file defines engineering execution standards for agents working in this rep
 
 ## Current Product Focus
 
-1. The active product focus is the `lifecycle` CLI, TUI (`apps/tui`), control plane (CF Workers + Durable Objects + D1), and sandbox provider infrastructure.
+1. The active product focus is the `lifecycle` CLI, the CLI-owned TUI (`apps/cli/src/tui`), control plane (CF Workers + Durable Objects + D1), and sandbox provider infrastructure.
 2. Prefer work that makes workspace lifecycle, shell attach, tmux persistence, host-aware execution, sandbox provisioning, and background agent orchestration more reliable.
 3. OpenCode is the agent runtime inside workspaces. Lifecycle provides workspace awareness through custom tools and plugins, not through custom agent provider integrations.
 4. Treat desktop, web, and other auxiliary surfaces as maintenance-only unless the user explicitly asks for them or they directly unblock CLI/TUI/control-plane work.
 
 ## Operating Context
 
-Lifecycle is a workspace runtime and agent orchestration platform. The working priority is CLI + TUI + control plane + sandbox providers. When the user reports behavioral errors, broken interactions, or "this didn't work", assume they are describing the `lifecycle` CLI, `lifecycle-tui`, control plane, or workspace/environment packages unless they explicitly say desktop, web, or another surface. Investigate CLI/TUI/control-plane codepaths first.
+Lifecycle is a workspace runtime and agent orchestration platform. The working priority is CLI + TUI + control plane + sandbox providers. When the user reports behavioral errors, broken interactions, or "this didn't work", assume they are describing the `lifecycle` CLI, the CLI-owned TUI, control plane, or workspace/environment packages unless they explicitly say desktop, web, or another surface. Investigate CLI/TUI/control-plane codepaths first.
 
 The system has two modes: **interactive** (human in a tmux-backed shell, optionally running an agent) and **background** (headless agent in a sandbox, orchestrated by the control plane). Both share the same workspace contract. See `docs/reference/architecture.md` for the full system design.
 

@@ -30,10 +30,10 @@ If we were choosing again now, these would be the non-negotiable rules:
 1. `lifecycle` is the only Lifecycle-owned executable artifact.
 2. The bridge is a CLI-owned runtime, not a separate package boundary and not a second user-facing executable.
 3. The desktop app launches the bundled CLI by absolute path and asks it to start the bridge with `lifecycle bridge start`.
-4. Bare `lifecycle` should print help by default. It should not implicitly launch a TUI or another product surface.
+4. Bare interactive `lifecycle` launches the first-party TUI that lives inside the CLI package. There is no separate standalone TUI artifact.
 5. The CLI does not own a first-party custom-agent UX, provider-auth UX, transcript UX, or agent-worker orchestration surface.
 6. Runtime operations are bridge-first.
-7. Local file and repo setup operations stay local to the CLI process.
+7. Shared install/setup flows that must work across CLI, TUI, and desktop should be bridge-backed even when they mutate local machine or repo state.
 8. Cloud commands extend the same noun model instead of introducing a second grammar.
 
 ## What The CLI Is
@@ -78,7 +78,7 @@ Rules:
 The CLI should not be:
 
 1. a desktop RPC shim
-2. a TUI launcher by default
+2. a launcher for a separate packaged TUI executable
 3. a home for first-party custom-agent commands
 4. a pile of dev-only subcommands mixed into the public product grammar
 5. a second runtime authority that bypasses the bridge
@@ -93,9 +93,10 @@ Pure filesystem or repo setup work. No bridge required.
 
 Examples:
 
-1. `project init`
-2. `project inspect`
-3. `repo install`
+1. `install`
+2. `project init`
+3. `project inspect`
+4. `repo install`
 
 ### Runtime Mode
 
@@ -153,6 +154,7 @@ If we were choosing today, the public surface would be this.
 2. `lifecycle bridge status`
 3. `lifecycle bridge stop`
 4. `lifecycle context [--json]`
+5. `lifecycle install [--check] [--json] [--yes]`
 
 ### Project
 
@@ -171,7 +173,7 @@ If we were choosing today, the public surface would be this.
 2. `lifecycle workspace list [--json]`
 3. `lifecycle workspace status [--json]`
 4. `lifecycle workspace shell [--json]`
-5. `lifecycle workspace destroy [--json]`
+5. `lifecycle workspace destroy [<workspace>] [--repo-path <path>] [--force] [--json]`
 6. `lifecycle workspace reset [--json]`
 7. `lifecycle workspace logs [--json]`
 8. `lifecycle workspace health [--json]`
@@ -212,13 +214,12 @@ If we were choosing today, the public surface would be this.
 
 These are the commands or patterns we should treat as migration targets, not durable architecture.
 
-1. bare `lifecycle` launching the TUI
-2. `context` routed through desktop RPC
-3. duplicate workspace deletion verbs like `archive`, `destroy`, and `remove`
-4. `workspace run` when stack lifecycle already exists as its own noun
-5. `project create` when `project init` is the clearer contract
-6. public dev-only commands like `db server`, `logs bridge`, and `tmux clean`
-7. any command family under `agent`
+1. `context` routed through desktop RPC
+2. duplicate workspace deletion verbs like `archive` and `remove`; `workspace destroy` is the durable delete verb
+3. `workspace run` when stack lifecycle already exists as its own noun
+4. `project create` when `project init` is the clearer contract
+5. public dev-only commands like `db server`, `logs bridge`, and `tmux clean`
+6. any command family under `agent`
 
 ## Internal Code Architecture
 
@@ -229,7 +230,8 @@ Recommended shape:
 ```text
 apps/cli/
   src/
-    index.ts                 # entrypoint; help-first default
+    index.ts                 # entrypoint; interactive bare invocation launches the TUI
+    tui/*
     cli/
       registry.ts            # command registry only
       runner.ts              # parse, dispatch, help, errors
@@ -343,17 +345,17 @@ Rules:
 
 These are the concrete mismatches between the current repo and the architecture above.
 
-1. `apps/cli/src/index.ts` still launches the TUI on bare invocation.
-2. `apps/cli/src/commands/context.ts` still uses `src/desktop/rpc.ts` instead of the bridge client.
-3. The public command set still includes duplicate or historical verbs.
-4. Public and dev-only commands are still mixed together under one visible registry.
-5. Bridge import boundaries still rely on source re-export shims under `src/bridge/*`.
+1. `apps/cli/src/commands/context.ts` still uses `src/desktop/rpc.ts` instead of the bridge client.
+2. The public command set still includes duplicate or historical verbs.
+3. Public and dev-only commands are still mixed together under one visible registry.
+4. Bridge import boundaries still rely on source re-export shims under `src/bridge/*`.
+5. Active docs and release packaging need to stay aligned with the CLI-owned TUI boundary instead of reviving a separate standalone TUI package.
 
 ## Next Implementation Slices
 
 If we wanted to converge the current codebase onto this architecture, I would do it in this order:
 
-1. Make bare `lifecycle` print help instead of launching the TUI.
+1. Keep the CLI-owned TUI, release packaging, and docs aligned around one shipped `lifecycle` helper payload.
 2. Move `context` off desktop RPC and onto the bridge.
 3. Hide or delete dev-only public commands that are not part of the product grammar.
 4. Collapse duplicate command families to one canonical noun and one canonical verb.

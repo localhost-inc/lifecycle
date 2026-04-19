@@ -14,6 +14,7 @@ import {
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
 import { spawnSync as nodeSpawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { killPid, type StartStackInput, type StartStackResult } from "../../../stack";
 import { LocalStackClient } from "../../../stack/clients/local";
 import type {
@@ -51,6 +52,7 @@ import {
   buildEnsureTmuxConnectionCommand,
   buildEnsureTmuxSessionCommand,
   buildSafeKillTmuxSessionCommand,
+  buildTmuxCaptureHistoryArgs,
   buildTmuxCloseTerminalArgs,
   buildTmuxConnectionId,
   buildTmuxCreateTerminalArgs,
@@ -63,6 +65,7 @@ import {
   resolveTmuxRuntimeProfile,
   shellEscape,
 } from "../../../terminal/tmux-runtime";
+import type { WatchPath } from "./watch-path";
 
 export interface LocalHostDeps {
   invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -72,11 +75,7 @@ export interface LocalHostDeps {
     start(config: LifecycleConfig, input: StartStackInput): Promise<StartStackResult>;
     stop(stackId: string, names: string[]): Promise<void>;
   };
-  watchPath?: (
-    path: string,
-    callback: () => void,
-    options: { recursive: boolean; delayMs: number },
-  ) => Promise<() => void>;
+  watchPath?: WatchPath;
 }
 
 function requireWorktreePath(workspace: WorkspaceRecord): string {
@@ -86,12 +85,14 @@ function requireWorktreePath(workspace: WorkspaceRecord): string {
   return workspace.workspace_root;
 }
 
+const SYSTEM_SH_PROGRAM = Bun.which("sh") ?? "/bin/sh";
+
 export class LocalWorkspaceHost implements WorkspaceHostAdapter {
   private fileReader: FileReader | undefined;
   private invoke: LocalHostDeps["invoke"];
   private stackController: NonNullable<LocalHostDeps["stackController"]>;
   private spawnSync: typeof nodeSpawnSync;
-  private watchPath: LocalHostDeps["watchPath"];
+  private watchPath: WatchPath | undefined;
   constructor(deps: LocalHostDeps) {
     this.fileReader = deps.fileReader;
     this.invoke = deps.invoke;
@@ -107,6 +108,14 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
       return {
         stdout: "",
         stderr: "Command must include a program.",
+        exitCode: 1,
+      };
+    }
+
+    if (!existsSync(cwd)) {
+      return {
+        stdout: "",
+        stderr: `Workspace path does not exist: ${cwd}`,
         exitCode: 1,
       };
     }
@@ -382,6 +391,7 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
     if (input.preferredTransport === "stream") {
       return {
         connectionId,
+        initialAnsi: null,
         terminalId,
         transport: null,
         launchError: "Lifecycle does not support streamed local terminal connections yet.",
@@ -390,11 +400,12 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
 
     return {
       connectionId,
+      initialAnsi: await this.captureTerminalHistory(workspace, context, terminalId),
       terminalId,
       transport: {
         kind: "spawn",
         prepare: {
-          program: "sh",
+          program: SYSTEM_SH_PROGRAM,
           args: [
             "-lc",
             buildEnsureTmuxConnectionCommand(
@@ -426,7 +437,7 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
   ): Promise<void> {
     const context = await this.requireTerminalContext(workspace, input);
     const result = await this.execCommand(workspace, [
-      "sh",
+      SYSTEM_SH_PROGRAM,
       "-lc",
       buildSafeKillTmuxSessionCommand(context.profile, connectionId),
     ]);
@@ -472,10 +483,10 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
     let gitSha: string | null = null;
 
     if (isRoot) {
-      workspaceRoot = input.projectPath;
+      workspaceRoot = input.repositoryPath;
       try {
         gitSha = (await this.invoke("get_git_sha", {
-          repoPath: input.projectPath,
+          repoPath: input.repositoryPath,
           refName: workspace.source_ref,
         })) as string;
       } catch {
@@ -485,11 +496,11 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
       const baseRef =
         input.baseRef ??
         ((await this.invoke("get_git_current_branch", {
-          repoPath: input.projectPath,
+          repoPath: input.repositoryPath,
         })) as string);
 
       workspaceRoot = (await this.invoke("create_git_worktree", {
-        repoPath: input.projectPath,
+        repoPath: input.repositoryPath,
         baseRef,
         branch: workspace.source_ref,
         name: workspace.name,
@@ -500,7 +511,7 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
 
       try {
         gitSha = (await this.invoke("get_git_sha", {
-          repoPath: input.projectPath,
+          repoPath: input.repositoryPath,
           refName: workspace.source_ref,
         })) as string;
       } catch {
@@ -523,7 +534,7 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
   }
 
   async renameWorkspace(input: RenameWorkspaceInput): Promise<WorkspaceRecord> {
-    const { workspace, projectPath, name } = input;
+    const { workspace, repositoryPath, name } = input;
     let branchHasUpstream = false;
     let currentWorktreeBranch: string | null = null;
     if (workspace.workspace_root) {
@@ -553,7 +564,7 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
       newSourceRef: renameInput.sourceRef,
       renameBranch: renameInput.renameBranch,
       moveWorktree: renameInput.moveWorktree,
-      repoPath: projectPath,
+      repoPath: repositoryPath,
       name: renameInput.name,
       id: workspace.id,
     })) as string | null;
@@ -585,13 +596,13 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
   }
 
   async archiveWorkspace(input: ArchiveWorkspaceInput): Promise<void> {
-    const { workspace, projectPath } = input;
+    const { workspace, repositoryPath } = input;
     const lifecycleRoot = (await this.invoke("resolve_lifecycle_root_path")) as string;
     const archiveInput = computeArchiveInput(workspace, lifecycleRoot);
 
     if (archiveInput.removeWorktree && workspace.workspace_root) {
       await this.invoke("remove_git_worktree", {
-        repoPath: projectPath,
+        repoPath: repositoryPath,
         workspaceRoot: workspace.workspace_root,
       });
     }
@@ -833,7 +844,7 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
     context: LocalTerminalContext,
   ): Promise<void> {
     const result = await this.execCommand(workspace, [
-      "sh",
+      SYSTEM_SH_PROGRAM,
       "-lc",
       buildEnsureTmuxSessionCommand(context.profile, context.sessionName, context.cwd),
     ]);
@@ -842,7 +853,7 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
 
   private commandAvailable(program: string): boolean {
     const result = this.spawnSync(
-      "sh",
+      SYSTEM_SH_PROGRAM,
       ["-lc", `command -v ${shellEscape(program)} >/dev/null 2>&1`],
       {
         stdio: "ignore",
@@ -868,6 +879,25 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
       profile: resolveTmuxRuntimeProfile(input),
       sessionName: runtime.runtimeId,
     };
+  }
+
+  private async captureTerminalHistory(
+    workspace: WorkspaceRecord,
+    context: Awaited<ReturnType<LocalWorkspaceHost["requireTerminalContext"]>>,
+    terminalId: string,
+  ): Promise<string | null> {
+    try {
+      const result = await this.execCommand(
+        workspace,
+        buildTmuxCommand(
+          context.profile,
+          buildTmuxCaptureHistoryArgs(context.sessionName, terminalId),
+        ),
+      );
+      return result.exitCode === 0 ? result.stdout : null;
+    } catch {
+      return null;
+    }
   }
 
   private throwIfCommandFailed(

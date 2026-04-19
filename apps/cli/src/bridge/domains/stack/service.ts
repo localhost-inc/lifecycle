@@ -21,12 +21,13 @@ import {
   upsertStackRuntimeService,
 } from "../stack";
 import { BridgeError } from "../../lib/errors";
+import { workspaceTopic } from "../../lib/socket-topics";
 import { workspaceHostLabel, type WorkspaceHostRegistry } from "../workspace";
 import { resolveWorkspaceRecord } from "../workspace/resolve";
 
-async function broadcastBridgeMessage(message: object): Promise<void> {
+async function broadcastBridgeMessage(message: object, topic?: string): Promise<void> {
   const { broadcastMessage } = await import("../../lib/server");
-  broadcastMessage(message);
+  broadcastMessage(message, topic);
 }
 
 type ServiceLifecycleEventType =
@@ -150,8 +151,7 @@ function managedNodeRecord(input: {
   const isStarting = existing?.status === "starting";
   const failed = !running && existing?.status === "failed";
   const status = isStarting ? "starting" : running ? "ready" : failed ? "failed" : "stopped";
-  const statusReason =
-    status === "failed" ? (existing?.status_reason ?? "unknown") : null;
+  const statusReason = status === "failed" ? (existing?.status_reason ?? "unknown") : null;
   const assignedPort = status === "ready" ? (existing?.assigned_port ?? null) : null;
 
   return {
@@ -418,6 +418,7 @@ export async function startWorkspaceStack(
                 type: "service.starting",
                 workspaceId: workspace.id,
               }),
+              workspaceTopic(workspace.id),
             );
           });
         },
@@ -436,6 +437,7 @@ export async function startWorkspaceStack(
                 type: "service.started",
                 workspaceId: workspace.id,
               }),
+              workspaceTopic(workspace.id),
             );
           });
         },
@@ -453,6 +455,7 @@ export async function startWorkspaceStack(
                 type: "service.failed",
                 workspaceId: workspace.id,
               }),
+              workspaceTopic(workspace.id),
             );
           });
         },
@@ -529,6 +532,7 @@ export async function stopWorkspaceStack(
         type: "service.stopping",
         workspaceId: workspace.id,
       }),
+      workspaceTopic(workspace.id),
     );
   }
 
@@ -549,6 +553,7 @@ export async function stopWorkspaceStack(
         type: "service.stopped",
         workspaceId: workspace.id,
       }),
+      workspaceTopic(workspace.id),
     );
   }
 

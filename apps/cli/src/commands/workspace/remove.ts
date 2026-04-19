@@ -6,7 +6,7 @@ import { z } from "zod";
 import { failCommand, jsonFlag } from "../_shared";
 
 export default defineCommand({
-  description: "Remove a local workspace from the config.",
+  description: "Alias for `lifecycle workspace destroy`.",
   input: z.object({
     args: z.array(z.string()).describe("<name>"),
     json: jsonFlag,
@@ -34,7 +34,7 @@ export default defineCommand({
       }
 
       if (data.archived) {
-        context.stdout(`Workspace "${name}" removed.`);
+        context.stdout(`Workspace "${name}" deleted.`);
       } else {
         context.stdout(`Workspace "${name}" not found in config.`);
       }

@@ -3,6 +3,7 @@ import type { SqlDriver } from "@lifecycle/db";
 import { getWorkspaceRecordById } from "@lifecycle/db/queries";
 import type { ResolveWorkspaceTerminalRuntimeInput } from "../workspace/host";
 import type { WorkspaceHostRegistry } from "../workspace/registry";
+import { ensureRuntimeWorkspaceRecord } from "../workspace/runtime-record";
 import {
   normalizeWorkspaceHost,
   resolveWorkspaceScope,
@@ -17,8 +18,13 @@ export async function readWorkspaceShell(
   workspaceHosts: WorkspaceHostRegistry,
   workspaceId: string,
 ) {
-  const workspace = await resolveWorkspaceScope(db, workspaceId);
-  const record = await getWorkspaceRecordById(db, workspaceId);
+  const initialWorkspace = await resolveWorkspaceScope(db, workspaceId);
+  const initialRecord = await getWorkspaceRecordById(db, workspaceId);
+  const record = initialRecord
+    ? await ensureRuntimeWorkspaceRecord(db, workspaceHosts, initialRecord)
+    : undefined;
+  const workspace =
+    initialRecord && record ? await resolveWorkspaceScope(db, workspaceId) : initialWorkspace;
 
   if (workspace.resolution_error || !record) {
     return {
@@ -233,8 +239,13 @@ async function resolveWorkspaceTerminalContext(
   workspaceHosts: WorkspaceHostRegistry,
   workspaceId: string,
 ): Promise<WorkspaceTerminalContext> {
-  const workspace = await resolveWorkspaceScope(db, workspaceId);
-  const record = await getWorkspaceRecordById(db, workspaceId);
+  const initialWorkspace = await resolveWorkspaceScope(db, workspaceId);
+  const initialRecord = await getWorkspaceRecordById(db, workspaceId);
+  const record = initialRecord
+    ? await ensureRuntimeWorkspaceRecord(db, workspaceHosts, initialRecord)
+    : undefined;
+  const workspace =
+    initialRecord && record ? await resolveWorkspaceScope(db, workspaceId) : initialWorkspace;
   const persistenceInput = await resolveTerminalPersistenceInput();
 
   return {
@@ -320,12 +331,14 @@ function serializeTerminalRecord(terminal: {
 
 function serializeTerminalConnection(connection: {
   connectionId: string;
+  initialAnsi: string | null;
   launchError: string | null;
   terminalId: string;
   transport: unknown;
 }) {
   return {
     connection_id: connection.connectionId,
+    initial_ansi: connection.initialAnsi,
     terminal_id: connection.terminalId,
     launch_error: connection.launchError,
     transport: connection.transport,

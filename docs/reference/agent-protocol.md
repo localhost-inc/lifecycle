@@ -1,10 +1,10 @@
 # Agent Protocol
 
-> Historical reference: Lifecycle no longer ships a first-party custom-agent runtime in the active CLI + desktop product path.
-
 Canonical contract for Lifecycle's normalized agent event layer.
 
 ## Scope
+
+Lifecycle currently keeps a bridge-owned agent session runtime. The bridge persists agent records, transcript messages, and append-only agent events, then streams normalized agent events over the bridge WebSocket for clients.
 
 Lifecycle keeps two simultaneous views of provider activity:
 

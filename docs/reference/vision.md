@@ -44,8 +44,8 @@ Lifecycle V1 is:
 
 Lifecycle V1 is not:
 
-1. a custom agent runtime
-2. a first-party chat surface
+1. a provider-specific chat product that replaces the terminal-native runtime model
+2. a first-party chat surface as the center of the product
 3. a full IDE replacement
 4. a cloud-only product
 5. a provider-specific workflow that forces one harness or one sandbox vendor
