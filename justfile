@@ -41,8 +41,8 @@ fix:
   bun run format
   bun run qa
 
-# Start a dev loop. Targets: desktop, desktop-services, desktop-app, desktop-smoke, tui.
-dev target="desktop":
+# Start a dev loop. Default: CLI-owned TUI. Targets: tui, desktop, desktop-services, desktop-app, desktop-smoke.
+dev target="tui":
   ./scripts/dev {{target}}
 
 # Show the current dev service state.

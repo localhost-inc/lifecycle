@@ -114,7 +114,7 @@ See [docs/reference/architecture.md](./docs/reference/architecture.md) for the f
 2. Optional: Docker for container-hosted workspaces
 3. Optional: Daytona for remote workspaces
 4. Optional: Modal for cloud sandboxes
-5. Recommended: `just` for the documented repo workflows (`just setup`, `just check`, `just dev tui`, `just tui-local`)
+5. Recommended: `just` for the documented repo workflows (`just setup`, `just check`, `just dev`, `just tui-local`)
 
 ## Quick Start
 
@@ -124,7 +124,7 @@ cd lifecycle
 just setup
 just check
 lifecycle proxy install --dry-run         # inspect machine-scoped preview routing changes
-just dev                                  # desktop loop: bridge + control plane + desktop-mac
+just dev                                  # primary dev path: CLI-owned TUI
 ```
 
 ## Common Commands
@@ -142,11 +142,11 @@ The root [`justfile`](./justfile) is the canonical workflow layer for documented
 7. `just build` — workspace builds
 8. `just check` or `just qa` — full quality gate
 9. `just fix` — format first, then run the full quality gate
-10. `just dev` — desktop loop: bridge, control plane, and `desktop-mac`
-11. `just dev desktop-services` — bridge + control plane only, for Xcode/native debugging
-12. `just dev desktop-app` — desktop app build/reload loop only
-13. `just dev tui` — focused CLI-owned TUI loop with auto-restart against the standard local Lifecycle runtime
-14. `just tui-local` — focused CLI-owned TUI loop with auto-restart against repo-local bridge + control plane
+10. `just dev` — primary CLI-owned TUI loop against the standard local Lifecycle runtime
+11. `just tui-local` — focused CLI-owned TUI loop with auto-restart against repo-local bridge + control plane
+12. `just dev desktop` — desktop loop: bridge, control plane, and `desktop-mac`
+13. `just dev desktop-services` — bridge + control plane only, for Xcode/native debugging
+14. `just dev desktop-app` — desktop app build/reload loop only
 15. `just desktop` — open the native macOS desktop app
 16. `just smoke` — smoke test the desktop dev loop
 17. `just bridge-generate` — regenerate bridge routed/OpenAPI artifacts after route-contract changes

@@ -30,7 +30,7 @@ What it does today:
 Launch:
 
 ```bash
-just dev
+just dev desktop
 ```
 
 Bridge + control-plane only, for Xcode debugging:
@@ -98,10 +98,10 @@ Bridge behavior:
 
 Debugging:
 
-1. Use `just dev` when you want the whole repo-backed app loop. The root `justfile` is the documented workflow entrypoint and delegates to the canonical monorepo supervisor for bridge, control-plane, and the mac app process together.
+1. Use `just dev desktop` when you want the whole repo-backed app loop. The root `justfile` is the documented workflow entrypoint and delegates to the canonical monorepo supervisor for bridge, control-plane, and the mac app process together.
 2. Use `just dev desktop-services` when you want Xcode to launch only the native app while bridge and control-plane keep running from the repo.
 3. Open `apps/desktop-mac/Package.swift` in Xcode and run the auto-generated `LifecycleMac` scheme.
-4. Paste the output of `just xcode-env` into the scheme's Run environment variables so Xcode uses the same bridge/runtime contract as `just dev`.
+4. Paste the output of `just xcode-env` into the scheme's Run environment variables so Xcode uses the same bridge/runtime contract as `just dev desktop`.
 5. Treat Xcode as the canonical path for breakpoints, sanitizers, Instruments, and crash debugging.
 6. Use `just smoke` to verify the desktop dev loop contract end to end: startup, bridge restart, control-plane restart, and desktop hot reload.
 7. The monorepo dev supervisor writes stable state and logs under the per-repo runtime root returned by `scripts/dev-runtime-root` (with supervisor state in `<runtime-root>/dev`), so `just status` and `just logs <service>` always point at the live runtime.

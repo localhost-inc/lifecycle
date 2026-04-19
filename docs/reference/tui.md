@@ -46,8 +46,8 @@ Rules:
 5. The TUI must not resolve workspace host, bridge authority, shell attach policy, or tmux session naming on its own when the bridge is available.
 6. The bridge layer resolves the authoritative bridge for a selected workspace and only that bridge executes runtime work.
 7. Bridge requests use singular dotted method names such as `repo.list`, `workspace.get`, `workspace.activity`, `workspace.shell`, `service.list`, `service.start`, and `service.stop`.
-8. In repository development mode, the TUI and bridge must inherit the local control-plane URL from the process environment. Root `bun dev` sets `LIFECYCLE_API_URL=http://127.0.0.1:8787`, and the TUI should not silently fall back to the production API in that mode.
-9. `just dev tui` is the standard-access path and should not force repo-dev bridge/control-plane overrides. Repo-local bridge/control-plane work is opt-in via `just tui-local`.
+8. In repository development mode, the TUI and bridge must inherit the local control-plane URL from the process environment. `just tui-local` (or `bun run dev:tui:local`) loads `LIFECYCLE_API_URL=http://127.0.0.1:18787`, `LIFECYCLE_BRIDGE_URL=http://127.0.0.1:52300`, and the rest of the repo-local dev contract, and the TUI should not silently fall back to the production API in that mode.
+9. `just dev` is the standard-access path for the CLI-owned TUI and should not force repo-local bridge/control-plane overrides. Repo-local bridge/control-plane work is opt-in via `just tui-local`.
 
 ## Bound workspace scope
 

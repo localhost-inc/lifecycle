@@ -172,20 +172,20 @@ show_logs() {
 
 usage() {
   cat <<'EOF'
-usage: scripts/dev [desktop|desktop-services|desktop-app|desktop-smoke|tui|status|stop|logs]
+usage: scripts/dev [tui|desktop|desktop-services|desktop-app|desktop-smoke|status|stop|logs]
 
+  tui               Start the CLI-owned TUI dev loop.
   desktop           Start the monorepo desktop dev loop.
   desktop-services  Start bridge and control-plane only.
   desktop-app       Start the desktop app build/reload loop only.
   desktop-smoke     Verify the desktop dev loop contract end to end.
-  tui               Start the CLI-owned TUI dev loop.
   status            Show current dev service state and log locations.
-  stop              Stop the current desktop dev loop and clear owned listeners.
+  stop              Stop the current dev loop and clear owned listeners.
   logs <service>    Tail a dev service log.
 EOF
 }
 
-case "${1:-desktop}" in
+case "${1:-tui}" in
   desktop)
     exec "$DESKTOP_DEV_SCRIPT" --monorepo
     ;;
