@@ -192,6 +192,10 @@ function App(props: { client: BridgeClient; initialWorkspaceId: string | null })
   const shellRunIdRef = useRef(0);
   const canvasSizeRef = useRef({ cols: MIN_CANVAS_COLS, rows: MIN_CANVAS_ROWS });
   const activeConnectionRef = useRef<ActiveTerminalConnection | null>(null);
+  const [measuredCanvasSize, setMeasuredCanvasSize] = useState<{
+    cols: number;
+    rows: number;
+  } | null>(null);
   const [theme, setTheme] = useState<TuiTheme>(defaultTuiTheme);
   const [focus, setFocus] = useState<FocusTarget>("canvas");
   const [loading, setLoading] = useState(true);
@@ -221,11 +225,13 @@ function App(props: { client: BridgeClient; initialWorkspaceId: string | null })
 
   const sidebarWidth = width >= 120 ? SIDEBAR_WIDTH : 24;
   const extensionWidth = width >= 150 ? EXTENSION_WIDTH : width >= 120 ? 30 : 26;
-  const canvasCols = Math.max(
+  const estimatedCanvasCols = Math.max(
     MIN_CANVAS_COLS,
     width - sidebarWidth - extensionWidth - BODY_WIDTH_OVERHEAD,
   );
-  const canvasRows = Math.max(MIN_CANVAS_ROWS, height - BODY_HEIGHT_OVERHEAD);
+  const estimatedCanvasRows = Math.max(MIN_CANVAS_ROWS, height - BODY_HEIGHT_OVERHEAD);
+  const canvasCols = measuredCanvasSize?.cols ?? estimatedCanvasCols;
+  const canvasRows = measuredCanvasSize?.rows ?? estimatedCanvasRows;
   const terminalRenderRows = useMemo(
     () => estimateTerminalRenderRows(terminalAnsi, canvasRows),
     [canvasRows, terminalAnsi],
@@ -270,6 +276,23 @@ function App(props: { client: BridgeClient; initialWorkspaceId: string | null })
       cancelled = true;
     };
   }, [renderer]);
+
+  useEffect(() => {
+    const scrollbox = terminalScrollRef.current;
+    if (!scrollbox) {
+      return;
+    }
+
+    const nextCols = Math.max(MIN_CANVAS_COLS, scrollbox.viewport.width);
+    const nextRows = Math.max(MIN_CANVAS_ROWS, scrollbox.viewport.height);
+
+    setMeasuredCanvasSize((current) => {
+      if (current && current.cols === nextCols && current.rows === nextRows) {
+        return current;
+      }
+      return { cols: nextCols, rows: nextRows };
+    });
+  });
 
   const focusRepository = useCallback((repositoryId: string) => {
     setSidebarSelectionKey(repositorySidebarEntryKey(repositoryId));
@@ -1170,8 +1193,44 @@ function App(props: { client: BridgeClient; initialWorkspaceId: string | null })
 }
 
 function estimateTerminalRenderRows(ansi: string, viewportRows: number): number {
-  const newlineCount = ansi === "" ? 0 : ansi.split("\n").length;
-  return Math.max(viewportRows, Math.min(4_000, newlineCount + viewportRows));
+  const lines = ansi === "" ? [] : ansi.replace(/\r\n/g, "\n").split("\n");
+  while (lines.length > 0 && isBlankTerminalLineForEstimate(lines.at(-1) ?? "")) {
+    lines.pop();
+  }
+
+  return Math.max(viewportRows, Math.min(4_000, lines.length + viewportRows));
+}
+
+function isBlankTerminalLineForEstimate(value: string): boolean {
+  let index = 0;
+
+  while (index < value.length) {
+    const current = value[index] ?? "";
+
+    if (current === "\u001b") {
+      index += 1;
+      if ((value[index] ?? "") === "[") {
+        index += 1;
+        while (index < value.length) {
+          const code = value.charCodeAt(index);
+          if (code >= 0x40 && code <= 0x7e) {
+            index += 1;
+            break;
+          }
+          index += 1;
+        }
+      }
+      continue;
+    }
+
+    if (current.trim() !== "") {
+      return false;
+    }
+
+    index += 1;
+  }
+
+  return true;
 }
 
 async function runLaunchSpec(spec: WorkspaceShellLaunchSpec): Promise<number> {
