@@ -1,0 +1,46 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.lifecycle/hooks/activity.sh\" tool.completed --provider claude-code --name Bash",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.lifecycle/hooks/activity.sh\" tool.started --provider claude-code --name Bash",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.lifecycle/hooks/activity.sh\" turn.completed --provider claude-code",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.lifecycle/hooks/activity.sh\" turn.started --provider claude-code",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}

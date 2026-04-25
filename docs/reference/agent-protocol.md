@@ -13,6 +13,37 @@ Lifecycle keeps two simultaneous views of provider activity:
 
 The normalized layer must be expressive enough for both Claude Agent SDK sessions and Codex app-server threads without forcing consumers to parse provider-native payloads.
 
+Lifecycle is ACP-oriented, but does not currently implement ACP as its native
+agent transport. ACP treats agents and clients as JSON-RPC peers around
+initialization, session creation/resume, prompt turns, streamed session updates,
+tool calls, terminal/file-system requests, and permission callbacks. Lifecycle's
+bridge keeps the same semantic boundaries: sessions and turns are first-class,
+tool and permission activity is structured, provider-specific payloads are
+preserved separately, and clients consume bridge-normalized lifecycle events.
+
+Do not copy provider hook names into the client contract. Harness-specific hook
+installers are adapters from Codex, Claude Code, OpenCode, ACP-capable agents,
+or future runtimes into Lifecycle's normalized events. ACP can become another
+adapter surface without changing TUI, desktop, or control-plane activity
+reducers.
+
+## Harness Adapter Rules
+
+Repo-scoped hook/plugin installation must keep a clear adapter boundary:
+
+1. Provider-native hook names stay inside the provider installer.
+2. Installed hooks emit Lifecycle semantic activity using the common
+   agent/client lexicon: `turn.started`, `turn.completed`,
+   `tool_call.started`, `tool_call.completed`, `permission.requested`, and
+   `permission.resolved`.
+3. Provider identity stays explicit in metadata such as `provider`,
+   `provider_id`, or `harness_id`.
+4. Cross-harness consumers read bridge-owned activity and normalized
+   `agent.*` events. They must not parse `.claude`, `.codex`, `.opencode`, or
+   ACP transport payloads directly.
+5. Provider-specific facts without a stable normalized home are retained in
+   `agent.provider.event` or `agent.provider.signal` metadata.
+
 ## Core Event Families
 
 1. Transcript stream

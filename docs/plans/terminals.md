@@ -96,7 +96,7 @@ Rules:
 
 1. Terminal activity is attached to a stable terminal id.
 2. Workspace activity is derived from the set of terminal activity records in that workspace.
-3. A terminal may carry optional activity metadata such as `turnId`, `toolName`, `waitingKind`, `provider`, `source`, and timestamps.
+3. A terminal may carry optional activity metadata such as `turnId`, `toolName`, `waitingKind`, `provider`, `prompt`, generated `title`, `source`, and timestamps.
 4. `provider` is optional metadata, not a required routing key.
 
 ## Authority Split
@@ -238,7 +238,11 @@ Optional event fields:
 2. `name` for tool names such as `Bash`
 3. `kind` for waiting kinds such as `approval`
 4. `provider`
-5. `metadata`
+5. `prompt` for the submitted user prompt when a harness provides it to the hook adapter
+6. generated `title`, derived by the bridge from the submitted prompt when a local title generator is available
+7. `metadata`
+
+Clients should display bridge-provided terminal titles. The bridge owns prompt-to-title generation so provider payloads and title-generation policy stay out of clients.
 
 The bridge read surface should return one terminal activity record per terminal plus a workspace-derived aggregate view.
 

@@ -87,11 +87,15 @@ describe("repo hook installer", () => {
       "updated",
       "updated",
       "updated",
+      "created",
     ]);
 
     const adapter = await readFile(join(dir, ".lifecycle", "hooks", "activity.sh"), "utf8");
     expect(adapter).toContain("LIFECYCLE_WORKSPACE_ID");
+    expect(adapter).toContain("tmux display-message");
+    expect(adapter).toContain("--terminal-id");
     expect(adapter).toContain("workspace activity emit");
+    expect(adapter).not.toContain("--read-hook-input");
 
     const claudeConfig = JSON.parse(
       await readFile(join(dir, ".claude", "settings.json"), "utf8"),
@@ -109,7 +113,7 @@ describe("repo hook installer", () => {
       },
       {
         command:
-          'sh "${CLAUDE_PROJECT_DIR}/.lifecycle/hooks/activity.sh" tool.started --provider claude-code --name Bash',
+          'sh "${CLAUDE_PROJECT_DIR}/.lifecycle/hooks/activity.sh" tool_call.started --provider claude-code --name Bash',
         type: "command",
       },
     ]);
@@ -136,9 +140,22 @@ describe("repo hook installer", () => {
     });
     expect(codexHooks.hooks.PreToolUse?.[0]?.hooks[0]).toEqual({
       command:
-        'sh "$(git rev-parse --show-toplevel)/.lifecycle/hooks/activity.sh" tool.started --provider codex --name Bash',
+        'sh "$(git rev-parse --show-toplevel)/.lifecycle/hooks/activity.sh" tool_call.started --provider codex --name Bash',
       type: "command",
     });
+
+    const opencodePlugin = await readFile(
+      join(dir, ".opencode", "plugins", "lifecycle-activity.js"),
+      "utf8",
+    );
+    expect(opencodePlugin).toContain("workspace");
+    expect(opencodePlugin).toContain("activity");
+    expect(opencodePlugin).toContain("opencode");
+    expect(opencodePlugin).toContain('"session.status"');
+    expect(opencodePlugin).toContain('"session.idle"');
+    expect(opencodePlugin).toContain('"tool.execute.before"');
+    expect(opencodePlugin).toContain('"tool.execute.after"');
+    expect(opencodePlugin).not.toContain("session.prompt");
 
     const adapterAfterFirstInstall = await readFile(
       join(dir, ".lifecycle", "hooks", "activity.sh"),
@@ -147,8 +164,13 @@ describe("repo hook installer", () => {
     const claudeAfterFirstInstall = await readFile(join(dir, ".claude", "settings.json"), "utf8");
     const codexConfigAfterFirstInstall = await readFile(join(dir, ".codex", "config.toml"), "utf8");
     const codexHooksAfterFirstInstall = await readFile(join(dir, ".codex", "hooks.json"), "utf8");
+    const opencodeAfterFirstInstall = await readFile(
+      join(dir, ".opencode", "plugins", "lifecycle-activity.js"),
+      "utf8",
+    );
 
     expect(targets.map((target) => installHookTarget(target))).toEqual([
+      "unchanged",
       "unchanged",
       "unchanged",
       "unchanged",
@@ -166,6 +188,9 @@ describe("repo hook installer", () => {
     expect(await readFile(join(dir, ".codex", "hooks.json"), "utf8")).toBe(
       codexHooksAfterFirstInstall,
     );
+    expect(await readFile(join(dir, ".opencode", "plugins", "lifecycle-activity.js"), "utf8")).toBe(
+      opencodeAfterFirstInstall,
+    );
   });
 
   test("reports missing, outdated, and installed hook state without writing files", async () => {
@@ -174,6 +199,7 @@ describe("repo hook installer", () => {
 
     const targets = resolveHookTargets(dir);
     expect(targets.map((target) => checkHookTarget(target))).toEqual([
+      "missing",
       "missing",
       "missing",
       "missing",
@@ -241,6 +267,7 @@ describe("repo hook installer", () => {
       "outdated",
       "installed",
       "outdated",
+      "missing",
     ]);
   });
 });

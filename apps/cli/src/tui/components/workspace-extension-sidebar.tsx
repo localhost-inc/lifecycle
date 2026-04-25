@@ -164,8 +164,9 @@ export function WorkspaceExtensionSidebar(props: WorkspaceExtensionSidebarProps)
               </text>
               {props.terminals.map((terminal) => (
                 <text key={terminal.id} fg={props.theme.sidebar.mutedForeground}>
-                  {terminal.busy ? "* " : ""}
+                  {(terminal.activity?.busy ?? terminal.busy) ? "* " : ""}
                   {terminal.title} · {terminal.kind}
+                  {terminal.activity ? ` · ${formatTerminalActivity(terminal)}` : ""}
                 </text>
               ))}
             </box>
@@ -174,4 +175,19 @@ export function WorkspaceExtensionSidebar(props: WorkspaceExtensionSidebarProps)
       </scrollbox>
     </box>
   );
+}
+
+function formatTerminalActivity(terminal: WorkspaceTerminalRecord): string {
+  const activity = terminal.activity;
+  if (!activity) {
+    return terminal.busy ? "busy" : "idle";
+  }
+
+  if (activity.state === "tool_active" && activity.tool_name) {
+    return `${activity.state}:${activity.tool_name}`;
+  }
+  if (activity.state === "waiting" && activity.waiting_kind) {
+    return `${activity.state}:${activity.waiting_kind}`;
+  }
+  return activity.state;
 }

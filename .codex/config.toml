@@ -1,5 +1,8 @@
 
 
 [mcp_servers.lifecycle]
-command = "/Users/kyle/.bun/bin/lifecycle"
+command = "lifecycle"
 args = ["mcp"]
+
+[features]
+codex_hooks = true

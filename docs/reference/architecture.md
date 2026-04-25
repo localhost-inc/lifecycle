@@ -100,6 +100,16 @@ OpenAPI contract publication follows the same boundary:
 2. The bridge serves that document at `GET /openapi.json`.
 3. Clients that generate typed interfaces should compile against that bridge-owned document instead of maintaining handwritten request wiring or duplicate schema copies.
 
+Lifecycle settings follow the same bridge-owned contract:
+
+1. The canonical schema lives in `packages/contracts/src/settings.ts`.
+2. The bridge settings implementation lives under `apps/cli/src/bridge/domains/settings`.
+3. Settings are runtime configuration, not authentication state.
+4. `settings.json` uses one strict top-level shape: `appearance`, `developer`, `providers`, and `terminal`.
+5. Appearance settings group visual runtime configuration under the setting they affect. Font families live at `appearance.fonts.ui` and `appearance.fonts.code`; do not add top-level font keys or flatten them onto `appearance`.
+6. The bridge reads and writes canonical settings objects through the shared schema; it does not preserve unknown fields or maintain legacy shape migrations.
+7. Terminal profile settings store launch behavior only. Presentation details such as icons, badges, colors, ordering affordances, and tab chrome are client-derived state and must not be added to the settings schema.
+
 Current implementation note:
 
 1. Some cloud workspace operations are still proxied from the current host bridge through control-plane endpoints.
@@ -194,7 +204,7 @@ OpenCode is the default remote harness endpoint Lifecycle stands up in cloud wor
 OpenCode gains workspace awareness through:
 
 1. **Custom tools** — `.opencode/tools/` scripts that call `lifecycle context`, `lifecycle stack status`, `lifecycle service info`, etc. The tool understands the workspace through the same CLI a human uses.
-2. **Plugins** — `.opencode/plugins/` for lifecycle-specific hooks such as `shell.env` workspace environment injection.
+2. **Plugins** — `.opencode/plugins/` for lifecycle-specific hooks such as shell environment injection and terminal activity emission.
 3. **Configuration** — `opencode.json` in the project root configures providers, tools, permissions, and MCP servers.
 
 ### Why OpenCode

@@ -95,6 +95,7 @@ export function buildEnsureTmuxSessionCommand(
   sessionName: string,
   cwd: string,
   initialTitle = "shell",
+  environment: Array<[string, string]> = [],
 ): string {
   const commands = [
     [
@@ -111,6 +112,7 @@ export function buildEnsureTmuxSessionCommand(
         initialTitle,
       ]),
     ].join(" "),
+    ...buildTmuxSessionEnvironmentCommands(profile, sessionName, environment),
     ...buildTmuxSessionOptionCommands(profile, sessionName),
   ];
 
@@ -123,14 +125,16 @@ export function buildEnsureTmuxConnectionCommand(
   connectionId: string,
   terminalId: string,
   cwd: string,
+  environment: Array<[string, string]> = [],
 ): string {
   return [
-    buildEnsureTmuxSessionCommand(profile, sessionName, cwd),
+    buildEnsureTmuxSessionCommand(profile, sessionName, cwd, "shell", environment),
     [
       buildTmuxCommandText(profile, ["has-session", "-t", connectionId]),
       "2>/dev/null ||",
       buildTmuxCommandText(profile, ["new-session", "-d", "-t", sessionName, "-s", connectionId]),
     ].join(" "),
+    ...buildTmuxSessionEnvironmentCommands(profile, connectionId, environment),
     ...buildTmuxSessionOptionCommands(profile, connectionId),
     buildTmuxCommandText(profile, [
       "select-window",
@@ -291,6 +295,8 @@ export function normalizeTerminalTitle(
       return "claude";
     case "codex":
       return "codex";
+    case "opencode":
+      return "opencode";
     case "custom":
       return "custom";
     case "shell":
@@ -325,6 +331,16 @@ function buildTmuxSessionOptionCommands(
   return commands;
 }
 
+function buildTmuxSessionEnvironmentCommands(
+  profile: TmuxRuntimeProfile,
+  sessionName: string,
+  environment: Array<[string, string]>,
+): string[] {
+  return environment.map(([key, value]) =>
+    buildTmuxCommandText(profile, ["set-environment", "-t", sessionName, key, value]),
+  );
+}
+
 function inferTerminalKind(title: string): WorkspaceTerminalKind {
   const normalized = title.trim().toLowerCase();
   if (/^claude(?:\s+\d+)?$/.test(normalized)) {
@@ -333,6 +349,12 @@ function inferTerminalKind(title: string): WorkspaceTerminalKind {
 
   if (/^codex(?:\s+\d+)?$/.test(normalized)) {
     return "codex";
+  }
+  if (/^opencode(?:\s+\d+)?$/.test(normalized)) {
+    return "opencode";
+  }
+  if (/^tab\s+\d+$/.test(normalized)) {
+    return "shell";
   }
 
   switch (normalized) {

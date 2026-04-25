@@ -94,14 +94,14 @@ Bridge behavior:
 6. After startup, the app keeps monitoring bridge health and pid changes so it can reconnect across bridge restarts on the fixed port.
 7. In repo development mode, `LIFECYCLE_BRIDGE_URL=http://127.0.0.1:52300` means the app treats the bridge as externally owned and waits/reconnects instead of trying to supervise it itself.
 8. In repo development mode, bridge `/health` must report the same `repoRoot` as `LIFECYCLE_REPO_ROOT`; this prevents attaching to a stale bridge from another checkout or an older bridge without runtime metadata.
-9. The bridge publishes `GET /openapi.json`, and the Swift package builds its generated client from `Sources/LifecycleApp/openapi.json`.
-10. `Sources/LifecycleApp/openapi.json` is a symlink to the canonical bridge artifact at `apps/cli/src/bridge/openapi.json`, so the bridge route and the Swift generator read the same document.
+9. The bridge publishes `GET /openapi.json`, and the Swift package builds its generated client from `Sources/Lifecycle/openapi.json`.
+10. `Sources/Lifecycle/openapi.json` is a symlink to the canonical bridge artifact at `apps/cli/src/bridge/openapi.json`, so the bridge route and the Swift generator read the same document.
 
 Debugging:
 
 1. Use `just dev desktop` as the primary desktop entrypoint. The root `justfile` is the documented workflow layer and delegates to the canonical monorepo supervisor for bridge, control-plane, and the mac app process together.
 2. Use `just dev desktop-services` when you want Xcode to launch only the native app while bridge and control-plane keep running from the repo.
-3. Open `apps/desktop-mac/Package.swift` in Xcode and run the auto-generated `LifecycleMac` scheme.
+3. Open `apps/desktop-mac/Package.swift` in Xcode and run the auto-generated `Lifecycle` scheme.
 4. Paste the output of `just xcode-env` into the scheme's Run environment variables so Xcode uses the same bridge/runtime contract as `just dev desktop`.
 5. Treat Xcode as the canonical path for breakpoints, sanitizers, Instruments, and crash debugging.
 6. Use `just smoke` to verify the desktop dev loop contract end to end: startup, bridge restart, control-plane restart, and desktop hot reload.

@@ -107,6 +107,34 @@ describe("repo MCP installer", () => {
     expect(await readFile(join(dir, ".codex", "config.toml"), "utf8")).toBe(tomlAfterFirstInstall);
   });
 
+  test("normalizes project-scoped lifecycle MCP commands to the portable binary name", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "lifecycle-cli-mcp-portable-"));
+    tempDirs.push(dir);
+
+    const targets = resolveMcpTargets("project", dir);
+    const machineSpecificEntry = {
+      args: ["mcp"],
+      command: "/Users/kyle/.bun/bin/lifecycle",
+    };
+
+    expect(targets.map((target) => installMcpTarget(target, machineSpecificEntry))).toEqual([
+      "created",
+      "created",
+    ]);
+
+    const jsonConfig = JSON.parse(await readFile(join(dir, ".mcp.json"), "utf8")) as {
+      mcpServers: Record<string, Record<string, unknown>>;
+    };
+    expect(jsonConfig.mcpServers.lifecycle).toEqual({
+      args: ["mcp"],
+      command: "lifecycle",
+    });
+
+    const tomlConfig = await readFile(join(dir, ".codex", "config.toml"), "utf8");
+    expect(tomlConfig).toContain('command = "lifecycle"');
+    expect(tomlConfig).not.toContain(".bun/bin/lifecycle");
+  });
+
   test("reports missing, outdated, and installed state without writing files", async () => {
     const dir = await mkdtemp(join(tmpdir(), "lifecycle-cli-mcp-check-"));
     tempDirs.push(dir);

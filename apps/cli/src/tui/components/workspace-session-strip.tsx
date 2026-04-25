@@ -51,7 +51,10 @@ export function WorkspaceSessionStrip(props: WorkspaceSessionStripProps) {
               }}
             >
               <text fg={isActive ? props.theme.foreground : props.theme.sidebar.mutedForeground}>
-                {formatWorkspaceTabLabel({ busy: terminal.busy, title: terminal.title })}
+                {formatWorkspaceTabLabel({
+                  busy: terminal.activity?.busy ?? terminal.busy,
+                  title: formatTerminalActivityTitle(terminal),
+                })}
               </text>
             </box>
           );
@@ -82,4 +85,26 @@ export function WorkspaceSessionStrip(props: WorkspaceSessionStripProps) {
       </box>
     </box>
   );
+}
+
+function formatTerminalActivityTitle(terminal: WorkspaceTerminalRecord): string {
+  const activity = terminal.activity;
+  if (!activity || activity.state === "idle" || activity.state === "unknown") {
+    return terminal.title;
+  }
+
+  switch (activity.state) {
+    case "waiting":
+      return `${terminal.title} waiting`;
+    case "tool_active":
+      return `${terminal.title} ${activity.tool_name ?? "tool"}`;
+    case "turn_active":
+      return `${terminal.title} turn`;
+    case "command_running":
+      return `${terminal.title} running`;
+    case "interactive_active":
+      return `${terminal.title} active`;
+    case "interactive_quiet":
+      return terminal.title;
+  }
 }

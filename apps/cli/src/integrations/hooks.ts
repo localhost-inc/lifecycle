@@ -8,8 +8,8 @@ import { LifecycleCliError } from "../errors";
 export type HookInstallStatus = "created" | "updated" | "unchanged";
 export type HookCheckStatus = "installed" | "missing" | "outdated";
 
-type HookTargetFormat = "json" | "script" | "toml";
-type HookTargetIntegration = "hook-adapter" | "hooks" | "hook-features";
+type HookTargetFormat = "javascript" | "json" | "script" | "toml";
+type HookTargetIntegration = "hook-adapter" | "hook-features" | "hooks" | "opencode-plugin";
 
 type HookHandler = Record<string, unknown> & {
   command: string;
@@ -38,12 +38,132 @@ const ACTIVITY_HOOK_SCRIPT_PATH = path.join(".lifecycle", "hooks", "activity.sh"
 const ACTIVITY_HOOK_SCRIPT = `#!/bin/sh
 set -eu
 
-if [ -z "\${LIFECYCLE_WORKSPACE_ID:-}" ] || [ -z "\${LIFECYCLE_TERMINAL_ID:-}" ]; then
+if [ -z "\${LIFECYCLE_WORKSPACE_ID:-}" ]; then
+  exit 0
+fi
+
+terminal_id="\${LIFECYCLE_TERMINAL_ID:-}"
+if [ -z "$terminal_id" ] && command -v tmux >/dev/null 2>&1 && [ -n "\${TMUX_PANE:-}" ]; then
+  terminal_id="$(tmux display-message -p -t "$TMUX_PANE" '#{window_id}' 2>/dev/null || true)"
+fi
+
+if [ -z "$terminal_id" ]; then
   exit 0
 fi
 
 cli_bin="\${LIFECYCLE_CLI_BIN:-lifecycle}"
-"$cli_bin" workspace activity emit "$@" >/dev/null 2>&1 || exit 0
+"$cli_bin" workspace activity emit "$@" --terminal-id "$terminal_id" >/dev/null 2>&1 || exit 0
+`;
+
+const OPENCODE_ACTIVITY_PLUGIN = `const resolveTerminalId = async () => {
+  if (process.env.LIFECYCLE_TERMINAL_ID) {
+    return process.env.LIFECYCLE_TERMINAL_ID
+  }
+  if (!process.env.TMUX_PANE) {
+    return null
+  }
+  try {
+    const { execFile } = await import("node:child_process")
+    return await new Promise((resolve) => {
+      execFile(
+        "tmux",
+        ["display-message", "-p", "-t", process.env.TMUX_PANE, "#{window_id}"],
+        { timeout: 1000 },
+        (error, stdout) => {
+          if (error) {
+            resolve(null)
+            return
+          }
+          const id = stdout.trim()
+          resolve(id.length > 0 ? id : null)
+        },
+      )
+    })
+  } catch {
+    return null
+  }
+}
+
+const pickText = (...values) => {
+  for (const value of values) {
+    if (typeof value === "string" && value.length > 0) {
+      return value
+    }
+  }
+  return null
+}
+
+const runLifecycleActivity = async (...args) => {
+  if (!process.env.LIFECYCLE_WORKSPACE_ID) {
+    return
+  }
+  const terminalId = await resolveTerminalId()
+  if (!terminalId) {
+    return
+  }
+  const { spawn } = await import("node:child_process")
+  const command = process.env.LIFECYCLE_CLI_BIN || "lifecycle"
+  const child = spawn(command, [
+    "workspace",
+    "activity",
+    "emit",
+    ...args,
+    "--terminal-id",
+    terminalId,
+  ], {
+    detached: true,
+    stdio: "ignore",
+  })
+  child.unref()
+}
+
+const sessionIDFrom = (input) =>
+  pickText(input?.sessionID, input?.session?.id, input?.session?.sessionID, input?.properties?.sessionID)
+
+const toolNameFrom = (input, output) =>
+  pickText(input?.tool, input?.toolID, input?.name, output?.tool, output?.toolID, output?.name)
+
+const emitTurnStarted = async (input) => {
+  const args = ["turn.started", "--provider", "opencode"]
+  const sessionID = sessionIDFrom(input)
+  if (sessionID) {
+    args.push("--turn-id", sessionID)
+  }
+  await runLifecycleActivity(...args)
+}
+
+export const LifecycleActivityPlugin = async () => ({
+  "session.status": async (input) => {
+    const status = pickText(input?.status, input?.session?.status, input?.properties?.status)
+    if (status === "busy" || status === "running") {
+      await emitTurnStarted(input)
+    }
+  },
+  "session.idle": async (input) => {
+    const args = ["turn.completed", "--provider", "opencode"]
+    const sessionID = sessionIDFrom(input)
+    if (sessionID) {
+      args.push("--turn-id", sessionID)
+    }
+    await runLifecycleActivity(...args)
+  },
+  "tool.execute.before": async (input, output) => {
+    const args = ["tool_call.started", "--provider", "opencode"]
+    const name = toolNameFrom(input, output)
+    if (name) {
+      args.push("--name", name)
+    }
+    await runLifecycleActivity(...args)
+  },
+  "tool.execute.after": async (input, output) => {
+    const args = ["tool_call.completed", "--provider", "opencode"]
+    const name = toolNameFrom(input, output)
+    if (name) {
+      args.push("--name", name)
+    }
+    await runLifecycleActivity(...args)
+  },
+})
 `;
 
 function createHookHandler(command: string): HookHandler {
@@ -56,6 +176,9 @@ function createHookHandler(command: string): HookHandler {
 const CLAUDE_ACTIVITY_COMMAND = `sh "\${CLAUDE_PROJECT_DIR}/.lifecycle/hooks/activity.sh"`;
 const CODEX_ACTIVITY_COMMAND = `sh "$(git rev-parse --show-toplevel)/.lifecycle/hooks/activity.sh"`;
 
+// Harness hook names are provider-native adapter details. Keep the installed
+// commands pointed at Lifecycle's semantic activity events so bridge consumers
+// can stay cross-harness and ACP-oriented.
 const HOOK_FILE_TARGETS: readonly HookTargetSpec[] = [
   {
     format: "script",
@@ -85,6 +208,13 @@ const HOOK_FILE_TARGETS: readonly HookTargetSpec[] = [
     label: "Codex hooks",
     path: path.join(".codex", "hooks.json"),
   },
+  {
+    format: "javascript",
+    harness_id: "opencode",
+    integration: "opencode-plugin",
+    label: "OpenCode activity plugin",
+    path: path.join(".opencode", "plugins", "lifecycle-activity.js"),
+  },
 ] as const;
 
 const CLAUDE_HOOKS: Record<string, HookGroup[]> = {
@@ -92,7 +222,7 @@ const CLAUDE_HOOKS: Record<string, HookGroup[]> = {
     {
       hooks: [
         createHookHandler(
-          `${CLAUDE_ACTIVITY_COMMAND} tool.completed --provider claude-code --name Bash`,
+          `${CLAUDE_ACTIVITY_COMMAND} tool_call.completed --provider claude-code --name Bash`,
         ),
       ],
       matcher: "Bash",
@@ -102,7 +232,7 @@ const CLAUDE_HOOKS: Record<string, HookGroup[]> = {
     {
       hooks: [
         createHookHandler(
-          `${CLAUDE_ACTIVITY_COMMAND} tool.started --provider claude-code --name Bash`,
+          `${CLAUDE_ACTIVITY_COMMAND} tool_call.started --provider claude-code --name Bash`,
         ),
       ],
       matcher: "Bash",
@@ -126,7 +256,9 @@ const CODEX_HOOKS: Record<string, HookGroup[]> = {
   PostToolUse: [
     {
       hooks: [
-        createHookHandler(`${CODEX_ACTIVITY_COMMAND} tool.completed --provider codex --name Bash`),
+        createHookHandler(
+          `${CODEX_ACTIVITY_COMMAND} tool_call.completed --provider codex --name Bash`,
+        ),
       ],
       matcher: "Bash",
     },
@@ -134,7 +266,9 @@ const CODEX_HOOKS: Record<string, HookGroup[]> = {
   PreToolUse: [
     {
       hooks: [
-        createHookHandler(`${CODEX_ACTIVITY_COMMAND} tool.started --provider codex --name Bash`),
+        createHookHandler(
+          `${CODEX_ACTIVITY_COMMAND} tool_call.started --provider codex --name Bash`,
+        ),
       ],
       matcher: "Bash",
     },
@@ -167,6 +301,8 @@ export function checkHookTarget(target: ResolvedHookTarget): HookCheckStatus {
       return evaluateHookJsonTarget(target).status;
     case "hook-features":
       return evaluateCodexFeatureTarget(target.path).status;
+    case "opencode-plugin":
+      return evaluateStaticScriptTarget(target.path, OPENCODE_ACTIVITY_PLUGIN).status;
   }
 }
 
@@ -178,6 +314,8 @@ export function installHookTarget(target: ResolvedHookTarget): HookInstallStatus
       return installHookJsonTarget(target);
     case "hook-features":
       return installCodexFeatureTarget(target.path);
+    case "opencode-plugin":
+      return installStaticScriptTarget(target.path, OPENCODE_ACTIVITY_PLUGIN);
   }
 }
 
@@ -189,6 +327,40 @@ function installScriptTarget(filePath: string): HookInstallStatus {
 
   writeFile(filePath, snapshot.nextContent);
   return snapshot.fileExists ? "updated" : "created";
+}
+
+function installStaticScriptTarget(filePath: string, content: string): HookInstallStatus {
+  const snapshot = evaluateStaticScriptTarget(filePath, content);
+  if (!snapshot.nextContent) {
+    return "unchanged";
+  }
+
+  writeFile(filePath, snapshot.nextContent);
+  return snapshot.fileExists ? "updated" : "created";
+}
+
+function evaluateStaticScriptTarget(
+  filePath: string,
+  content: string,
+): {
+  fileExists: boolean;
+  nextContent: string | null;
+  status: HookCheckStatus;
+} {
+  const raw = readFileOrNull(filePath);
+  if (raw === content) {
+    return {
+      fileExists: raw !== null,
+      nextContent: null,
+      status: "installed",
+    };
+  }
+
+  return {
+    fileExists: raw !== null,
+    nextContent: content,
+    status: raw === null ? "missing" : "outdated",
+  };
 }
 
 function evaluateScriptTarget(filePath: string): {

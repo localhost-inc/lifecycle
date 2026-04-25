@@ -35,6 +35,7 @@ export async function launchTui(
     process.env.LIFECYCLE_BRIDGE_URL = bridgeUrl;
 
     return await runOpenTUI({
+      bridgeUrl,
       client,
       initialWorkspaceId: await resolveInitialWorkspaceId(input.env, input.workspaceId),
     });

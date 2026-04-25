@@ -24,6 +24,8 @@ describe("listWorkspaceTerminals", () => {
   test("re-ensures a stale local workspace before resolving the terminal runtime", async () => {
     const dir = await mkdtemp(join(tmpdir(), "lifecycle-terminal-service-"));
     tempDirs.push(dir);
+    const previousLifecycleRoot = process.env.LIFECYCLE_ROOT;
+    process.env.LIFECYCLE_ROOT = dir;
 
     const db = await createTursoDb({
       path: join(dir, "bridge.db"),
@@ -158,5 +160,10 @@ describe("listWorkspaceTerminals", () => {
     expect(persisted?.workspace_root).toBe(repairedWorkspaceRoot);
 
     await db.close();
+    if (previousLifecycleRoot === undefined) {
+      delete process.env.LIFECYCLE_ROOT;
+    } else {
+      process.env.LIFECYCLE_ROOT = previousLifecycleRoot;
+    }
   });
 });

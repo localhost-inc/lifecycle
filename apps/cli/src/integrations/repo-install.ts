@@ -3,7 +3,7 @@ import { checkHookTarget, installHookTarget, resolveHookTargets } from "./hooks"
 import type { McpCheckStatus, McpInstallStatus, ResolvedMcpTarget } from "./mcp";
 import { checkMcpTarget, installMcpTarget, resolveMcpTargets } from "./mcp";
 
-export type RepoInstallProviderId = "claude-code" | "codex";
+export type RepoInstallProviderId = "claude-code" | "codex" | "opencode";
 
 export interface RepoInstallResult {
   harness_id: string;
@@ -42,6 +42,11 @@ const PROVIDER_OPTIONS: readonly RepoInstallProviderOption[] = [
     description: "Install project-scoped MCP config and Codex hooks.",
     id: "codex",
     label: "Codex",
+  },
+  {
+    description: "Install project-scoped OpenCode activity hooks.",
+    id: "opencode",
+    label: "OpenCode",
   },
 ] as const;
 

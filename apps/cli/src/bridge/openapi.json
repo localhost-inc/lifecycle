@@ -419,10 +419,10 @@
                     "enum": [
                       "turn.started",
                       "turn.completed",
-                      "tool.started",
-                      "tool.completed",
-                      "waiting.started",
-                      "waiting.completed"
+                      "tool_call.started",
+                      "tool_call.completed",
+                      "permission.requested",
+                      "permission.resolved"
                     ]
                   },
                   "kind": {
@@ -434,6 +434,10 @@
                     "additionalProperties": {}
                   },
                   "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "prompt": {
                     "type": "string",
                     "minLength": 1
                   },
@@ -2317,6 +2321,7 @@
           "shell",
           "claude",
           "codex",
+          "opencode",
           "custom"
         ]
       },
@@ -3369,6 +3374,10 @@
           "appearance": {
             "default": {
               "theme": "dark",
+              "fonts": {
+                "ui": "Geist",
+                "code": "Geist Mono"
+              },
               "dimInactivePanes": true,
               "inactivePaneOpacity": 0.52
             },
@@ -3390,6 +3399,30 @@
                   "rose-pine"
                 ]
               },
+              "fonts": {
+                "default": {
+                  "ui": "Geist",
+                  "code": "Geist Mono"
+                },
+                "type": "object",
+                "properties": {
+                  "ui": {
+                    "default": "Geist",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "code": {
+                    "default": "Geist Mono",
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "ui",
+                  "code"
+                ],
+                "additionalProperties": false
+              },
               "dimInactivePanes": {
                 "default": true,
                 "type": "boolean"
@@ -3403,8 +3436,25 @@
             },
             "required": [
               "theme",
+              "fonts",
               "dimInactivePanes",
               "inactivePaneOpacity"
+            ],
+            "additionalProperties": false
+          },
+          "developer": {
+            "default": {
+              "showOnboarding": false
+            },
+            "type": "object",
+            "properties": {
+              "showOnboarding": {
+                "default": false,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "showOnboarding"
             ],
             "additionalProperties": false
           },
@@ -3478,6 +3528,10 @@
                     "reasoningEffort": null,
                     "webSearch": null
                   }
+                },
+                "opencode": {
+                  "launcher": "opencode",
+                  "label": "OpenCode"
                 }
               }
             },
@@ -3570,6 +3624,10 @@
                       "reasoningEffort": null,
                       "webSearch": null
                     }
+                  },
+                  "opencode": {
+                    "launcher": "opencode",
+                    "label": "OpenCode"
                   }
                 },
                 "type": "object",
@@ -3817,6 +3875,28 @@
                         "settings"
                       ],
                       "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "launcher": {
+                          "type": "string",
+                          "enum": [
+                            "opencode"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "launcher"
+                      ],
+                      "additionalProperties": false
                     }
                   ]
                 }
@@ -3833,6 +3913,7 @@
         },
         "required": [
           "appearance",
+          "developer",
           "providers",
           "terminal"
         ],
@@ -3861,7 +3942,6 @@
             "type": "object",
             "properties": {
               "theme": {
-                "default": "dark",
                 "type": "string",
                 "enum": [
                   "system",
@@ -3876,15 +3956,37 @@
                   "rose-pine"
                 ]
               },
+              "fonts": {
+                "type": "object",
+                "properties": {
+                  "ui": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "code": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              },
               "dimInactivePanes": {
-                "default": true,
                 "type": "boolean"
               },
               "inactivePaneOpacity": {
-                "default": 0.52,
                 "type": "number",
                 "minimum": 0.2,
                 "maximum": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          "developer": {
+            "type": "object",
+            "properties": {
+              "showOnboarding": {
+                "default": false,
+                "type": "boolean"
               }
             },
             "additionalProperties": false
@@ -4203,6 +4305,28 @@
                         "settings"
                       ],
                       "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "default": null,
+                          "nullable": true,
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "launcher": {
+                          "type": "string",
+                          "enum": [
+                            "opencode"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "launcher"
+                      ],
+                      "additionalProperties": false
                     }
                   ]
                 }
@@ -4226,6 +4350,7 @@
           "proxy",
           "claude-code",
           "codex",
+          "opencode",
           "agents-md",
           "claude-md"
         ]

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parseManifest } from "@lifecycle/contracts";
 
+import { extractHookPrompt } from "./commands/workspace/activity/emit";
 import { main } from "./index";
 
 function createIo() {
@@ -1231,6 +1232,7 @@ describe("lifecycle cli", () => {
               source: "hook",
             },
             provider: "codex",
+            prompt: "Implement prompt based tab titles",
             terminalId: "term_123",
             turnId: "turn_123",
           },
@@ -1248,9 +1250,11 @@ describe("lifecycle cli", () => {
                 source: "hook",
               },
               provider: "codex",
+              prompt: "Implement prompt based tab titles",
               source: "explicit",
               state: "turn_active",
               terminal_id: "term_123",
+              title: "Prompt Based Tab Titles",
               tool_name: null,
               turn_id: "turn_123",
               updated_at: "2026-04-09T00:00:00.000Z",
@@ -1278,6 +1282,8 @@ describe("lifecycle cli", () => {
                 "turn_123",
                 "--provider",
                 "codex",
+                "--prompt",
+                "Implement prompt based tab titles",
                 "--metadata",
                 '{"source":"hook"}',
               ],
@@ -1291,6 +1297,15 @@ describe("lifecycle cli", () => {
 
     expect(sink.stdout).toEqual([]);
     expect(sink.stderr).toEqual([]);
+  });
+
+  test("extracts workspace activity prompt from hook payload variants", () => {
+    expect(extractHookPrompt({ prompt: "Direct prompt" })).toBe("Direct prompt");
+    expect(extractHookPrompt({ event: { input: "Nested input" } })).toBe("Nested input");
+    expect(extractHookPrompt({ properties: { message: "Provider message" } })).toBe(
+      "Provider message",
+    );
+    expect(extractHookPrompt({ payload: { userPrompt: "Camel prompt" } })).toBe("Camel prompt");
   });
 
   test("fails workspace activity emit when terminal context cannot be resolved", async () => {
@@ -1329,9 +1344,11 @@ describe("lifecycle cli", () => {
               last_event_at: "2026-04-09T00:00:00.000Z",
               metadata: null,
               provider: "codex",
+              prompt: null,
               source: "explicit",
               state: "waiting",
               terminal_id: "term_123",
+              title: null,
               tool_name: null,
               turn_id: "turn_123",
               updated_at: "2026-04-09T00:00:00.000Z",
@@ -1362,9 +1379,11 @@ describe("lifecycle cli", () => {
           last_event_at: "2026-04-09T00:00:00.000Z",
           metadata: null,
           provider: "codex",
+          prompt: null,
           source: "explicit",
           state: "waiting",
           terminal_id: "term_123",
+          title: null,
           tool_name: null,
           turn_id: "turn_123",
           updated_at: "2026-04-09T00:00:00.000Z",
@@ -1486,6 +1505,7 @@ describe("lifecycle cli", () => {
           { harness_id: "codex", integration: "hook-features", status: "updated" },
           { harness_id: "codex", integration: "hooks", status: "updated" },
           { harness_id: "codex", integration: "mcp", status: "updated" },
+          { harness_id: "opencode", integration: "opencode-plugin", status: "created" },
         ],
       });
 
@@ -1503,6 +1523,10 @@ describe("lifecycle cli", () => {
         join(repoPath, ".codex", "hooks.json"),
         "utf8",
       );
+      const opencodeAfterFirstInstall = await readFile(
+        join(repoPath, ".opencode", "plugins", "lifecycle-activity.js"),
+        "utf8",
+      );
 
       const secondSink = createIo();
       const secondCode = await main(
@@ -1518,6 +1542,7 @@ describe("lifecycle cli", () => {
           { harness_id: "codex", integration: "hook-features", status: "unchanged" },
           { harness_id: "codex", integration: "hooks", status: "unchanged" },
           { harness_id: "codex", integration: "mcp", status: "unchanged" },
+          { harness_id: "opencode", integration: "opencode-plugin", status: "unchanged" },
         ],
       });
       expect(await readFile(join(repoPath, ".lifecycle", "hooks", "activity.sh"), "utf8")).toBe(
@@ -1533,6 +1558,9 @@ describe("lifecycle cli", () => {
       expect(await readFile(join(repoPath, ".codex", "hooks.json"), "utf8")).toBe(
         codexHooksAfterFirstInstall,
       );
+      expect(
+        await readFile(join(repoPath, ".opencode", "plugins", "lifecycle-activity.js"), "utf8"),
+      ).toBe(opencodeAfterFirstInstall);
     } finally {
       await rm(repoPath, { force: true, recursive: true });
     }

@@ -38,7 +38,7 @@ describe("terminal launch profiles", () => {
     });
   });
 
-  test("resolves Codex launch settings into an interactive CLI command", () => {
+  test("resolves Codex yolo launch settings into the bypass flag", () => {
     const resolved = resolveTerminalLaunch(
       settings({
         profiles: {
@@ -67,12 +67,61 @@ describe("terminal launch profiles", () => {
         "gpt-5.4",
         "--profile",
         "fast",
-        "--ask-for-approval",
-        "never",
-        "--sandbox",
-        "danger-full-access",
+        "--dangerously-bypass-approvals-and-sandbox",
         "--search",
       ],
+      cwd: null,
+      env: [],
+    });
+  });
+
+  test("resolves Codex non-yolo launch settings into approval and sandbox flags", () => {
+    const resolved = resolveTerminalLaunch(
+      settings({
+        profiles: {
+          codex: {
+            launcher: "codex",
+            label: "Codex",
+            settings: {
+              model: null,
+              configProfile: null,
+              approvalPolicy: "on-request",
+              sandboxMode: "workspace-write",
+              reasoningEffort: null,
+              webSearch: null,
+            },
+          },
+        },
+      }),
+      "codex",
+    );
+
+    expect(resolved.kind).toBe("codex");
+    expect(resolved.launchSpec).toEqual({
+      program: "codex",
+      args: ["--ask-for-approval", "on-request", "--sandbox", "workspace-write"],
+      cwd: null,
+      env: [],
+    });
+  });
+
+  test("resolves OpenCode launch settings into an interactive CLI command", () => {
+    const resolved = resolveTerminalLaunch(
+      settings({
+        profiles: {
+          opencode: {
+            launcher: "opencode",
+            label: "OpenCode",
+          },
+        },
+      }),
+      "opencode",
+    );
+
+    expect(resolved.kind).toBe("opencode");
+    expect(resolved.launchSpec).toEqual({
+      program: "opencode",
+      args: [],
       cwd: null,
       env: [],
     });

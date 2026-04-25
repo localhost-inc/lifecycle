@@ -7,10 +7,10 @@ describe("activity contracts", () => {
     expect(WORKSPACE_ACTIVITY_EVENT_NAMES).toEqual([
       "turn.started",
       "turn.completed",
-      "tool.started",
-      "tool.completed",
-      "waiting.started",
-      "waiting.completed",
+      "tool_call.started",
+      "tool_call.completed",
+      "permission.requested",
+      "permission.resolved",
     ]);
   });
 

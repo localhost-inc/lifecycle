@@ -29,6 +29,11 @@ describe("repo install provider plan", () => {
         id: "codex",
         label: "Codex",
       },
+      {
+        description: "Install project-scoped OpenCode activity hooks.",
+        id: "opencode",
+        label: "OpenCode",
+      },
     ]);
   });
 
@@ -60,6 +65,12 @@ describe("repo install provider plan", () => {
     );
     expect(await readFile(join(dir, ".codex", "config.toml"), "utf8")).toContain(
       "[mcp_servers.lifecycle]",
+    );
+    expect(await readFile(join(dir, ".codex", "config.toml"), "utf8")).toContain(
+      'command = "lifecycle"',
+    );
+    expect(await readFile(join(dir, ".codex", "config.toml"), "utf8")).not.toContain(
+      ".bun/bin/lifecycle",
     );
   });
 

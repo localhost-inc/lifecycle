@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-import type { SqlDriver } from "@lifecycle/db";
+import { dirname, isAbsolute, relative, sep } from "node:path";
+import { resolveLifecyclePath, type SqlDriver } from "@lifecycle/db";
 import { getRepositoryById, getWorkspaceRecordById } from "@lifecycle/db/queries";
 import type {
   WorkspaceActivityEventName,
@@ -8,13 +8,15 @@ import type {
   WorkspaceActivityTerminalRecord,
 } from "@lifecycle/contracts";
 import { BridgeError } from "../../lib/errors";
-import { resolveLifecycleRuntimePath } from "../../lib/runtime-paths";
 import { listWorkspaceTerminals } from "../terminal/service";
 import type { WorkspaceHostRegistry } from "./registry";
+import { generateWorkspaceTitle } from "./title";
 
 interface StoredActivitySignal {
   metadata: Record<string, unknown> | null;
   provider: string | null;
+  prompt: string | null;
+  title: string | null;
   turn_id: string | null;
   updated_at: string;
 }
@@ -52,7 +54,9 @@ export interface EmitWorkspaceActivityInput {
   metadata?: Record<string, unknown> | null | undefined;
   name?: string | null | undefined;
   provider?: string | null | undefined;
+  prompt?: string | null | undefined;
   terminalId: string;
+  title?: string | null | undefined;
   turnId?: string | null | undefined;
 }
 
@@ -62,9 +66,13 @@ export async function readWorkspaceActivity(
   workspaceId: string,
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<WorkspaceActivitySummary> {
-  await requireWorkspaceRecord(db, workspaceId);
+  const workspace = await requireWorkspaceRecord(db, workspaceId);
+  const repository = await requireRepositoryRecord(db, workspace.repository_id, workspaceId);
 
-  const stored = await readStoredWorkspaceActivity(workspaceId, environment);
+  const stored = await readStoredWorkspaceActivity(
+    workspaceActivityScope(workspace, repository, environment),
+    environment,
+  );
   const listing = await listWorkspaceTerminals(db, workspaceHosts, workspaceId);
   const explicitRecords = new Map<string, WorkspaceActivityTerminalRecord>();
 
@@ -107,16 +115,37 @@ export async function emitWorkspaceActivity(
   input: EmitWorkspaceActivityInput,
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<WorkspaceActivitySummary> {
-  await requireWorkspaceRecord(db, workspaceId);
+  const workspace = await requireWorkspaceRecord(db, workspaceId);
+  const repository = await requireRepositoryRecord(db, workspace.repository_id, workspaceId);
+  const scope = workspaceActivityScope(workspace, repository, environment);
+  const inputWithTitle = await withGeneratedTitle(input, workspace.workspace_root, environment);
 
-  const current = await readStoredWorkspaceActivity(workspaceId, environment);
-  const next = reduceStoredWorkspaceActivity(current, input, new Date().toISOString());
+  const current = await readStoredWorkspaceActivity(scope, environment);
+  const next = reduceStoredWorkspaceActivity(current, inputWithTitle, new Date().toISOString());
 
   if (next !== current) {
-    await writeStoredWorkspaceActivity(next, environment);
+    await writeStoredWorkspaceActivity(scope, next, environment);
   }
 
   return readWorkspaceActivity(db, workspaceHosts, workspaceId, environment);
+}
+
+async function withGeneratedTitle(
+  input: EmitWorkspaceActivityInput,
+  cwd: string | null,
+  environment: NodeJS.ProcessEnv,
+): Promise<EmitWorkspaceActivityInput> {
+  if (input.event !== "turn.started" || normalizeOptionalString(input.title)) {
+    return input;
+  }
+
+  const prompt = normalizeOptionalString(input.prompt);
+  if (!prompt) {
+    return input;
+  }
+
+  const title = await generateWorkspaceTitle({ cwd, prompt }, environment);
+  return title ? { ...input, title } : input;
 }
 
 export async function buildWorkspaceActivitySocketMessage(
@@ -164,18 +193,108 @@ async function requireWorkspaceRecord(db: SqlDriver, workspaceId: string) {
   return workspace;
 }
 
+async function requireRepositoryRecord(db: SqlDriver, repositoryId: string, workspaceId: string) {
+  const repository = await getRepositoryById(db, repositoryId);
+  if (!repository) {
+    throw new BridgeError({
+      code: "repository_not_found",
+      message: `Could not resolve repository "${repositoryId}" for workspace "${workspaceId}".`,
+      status: 404,
+    });
+  }
+
+  return repository;
+}
+
+interface WorkspaceActivityScope {
+  organizationSlug: string;
+  repositorySlug: string;
+  workspaceId: string;
+  workspaceSlug: string;
+}
+
+function workspaceActivityScope(
+  workspace: {
+    id: string;
+    slug: string;
+    workspace_root: string | null;
+  },
+  repository: {
+    slug: string;
+  },
+  environment: NodeJS.ProcessEnv,
+): WorkspaceActivityScope {
+  return {
+    organizationSlug: organizationSlugFromWorkspaceRoot(
+      workspace.workspace_root,
+      repository.slug,
+      workspace.slug,
+      environment,
+    ),
+    repositorySlug: repository.slug,
+    workspaceId: workspace.id,
+    workspaceSlug: workspace.slug,
+  };
+}
+
+function organizationSlugFromWorkspaceRoot(
+  workspaceRoot: string | null,
+  repositorySlug: string,
+  workspaceSlug: string,
+  environment: NodeJS.ProcessEnv,
+): string {
+  if (!workspaceRoot) {
+    return "local";
+  }
+
+  const relativeWorkspaceRoot = relative(
+    resolveLifecyclePath(["worktrees"], environment),
+    workspaceRoot,
+  );
+  if (
+    !relativeWorkspaceRoot ||
+    relativeWorkspaceRoot === ".." ||
+    relativeWorkspaceRoot.startsWith(`..${sep}`) ||
+    isAbsolute(relativeWorkspaceRoot)
+  ) {
+    return "local";
+  }
+
+  const [organizationSlug, rootRepositorySlug, rootWorkspaceSlug] = relativeWorkspaceRoot
+    .split(sep)
+    .filter(Boolean);
+  if (
+    !organizationSlug ||
+    rootRepositorySlug !== repositorySlug ||
+    rootWorkspaceSlug !== workspaceSlug
+  ) {
+    return "local";
+  }
+
+  return organizationSlug;
+}
+
 function activityStatePath(
-  workspaceId: string,
+  scope: WorkspaceActivityScope,
   environment: NodeJS.ProcessEnv = process.env,
 ): string {
-  return resolveLifecycleRuntimePath(["workspace-activity", `${workspaceId}.json`], environment);
+  return resolveLifecyclePath(
+    [
+      "activity",
+      scope.organizationSlug,
+      scope.repositorySlug,
+      scope.workspaceSlug,
+      "activity.json",
+    ],
+    environment,
+  );
 }
 
 async function readStoredWorkspaceActivity(
-  workspaceId: string,
+  scope: WorkspaceActivityScope,
   environment: NodeJS.ProcessEnv,
 ): Promise<StoredWorkspaceActivityState> {
-  const path = activityStatePath(workspaceId, environment);
+  const path = activityStatePath(scope, environment);
 
   try {
     const raw = JSON.parse(await readFile(path, "utf8")) as Partial<StoredWorkspaceActivityState>;
@@ -184,7 +303,7 @@ async function readStoredWorkspaceActivity(
         ? (raw.terminals as StoredWorkspaceActivityState["terminals"])
         : {},
       updated_at: typeof raw.updated_at === "string" ? raw.updated_at : null,
-      workspace_id: typeof raw.workspace_id === "string" ? raw.workspace_id : workspaceId,
+      workspace_id: typeof raw.workspace_id === "string" ? raw.workspace_id : scope.workspaceId,
     };
   } catch (error) {
     if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
@@ -194,16 +313,17 @@ async function readStoredWorkspaceActivity(
     return {
       terminals: {},
       updated_at: null,
-      workspace_id: workspaceId,
+      workspace_id: scope.workspaceId,
     };
   }
 }
 
 async function writeStoredWorkspaceActivity(
+  scope: WorkspaceActivityScope,
   state: StoredWorkspaceActivityState,
   environment: NodeJS.ProcessEnv,
 ): Promise<void> {
-  const path = activityStatePath(state.workspace_id, environment);
+  const path = activityStatePath(scope, environment);
   await mkdir(dirname(path), { recursive: true });
 
   const payload = JSON.stringify(state, null, 2) + "\n";
@@ -267,12 +387,12 @@ function applyActivityEvent(
       }
       return changed;
     }
-    case "tool.started": {
+    case "tool_call.started": {
       terminal.last_event_at = now;
       terminal.tool = createToolSignal(input, now, resolveTurnIdForStart(terminal, input));
       return true;
     }
-    case "tool.completed": {
+    case "tool_call.completed": {
       const changed = clearToolSignal(
         terminal,
         normalizeOptionalString(input.turnId),
@@ -283,12 +403,12 @@ function applyActivityEvent(
       }
       return changed;
     }
-    case "waiting.started": {
+    case "permission.requested": {
       terminal.last_event_at = now;
       terminal.waiting = createWaitingSignal(input, now, resolveTurnIdForStart(terminal, input));
       return true;
     }
-    case "waiting.completed": {
+    case "permission.resolved": {
       const changed = clearWaitingSignal(
         terminal,
         normalizeOptionalString(input.turnId),
@@ -306,9 +426,9 @@ function cloneStoredTerminal(current?: StoredTerminalActivity): StoredTerminalAc
   return current
     ? {
         last_event_at: current.last_event_at,
-        tool: current.tool ? { ...current.tool } : null,
-        turn: current.turn ? { ...current.turn } : null,
-        waiting: current.waiting ? { ...current.waiting } : null,
+        tool: current.tool ? cloneStoredToolSignal(current.tool) : null,
+        turn: current.turn ? cloneStoredSignal(current.turn) : null,
+        waiting: current.waiting ? cloneStoredWaitingSignal(current.waiting) : null,
       }
     : {
         last_event_at: "",
@@ -316,6 +436,33 @@ function cloneStoredTerminal(current?: StoredTerminalActivity): StoredTerminalAc
         turn: null,
         waiting: null,
       };
+}
+
+function cloneStoredSignal(signal: StoredActivitySignal): StoredActivitySignal {
+  return {
+    metadata: cloneMetadata(signal.metadata),
+    provider: signal.provider ?? null,
+    prompt: signal.prompt ?? null,
+    title: signal.title ?? null,
+    turn_id: signal.turn_id ?? null,
+    updated_at: signal.updated_at,
+  };
+}
+
+function cloneStoredToolSignal(signal: StoredToolActivitySignal): StoredToolActivitySignal {
+  return {
+    ...cloneStoredSignal(signal),
+    name: signal.name ?? null,
+  };
+}
+
+function cloneStoredWaitingSignal(
+  signal: StoredWaitingActivitySignal,
+): StoredWaitingActivitySignal {
+  return {
+    ...cloneStoredSignal(signal),
+    kind: signal.kind ?? null,
+  };
 }
 
 function hasExplicitActivity(terminal: StoredTerminalActivity): boolean {
@@ -330,6 +477,8 @@ function createSignal(
   return {
     metadata: cloneMetadata(input.metadata),
     provider: normalizeOptionalString(input.provider),
+    prompt: normalizeOptionalString(input.prompt),
+    title: normalizeOptionalString(input.title),
     turn_id: turnId,
     updated_at: now,
   };
@@ -444,9 +593,11 @@ function deriveExplicitRecord(
       last_event_at: terminal.last_event_at,
       metadata: terminal.waiting.metadata,
       provider: terminal.waiting.provider,
+      prompt: terminal.waiting.prompt ?? terminal.turn?.prompt ?? null,
       source: "explicit",
       state: "waiting",
       terminal_id: terminalId,
+      title: terminal.waiting.title ?? terminal.turn?.title ?? null,
       tool_name: null,
       turn_id: terminal.waiting.turn_id ?? terminal.turn?.turn_id ?? null,
       updated_at: terminal.waiting.updated_at,
@@ -460,9 +611,11 @@ function deriveExplicitRecord(
       last_event_at: terminal.last_event_at,
       metadata: terminal.tool.metadata,
       provider: terminal.tool.provider,
+      prompt: terminal.tool.prompt ?? terminal.turn?.prompt ?? null,
       source: "explicit",
       state: "tool_active",
       terminal_id: terminalId,
+      title: terminal.tool.title ?? terminal.turn?.title ?? null,
       tool_name: terminal.tool.name,
       turn_id: terminal.tool.turn_id ?? terminal.turn?.turn_id ?? null,
       updated_at: terminal.tool.updated_at,
@@ -476,9 +629,11 @@ function deriveExplicitRecord(
       last_event_at: terminal.last_event_at,
       metadata: terminal.turn.metadata,
       provider: terminal.turn.provider,
+      prompt: terminal.turn.prompt,
       source: "explicit",
       state: "turn_active",
       terminal_id: terminalId,
+      title: terminal.turn.title,
       tool_name: null,
       turn_id: terminal.turn.turn_id,
       updated_at: terminal.turn.updated_at,
@@ -495,7 +650,11 @@ function deriveHeuristicRecord(terminal: ObservedTerminal): WorkspaceActivityTer
     busy: terminal.busy,
     last_event_at: null,
     metadata: null,
-    provider: terminal.kind === "claude" || terminal.kind === "codex" ? terminal.kind : null,
+    provider:
+      terminal.kind === "claude" || terminal.kind === "codex" || terminal.kind === "opencode"
+        ? terminal.kind
+        : null,
+    prompt: null,
     source: "heuristic",
     state: isInteractiveHarness
       ? terminal.busy
@@ -505,6 +664,7 @@ function deriveHeuristicRecord(terminal: ObservedTerminal): WorkspaceActivityTer
         ? "unknown"
         : "idle",
     terminal_id: terminal.id,
+    title: null,
     tool_name: null,
     turn_id: null,
     updated_at: null,

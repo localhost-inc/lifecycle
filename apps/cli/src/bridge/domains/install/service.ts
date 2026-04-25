@@ -89,6 +89,7 @@ const INSTALL_STEP_ORDER: InstallStepId[] = [
   "proxy",
   "claude-code",
   "codex",
+  "opencode",
   "agents-md",
   "claude-md",
 ];
@@ -479,6 +480,7 @@ async function inspectStep(
       return proxyInspectStep(runtime);
     case "claude-code":
     case "codex":
+    case "opencode":
       return providerInspectStep(stepId, repoPath);
     case "agents-md":
     case "claude-md":
@@ -501,6 +503,7 @@ async function applyStep(
       return proxyApplyStep(runtime);
     case "claude-code":
     case "codex":
+    case "opencode":
       return providerApplyStep(stepId, repoPath);
     case "agents-md":
     case "claude-md":

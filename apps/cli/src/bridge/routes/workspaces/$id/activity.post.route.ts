@@ -12,6 +12,7 @@ export default createRoute({
       kind: z.string().trim().min(1).optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
       name: z.string().trim().min(1).optional(),
+      prompt: z.string().trim().min(1).optional(),
       provider: z.string().trim().min(1).optional(),
       terminalId: z.string().trim().min(1),
       turnId: z.string().trim().min(1).optional(),

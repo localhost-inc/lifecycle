@@ -8,20 +8,45 @@ This file defines engineering execution standards for agents working in this rep
 2. Keep changes small, testable, and contract-aligned.
 3. Treat this repo as a production codebase, not a sandbox.
 
+## Forward-Only Engineering
+
+1. No legacy behavior, compatibility shims, fallback aliases, duplicate APIs, or backwards-compatible wrappers by default.
+2. Add compatibility only when the user explicitly requests it or when a concrete shipped/persisted/external contract requires it.
+3. If compatibility is required, keep it narrow, document the removal condition, and do not let it become a second implementation path.
+4. Prefer deleting or replacing obsolete paths over preserving them. Agents should ask one short question when compatibility requirements are unclear instead of guessing.
+
 ## Current Product Focus
 
-1. The active product focus is the `lifecycle` CLI, the CLI-owned TUI (`apps/cli/src/tui`), control plane (CF Workers + Durable Objects + D1), and sandbox provider infrastructure.
-2. Prefer work that makes workspace lifecycle, shell attach, tmux persistence, host-aware execution, sandbox provisioning, and background agent orchestration more reliable.
-3. OpenCode is the agent runtime inside workspaces. Lifecycle provides workspace awareness through custom tools and plugins, not through custom agent provider integrations.
-4. Treat desktop, web, and other auxiliary surfaces as maintenance-only unless the user explicitly asks for them or they directly unblock CLI/TUI/control-plane work.
+1. The active product focus is the full Lifecycle workspace experience: the native desktop app (`apps/desktop-mac`), the `lifecycle` CLI, the CLI-owned TUI (`apps/cli/src/tui`), control plane (CF Workers + Durable Objects + D1), and sandbox provider infrastructure.
+2. Treat the desktop app as a first-class product surface, not an auxiliary maintenance surface. Desktop work is appropriate when the request is about visual design, workspace navigation, terminal/agent presentation, stack observability, settings, onboarding, or native app behavior.
+3. Prefer work that makes workspace lifecycle, shell attach, tmux persistence, host-aware execution, sandbox provisioning, background agent orchestration, and desktop workspace ergonomics more reliable.
+4. OpenCode is the agent runtime inside workspaces. Lifecycle provides workspace awareness through custom tools and plugins, not through custom agent provider integrations.
+5. Treat web and other auxiliary surfaces as maintenance-only unless the user explicitly asks for them or they directly unblock desktop, CLI/TUI, or control-plane work.
 
 ## Operating Context
 
-Lifecycle is a workspace runtime and agent orchestration platform. The working priority is CLI + TUI + control plane + sandbox providers. When the user reports behavioral errors, broken interactions, or "this didn't work", assume they are describing the `lifecycle` CLI, the CLI-owned TUI, control plane, or workspace/environment packages unless they explicitly say desktop, web, or another surface. Investigate CLI/TUI/control-plane codepaths first.
+Lifecycle is a workspace runtime and agent orchestration platform. The working priority is desktop + CLI/TUI + control plane + sandbox providers. When the user reports behavioral errors, broken interactions, or "this didn't work", route by the surface named or shown in context. If the report is about native app UI, visual layout, workspace canvas behavior, terminal/agent presentation inside the app, settings, onboarding, or macOS behavior, investigate `apps/desktop-mac` first. If no surface is named or shown, investigate CLI/TUI/control-plane codepaths first.
+
+Visual surface routing override: when the user provides a screenshot, mock, or visual design feedback, first identify the visible product surface from the image and nearby language before applying the CLI/TUI default. A screenshot of the native desktop app, macOS chrome, or SwiftUI-styled panels is an explicit desktop signal; route that work to `apps/desktop-mac` unless the user says otherwise.
 
 The system has two modes: **interactive** (human in a tmux-backed shell, optionally running an agent) and **background** (headless agent in a sandbox, orchestrated by the control plane). Both share the same workspace contract. See `docs/reference/architecture.md` for the full system design.
 
 Bridge-first execution rule: treat the bridge as the single runtime authority boundary for CLI and TUI work. Clients ask the bridge to do runtime reads and mutations. The bridge streams lifecycle events back to clients. Do not add side paths that shell out to ad hoc `lifecycle` subprocesses or duplicate runtime orchestration in clients when bridge ownership is the intended model.
+
+## Dogfood Safety
+
+Lifecycle is used to build Lifecycle. Breaking the active desktop workspace, terminal attach, bridge runtime, or tmux session continuity is a release-blocking regression, not an acceptable intermediate state.
+
+1. Never make a change that can strand the user out of their current workspace, terminal, agent session, or running stack without first preserving a safe recovery path.
+2. Treat `apps/desktop-mac`, bridge routes, generated OpenAPI/Swift clients, terminal runtime code, tmux attach/session logic, workspace selection/opening, and stack controls as dogfood-critical paths.
+3. Do not add presentation-only fields to bridge/API contracts just to satisfy a UI need. Derive UI presentation in the client unless the value is a real runtime/domain contract.
+4. If a bridge route schema changes, regenerate all generated clients in the same change and verify the live route against the currently running dev bridge with `curl` or an equivalent direct request.
+5. For any change touching workspace open, terminal resolution, terminal creation/attach, tmux IDs, bridge discovery, bridge health, generated clients, or desktop canvas layout, run a dogfood smoke test before calling the task done.
+6. The minimum desktop dogfood smoke test is: `just dev status`, live `GET /workspaces/:id/terminals` returns `200`, the selected workspace opens, existing terminal tabs do not show `can't find window`, and a terminal/agent tab remains usable.
+7. If a smoke test fails, stop feature work immediately, fix the regression first, and clearly report the broken contract and recovery steps.
+8. Do not dismiss a report as a visual/layout issue when the screenshot includes bridge errors, terminal runtime errors, missing tmux windows, or workspace-open failures. Diagnose the runtime path first.
+9. Unit tests are not enough for dogfood-critical paths. Passing `swift test` or `bun test` does not replace a live bridge/desktop smoke test when runtime contracts changed.
+10. If the app is already broken, prefer the smallest forward fix that restores the dogfood loop. Do not perform broad rollbacks or unrelated edits unless they are required to restore the active workflow.
 
 ## Core References
 

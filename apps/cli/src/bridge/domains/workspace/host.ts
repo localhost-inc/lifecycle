@@ -146,7 +146,7 @@ export interface WorkspaceTerminalRuntime {
   supportsRename: boolean;
 }
 
-export type WorkspaceTerminalKind = "shell" | "claude" | "codex" | "custom";
+export type WorkspaceTerminalKind = "shell" | "claude" | "codex" | "opencode" | "custom";
 
 export interface WorkspaceTerminalRecord {
   id: string;

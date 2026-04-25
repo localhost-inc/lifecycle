@@ -72,13 +72,15 @@ function statusLabel(status: string, requiresElevation: boolean): string {
 async function selectSteps(inspection: {
   steps: Array<{
     detail: string | null;
-    id: "agents-md" | "claude-code" | "claude-md" | "codex" | "proxy";
+    id: "agents-md" | "claude-code" | "claude-md" | "codex" | "opencode" | "proxy";
     label: string;
     requires_elevation: boolean;
     selected_by_default: boolean;
     status: string;
   }>;
-}): Promise<Array<"agents-md" | "claude-code" | "claude-md" | "codex" | "proxy"> | null> {
+}): Promise<Array<
+  "agents-md" | "claude-code" | "claude-md" | "codex" | "opencode" | "proxy"
+> | null> {
   const selectableSteps = inspection.steps.filter((step) => step.status !== "unsupported");
   if (selectableSteps.length === 0) {
     outro("Nothing to configure from this surface.");

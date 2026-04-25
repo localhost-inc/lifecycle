@@ -27,6 +27,7 @@ function resolveRequestedProfileId(
     case "shell":
     case "claude":
     case "codex":
+    case "opencode":
       return requestedKind;
     case "custom":
       return null;
@@ -49,6 +50,8 @@ function inferTerminalKind(
       return "claude";
     case "codex":
       return "codex";
+    case "opencode":
+      return "opencode";
     case "command":
       return "custom";
   }
@@ -95,11 +98,18 @@ function buildTerminalLaunchSpec(
       if (profile.settings.configProfile) {
         args.push("--profile", profile.settings.configProfile);
       }
-      if (profile.settings.approvalPolicy) {
-        args.push("--ask-for-approval", profile.settings.approvalPolicy);
-      }
-      if (profile.settings.sandboxMode) {
-        args.push("--sandbox", profile.settings.sandboxMode);
+      if (
+        profile.settings.approvalPolicy === "never" &&
+        profile.settings.sandboxMode === "danger-full-access"
+      ) {
+        args.push("--dangerously-bypass-approvals-and-sandbox");
+      } else {
+        if (profile.settings.approvalPolicy) {
+          args.push("--ask-for-approval", profile.settings.approvalPolicy);
+        }
+        if (profile.settings.sandboxMode) {
+          args.push("--sandbox", profile.settings.sandboxMode);
+        }
       }
       // The installed Codex CLI currently exposes search as a boolean flag rather than
       // the persisted disabled/cached/live tri-state. Any enabled search mode opts in.
@@ -113,5 +123,12 @@ function buildTerminalLaunchSpec(
         env: [],
       };
     }
+    case "opencode":
+      return {
+        program: "opencode",
+        args: [],
+        cwd: null,
+        env: [],
+      };
   }
 }

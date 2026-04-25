@@ -9,11 +9,11 @@ DIST_DIR="$APP_DIR/dist"
 APP_NAME="Lifecycle"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 EXECUTABLE_NAME="Lifecycle"
-RESOURCE_BUNDLE_NAME="LifecycleMac_LifecycleApp.bundle"
+RESOURCE_BUNDLE_NAME="Lifecycle_Lifecycle.bundle"
 APP_ICON_PATH="$APP_DIR/Resources/AppIcon.icns"
 CLI_HELPER_DIR="$ROOT_DIR/apps/cli/dist/release"
 BRIDGE_OPENAPI_PATH="$ROOT_DIR/apps/cli/src/bridge/openapi.json"
-APP_OPENAPI_PATH="$APP_DIR/Sources/LifecycleApp/openapi.json"
+APP_OPENAPI_PATH="$APP_DIR/Sources/Lifecycle/openapi.json"
 
 assert_bridge_openapi_symlink() {
   if [[ ! -L "$APP_OPENAPI_PATH" ]]; then

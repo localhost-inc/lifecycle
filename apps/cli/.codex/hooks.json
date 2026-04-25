@@ -1,0 +1,46 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "command": "sh \"$(git rev-parse --show-toplevel)/.lifecycle/hooks/activity.sh\" tool.completed --provider codex --name Bash",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "command": "sh \"$(git rev-parse --show-toplevel)/.lifecycle/hooks/activity.sh\" tool.started --provider codex --name Bash",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "sh \"$(git rev-parse --show-toplevel)/.lifecycle/hooks/activity.sh\" turn.completed --provider codex",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "sh \"$(git rev-parse --show-toplevel)/.lifecycle/hooks/activity.sh\" turn.started --provider codex",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -420,6 +420,7 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
               connectionId,
               terminalId,
               context.cwd,
+              buildLifecycleTerminalEnvironment(workspace),
             ),
           ],
           cwd: context.cwd,
@@ -852,7 +853,13 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
     const result = await this.execCommand(workspace, [
       SYSTEM_SH_PROGRAM,
       "-lc",
-      buildEnsureTmuxSessionCommand(context.profile, context.sessionName, context.cwd),
+      buildEnsureTmuxSessionCommand(
+        context.profile,
+        context.sessionName,
+        context.cwd,
+        "shell",
+        buildLifecycleTerminalEnvironment(workspace),
+      ),
     ]);
     this.throwIfCommandFailed(result, "Lifecycle could not prepare the local terminal runtime.");
   }
@@ -922,6 +929,10 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
     const detail = [result.stderr.trim(), result.stdout.trim()].find((value) => value.length > 0);
     throw new Error(detail ? `${message} ${detail}` : message);
   }
+}
+
+function buildLifecycleTerminalEnvironment(workspace: WorkspaceRecord): Array<[string, string]> {
+  return [["LIFECYCLE_WORKSPACE_ID", workspace.id]];
 }
 
 interface LocalTerminalContext {

@@ -59,6 +59,7 @@ The canvas still owns:
 3. which surfaces belong to which groups
 4. the order of surfaces inside a group
 5. which surface is active inside each group
+6. which runtime-backed surfaces are hidden after user close and eligible for reopen
 
 Dragging a terminal surface between groups is a canvas operation. It should not require changing tmux window identity.
 
@@ -71,7 +72,9 @@ Recommended shape:
 1. create terminal tab: create a tmux window, then create a surface bound to that window
 2. split group: create a new group in canvas state, then place a chosen or newly created surface into it
 3. reorder tabs: reorder surfaces inside the group; do not reorder tmux windows just to satisfy UI order
-4. close terminal tab: remove the surface from canvas state and close the bound tmux window
+4. close terminal tab: remove the surface from visible canvas state; either close the bound tmux window or persist the surface as hidden when the client supports reopen
+
+Desktop clients that support reopening recently closed runtime-backed surfaces may keep the bound runtime resource alive after close. In that mode, the client must persist the hidden surface ids alongside the canvas document so a client restart or hot reload does not recreate those hidden resources as visible tabs from bridge runtime enumeration.
 
 ## Surface identity
 

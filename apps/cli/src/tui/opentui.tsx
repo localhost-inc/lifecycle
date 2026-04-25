@@ -25,6 +25,7 @@ import {
 } from "react";
 import type { BridgeClient } from "@/bridge";
 
+import { workspaceTopic } from "@/bridge/lib/socket-topics";
 import { RepositorySidebar } from "./components/repository-sidebar";
 import { WorkspaceExtensionSidebar } from "./components/workspace-extension-sidebar";
 import { WorkspaceHeader } from "./components/workspace-header";
@@ -49,10 +50,12 @@ import {
 } from "./opentui-helpers";
 import { saveWorkspaceSelection } from "./selection-state";
 import { defaultTuiTheme, deriveTuiTheme, type TuiTheme } from "./tui-theme";
+import { attachTerminalActivity } from "./tui-models";
 import type {
   FocusTarget,
   RepositoriesResponse,
   WorkspaceCreatedTerminalEnvelope,
+  WorkspaceActivitySummary,
   WorkspaceDetailResponse,
   WorkspaceExtensionKind,
   WorkspaceShellLaunchSpec,
@@ -86,7 +89,32 @@ interface ActiveTerminalConnection {
 
 type RefreshReason = "initial" | "manual" | "poll";
 
+type BridgeTuiSocketMessage =
+  | {
+      type: "activity";
+      workspaces: Array<
+        WorkspaceActivitySummary & {
+          name: string;
+          repo: string;
+        }
+      >;
+    }
+  | {
+      reason: string;
+      resource: "app" | "workspace";
+      type: "snapshot.invalidated";
+      workspace_id?: string;
+    }
+  | {
+      clientId: string;
+      type: "connected";
+    }
+  | {
+      type: "pong";
+    };
+
 export async function runOpenTUI(input: {
+  bridgeUrl: string;
   client: BridgeClient;
   initialWorkspaceId: string | null;
 }): Promise<number> {
@@ -126,7 +154,11 @@ export async function runOpenTUI(input: {
 
   root.render(
     <FatalTuiBoundary>
-      <App client={input.client} initialWorkspaceId={input.initialWorkspaceId} />
+      <App
+        bridgeUrl={input.bridgeUrl}
+        client={input.client}
+        initialWorkspaceId={input.initialWorkspaceId}
+      />
     </FatalTuiBoundary>,
   );
 
@@ -182,7 +214,11 @@ function FatalTuiScreen(props: { error: Error }) {
   );
 }
 
-function App(props: { client: BridgeClient; initialWorkspaceId: string | null }) {
+function App(props: {
+  bridgeUrl: string;
+  client: BridgeClient;
+  initialWorkspaceId: string | null;
+}) {
   const renderer = useRenderer();
   const { height, width } = useTerminalDimensions();
   const terminalScrollRef = useRef<ScrollBoxRenderable | null>(null);
@@ -447,18 +483,24 @@ function App(props: { client: BridgeClient; initialWorkspaceId: string | null })
       }
 
       try {
-        const [detailResponse, terminalsResponse] = await Promise.all([
+        const [detailResponse, terminalsResponse, activityResponse] = await Promise.all([
           props.client.workspaces[":id"].$get({ param: { id: workspaceId } }),
           props.client.workspaces[":id"].terminals.$get({ param: { id: workspaceId } }),
+          props.client.workspaces[":id"].activity.$get({ param: { id: workspaceId } }),
         ]);
 
         const nextDetail = (await detailResponse.json()) as WorkspaceDetailResponse;
         const nextTerminals = (await terminalsResponse.json()) as WorkspaceTerminalsEnvelope;
+        const nextActivity = (await activityResponse.json()) as WorkspaceActivitySummary;
+        const terminalsWithActivity = attachTerminalActivity(nextTerminals.terminals, nextActivity);
         const nextActiveTerminalId = pickTerminalId(nextTerminals.terminals, null);
 
         setWorkspaceDetail(nextDetail);
-        setTerminalsEnvelope(nextTerminals);
-        setActiveTerminalId((current) => pickTerminalId(nextTerminals.terminals, current));
+        setTerminalsEnvelope({
+          ...nextTerminals,
+          terminals: terminalsWithActivity,
+        });
+        setActiveTerminalId((current) => pickTerminalId(terminalsWithActivity, current));
 
         if (
           reason !== "poll" &&
@@ -759,6 +801,79 @@ function App(props: { client: BridgeClient; initialWorkspaceId: string | null })
     }
     void saveWorkspaceSelection(selectedWorkspaceId).catch(() => undefined);
   }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    let closed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let socket: WebSocket | null = null;
+
+    const connect = () => {
+      socket = new WebSocket(resolveBridgeWebSocketUrl(props.bridgeUrl));
+      socket.addEventListener("open", () => {
+        socket?.send(
+          JSON.stringify({
+            type: "subscribe",
+            topics: [workspaceTopic(selectedWorkspaceId)],
+          }),
+        );
+      });
+      socket.addEventListener("message", (event) => {
+        const message = parseBridgeSocketMessage(event.data);
+        if (!message) {
+          return;
+        }
+
+        if (message.type === "activity") {
+          const workspaceActivity = message.workspaces.find(
+            (workspace) => workspace.workspace_id === selectedWorkspaceId,
+          );
+          if (!workspaceActivity) {
+            return;
+          }
+
+          setTerminalsEnvelope((current) =>
+            current
+              ? {
+                  ...current,
+                  terminals: attachTerminalActivity(current.terminals, workspaceActivity),
+                }
+              : current,
+          );
+          return;
+        }
+
+        if (
+          message.type === "snapshot.invalidated" &&
+          message.resource === "workspace" &&
+          message.workspace_id === selectedWorkspaceId
+        ) {
+          void loadWorkspaceScene(selectedWorkspaceId, "poll");
+        }
+      });
+      socket.addEventListener("close", () => {
+        if (!closed) {
+          reconnectTimer = setTimeout(connect, 1_000);
+        }
+      });
+      socket.addEventListener("error", () => {
+        socket?.close();
+      });
+    };
+
+    connect();
+
+    return () => {
+      closed = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+      socket?.close();
+    };
+  }, [loadWorkspaceScene, props.bridgeUrl, selectedWorkspaceId]);
 
   useEffect(() => {
     setDeleteError(null);
@@ -1243,4 +1358,23 @@ function hasActiveStackServices(detail: WorkspaceDetailResponse): boolean {
 
 function resolveLaunchProgram(program: string): string {
   return Bun.which(program) ?? program;
+}
+
+function resolveBridgeWebSocketUrl(bridgeUrl: string): string {
+  const url = new URL("/ws", bridgeUrl);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return url.toString();
+}
+
+function parseBridgeSocketMessage(data: unknown): BridgeTuiSocketMessage | null {
+  if (typeof data !== "string") {
+    return null;
+  }
+
+  try {
+    const message = JSON.parse(data) as Partial<BridgeTuiSocketMessage>;
+    return typeof message.type === "string" ? (message as BridgeTuiSocketMessage) : null;
+  } catch {
+    return null;
+  }
 }

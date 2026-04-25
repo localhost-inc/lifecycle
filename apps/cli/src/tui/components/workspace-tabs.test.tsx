@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { WorkspaceExtensionSidebar } from "./workspace-extension-sidebar";
 import { WorkspaceSessionStrip } from "./workspace-session-strip";
 import { defaultTuiTheme } from "../tui-theme";
+import { attachTerminalActivity } from "../tui-models";
 
 describe("workspace tabs", () => {
   test("renders the active workspace tab as a highlighted pill", () => {
@@ -27,6 +28,129 @@ describe("workspace tabs", () => {
 
     expect(markup).toContain("zsh");
     expect(highlightedPillCount).toBe(1);
+  });
+
+  test("renders explicit terminal activity in the session strip", () => {
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceSessionStrip, {
+        activeTerminalId: "term_agent",
+        focus: "canvas",
+        onCreateTerminal: () => {},
+        onTerminalPress: () => {},
+        terminals: [
+          {
+            activity: {
+              busy: true,
+              last_event_at: "2026-04-25T12:00:00.000Z",
+              metadata: null,
+              provider: "opencode",
+              prompt: null,
+              source: "explicit",
+              state: "waiting",
+              terminal_id: "term_agent",
+              title: null,
+              tool_name: null,
+              turn_id: "turn_1",
+              updated_at: "2026-04-25T12:00:00.000Z",
+              waiting_kind: "approval",
+            },
+            busy: false,
+            id: "term_agent",
+            kind: "custom",
+            title: "opencode",
+          },
+        ],
+        theme: defaultTuiTheme,
+      }),
+    );
+
+    expect(markup).toContain("* opencode waiting");
+  });
+
+  test("keeps explicit websocket activity when the terminal snapshot has not caught up", () => {
+    const terminals = attachTerminalActivity([], {
+      busy: true,
+      terminals: [
+        {
+          busy: true,
+          last_event_at: "2026-04-25T12:00:00.000Z",
+          metadata: null,
+          provider: "opencode",
+          prompt: null,
+          source: "explicit",
+          state: "turn_active",
+          terminal_id: "@agent",
+          title: null,
+          tool_name: null,
+          turn_id: "turn_1",
+          updated_at: "2026-04-25T12:00:00.000Z",
+          waiting_kind: null,
+        },
+      ],
+      updated_at: "2026-04-25T12:00:00.000Z",
+      workspace_id: "ws_1",
+    });
+
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceSessionStrip, {
+        activeTerminalId: "@agent",
+        focus: "canvas",
+        onCreateTerminal: () => {},
+        onTerminalPress: () => {},
+        terminals,
+        theme: defaultTuiTheme,
+      }),
+    );
+
+    expect(terminals).toEqual([
+      expect.objectContaining({
+        busy: true,
+        id: "@agent",
+        kind: "opencode",
+        title: "opencode",
+      }),
+    ]);
+    expect(markup).toContain("* opencode turn");
+  });
+
+  test("renders terminal activity in the debug sidebar", () => {
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceExtensionSidebar, {
+        detail: null,
+        focus: "extensions",
+        onSelectExtension: () => {},
+        selectedExtension: "debug",
+        terminals: [
+          {
+            activity: {
+              busy: true,
+              last_event_at: "2026-04-25T12:00:00.000Z",
+              metadata: null,
+              provider: "codex",
+              prompt: null,
+              source: "explicit",
+              state: "tool_active",
+              terminal_id: "term_agent",
+              title: null,
+              tool_name: "Bash",
+              turn_id: "turn_1",
+              updated_at: "2026-04-25T12:00:00.000Z",
+              waiting_kind: null,
+            },
+            busy: false,
+            id: "term_agent",
+            kind: "codex",
+            title: "codex",
+          },
+        ],
+        terminalsEnvelope: null,
+        theme: defaultTuiTheme,
+        width: 30,
+        workspacePath: "/workspace",
+      }),
+    );
+
+    expect(markup).toContain("* codex · codex · tool_active:Bash");
   });
 
   test("renders the selected extension tab as a highlighted pill", () => {

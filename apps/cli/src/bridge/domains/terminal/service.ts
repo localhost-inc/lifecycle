@@ -9,7 +9,7 @@ import {
   resolveWorkspaceScope,
   type WorkspaceScope,
 } from "../workspace/resolve";
-import { readBridgeSettings } from "../auth/settings";
+import { readBridgeSettings } from "../settings/service";
 import { resolveTerminalLaunch } from "./launch-profile";
 import { buildTmuxSessionName } from "./tmux";
 
@@ -118,7 +118,7 @@ export async function createWorkspaceTerminal(
   workspaceHosts: WorkspaceHostRegistry,
   workspaceId: string,
   input: {
-    kind?: "shell" | "claude" | "codex" | "custom";
+    kind?: "shell" | "claude" | "codex" | "opencode" | "custom";
     title?: string | null;
   },
 ) {

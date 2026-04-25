@@ -3,14 +3,14 @@
 import PackageDescription
 
 let package = Package(
-  name: "LifecycleMac",
+  name: "Lifecycle",
   platforms: [
     .macOS(.v13),
   ],
   products: [
     .executable(
       name: "Lifecycle",
-      targets: ["LifecycleApp"]
+      targets: ["Lifecycle"]
     ),
   ],
   dependencies: [
@@ -51,14 +51,14 @@ let package = Package(
       path: "Sources/LifecyclePresentation"
     ),
     .executableTarget(
-      name: "LifecycleApp",
+      name: "Lifecycle",
       dependencies: [
         "LifecycleTerminalHost",
         "LifecyclePresentation",
         .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
         .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
       ],
-      path: "Sources/LifecycleApp",
+      path: "Sources/Lifecycle",
       resources: [
         .process("Resources"),
       ],
@@ -67,12 +67,12 @@ let package = Package(
       ]
     ),
     .testTarget(
-      name: "LifecycleAppTests",
+      name: "LifecycleTests",
       dependencies: [
-        "LifecycleApp",
+        "Lifecycle",
         "LifecyclePresentation",
       ],
-      path: "Tests/LifecycleAppTests"
+      path: "Tests/LifecycleTests"
     ),
   ]
 )

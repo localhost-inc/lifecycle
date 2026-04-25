@@ -81,21 +81,34 @@ export function resolveMcpTargets(scope: McpScope, cwd = process.cwd()): Resolve
 }
 
 export function checkMcpTarget(target: ResolvedMcpTarget, entry: McpEntry): McpCheckStatus {
+  const normalizedEntry = normalizeMcpEntry(target, entry);
   switch (target.format) {
     case "json":
-      return evaluateJsonTarget(target.path, entry).status;
+      return evaluateJsonTarget(target.path, normalizedEntry).status;
     case "toml":
-      return evaluateTomlTarget(target.path, entry).status;
+      return evaluateTomlTarget(target.path, normalizedEntry).status;
   }
 }
 
 export function installMcpTarget(target: ResolvedMcpTarget, entry: McpEntry): McpInstallStatus {
+  const normalizedEntry = normalizeMcpEntry(target, entry);
   switch (target.format) {
     case "json":
-      return installJsonTarget(target.path, entry);
+      return installJsonTarget(target.path, normalizedEntry);
     case "toml":
-      return installTomlTarget(target.path, entry);
+      return installTomlTarget(target.path, normalizedEntry);
   }
+}
+
+function normalizeMcpEntry(target: ResolvedMcpTarget, entry: McpEntry): McpEntry {
+  if (target.scope !== "project") {
+    return entry;
+  }
+
+  return {
+    ...entry,
+    command: "lifecycle",
+  };
 }
 
 function installJsonTarget(filePath: string, entry: McpEntry): McpInstallStatus {

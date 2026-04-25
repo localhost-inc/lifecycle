@@ -1,4 +1,8 @@
-import type { WorkspaceRecord } from "@lifecycle/contracts";
+import type {
+  WorkspaceActivitySummary,
+  WorkspaceActivityTerminalRecord,
+  WorkspaceRecord,
+} from "@lifecycle/contracts";
 
 import type { BridgeRepositorySummary } from "./opentui-helpers";
 
@@ -70,11 +74,15 @@ export interface WorkspaceTerminalRuntime {
 }
 
 export interface WorkspaceTerminalRecord {
+  activity?: WorkspaceActivityTerminalRecord;
   busy: boolean;
+  icon?: string;
   id: string;
   kind: string;
   title: string;
 }
+
+export type { WorkspaceActivitySummary, WorkspaceActivityTerminalRecord };
 
 export interface WorkspaceTerminalsEnvelope {
   runtime: WorkspaceTerminalRuntime;
@@ -117,3 +125,38 @@ export interface WorkspaceTerminalConnectionEnvelope {
 export type FocusTarget = "canvas" | "extensions" | "sidebar";
 
 export type WorkspaceExtensionKind = "debug" | "stack";
+
+export function attachTerminalActivity(
+  terminals: WorkspaceTerminalRecord[],
+  activity: WorkspaceActivitySummary,
+): WorkspaceTerminalRecord[] {
+  const activityByTerminalId = new Map(
+    activity.terminals.map((terminal) => [terminal.terminal_id, terminal]),
+  );
+
+  const terminalsWithActivity = terminals.map((terminal) => {
+    const terminalActivity = activityByTerminalId.get(terminal.id);
+    if (!terminalActivity) {
+      return terminal;
+    }
+    activityByTerminalId.delete(terminal.id);
+
+    return {
+      ...terminal,
+      activity: terminalActivity,
+      busy: terminalActivity.busy,
+    };
+  });
+
+  const explicitOnlyTerminals: WorkspaceTerminalRecord[] = [...activityByTerminalId.values()]
+    .filter((terminalActivity) => terminalActivity.source === "explicit")
+    .map((terminalActivity) => ({
+      activity: terminalActivity,
+      busy: terminalActivity.busy,
+      id: terminalActivity.terminal_id,
+      kind: terminalActivity.provider ?? "activity",
+      title: terminalActivity.provider ?? terminalActivity.terminal_id,
+    }));
+
+  return terminalsWithActivity.concat(explicitOnlyTerminals);
+}

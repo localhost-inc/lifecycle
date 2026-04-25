@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { applyDbMigrations } from "@lifecycle/db/migrations";
@@ -88,7 +88,7 @@ function createWorkspaceRegistry(terminals: WorkspaceTerminalRecord[]) {
   return createWorkspaceHostRegistry({ local: localClient });
 }
 
-async function createTestDb() {
+async function createTestDb(organizationSlug = "local") {
   const dir = await mkdtemp(join(tmpdir(), "lifecycle-bridge-activity-"));
   tempDirs.push(dir);
 
@@ -102,7 +102,7 @@ async function createTestDb() {
     path: "/tmp/lifecycle",
     name: "lifecycle",
   });
-  const workspaceRoot = join(dir, "worktrees", "feature-activity");
+  const workspaceRoot = join(dir, "worktrees", organizationSlug, "lifecycle", "feature-activity");
   await mkdir(workspaceRoot, { recursive: true });
   const workspaceId = await insertWorkspace(db, {
     checkoutType: "worktree",
@@ -117,10 +117,20 @@ async function createTestDb() {
     db,
     environment: {
       ...process.env,
-      LIFECYCLE_RUNTIME_ROOT: dir,
+      LIFECYCLE_ROOT: dir,
     },
+    rootDir: dir,
     workspaceId,
   };
+}
+
+async function installFakeTitleGenerator(rootDir: string): Promise<string> {
+  const binDir = join(rootDir, "bin");
+  await mkdir(binDir, { recursive: true });
+  const codexPath = join(binDir, "codex");
+  await writeFile(codexPath, "#!/bin/sh\necho Prompt Based Title\n", "utf8");
+  await chmod(codexPath, 0o755);
+  return binDir;
 }
 
 describe("workspace activity", () => {
@@ -151,9 +161,11 @@ describe("workspace activity", () => {
           last_event_at: null,
           metadata: null,
           provider: null,
+          prompt: null,
           source: "heuristic",
           state: "idle",
           terminal_id: "term_shell",
+          title: null,
           tool_name: null,
           turn_id: null,
           updated_at: null,
@@ -164,9 +176,11 @@ describe("workspace activity", () => {
           last_event_at: null,
           metadata: null,
           provider: "codex",
+          prompt: null,
           source: "heuristic",
           state: "interactive_active",
           terminal_id: "term_codex",
+          title: null,
           tool_name: null,
           turn_id: null,
           updated_at: null,
@@ -181,8 +195,9 @@ describe("workspace activity", () => {
   });
 
   test("reduces explicit terminal activity with precedence and stale completion protection", async () => {
-    const { db, environment, workspaceId } = await createTestDb();
+    const { db, environment, rootDir, workspaceId } = await createTestDb("kin");
     const workspaceRegistry = createWorkspaceRegistry([]);
+    const titleGeneratorPath = await installFakeTitleGenerator(rootDir);
 
     const turnSummary = await emitWorkspaceActivity(
       db,
@@ -191,28 +206,45 @@ describe("workspace activity", () => {
       {
         event: "turn.started",
         provider: "codex",
+        prompt: "Implement the prompt title flow",
         terminalId: "term_hook",
         turnId: "turn_1",
       },
-      environment,
+      { ...environment, PATH: titleGeneratorPath },
     );
     expect(turnSummary.terminals).toEqual([
       expect.objectContaining({
         busy: true,
         provider: "codex",
+        prompt: "Implement the prompt title flow",
         source: "explicit",
         state: "turn_active",
         terminal_id: "term_hook",
+        title: "Prompt Based Title",
         turn_id: "turn_1",
       }),
     ]);
+    const activityPath = join(
+      rootDir,
+      "activity",
+      "kin",
+      "lifecycle",
+      "feature-activity",
+      "activity.json",
+    );
+    const storedActivity = JSON.parse(await readFile(activityPath, "utf8")) as {
+      terminals?: Record<string, unknown>;
+      workspace_id?: string;
+    };
+    expect(storedActivity.workspace_id).toBe(workspaceId);
+    expect(storedActivity.terminals).toHaveProperty("term_hook");
 
     const toolSummary = await emitWorkspaceActivity(
       db,
       workspaceRegistry,
       workspaceId,
       {
-        event: "tool.started",
+        event: "tool_call.started",
         name: "Bash",
         provider: "codex",
         terminalId: "term_hook",
@@ -237,7 +269,7 @@ describe("workspace activity", () => {
       workspaceRegistry,
       workspaceId,
       {
-        event: "waiting.started",
+        event: "permission.requested",
         kind: "approval",
         provider: "codex",
         terminalId: "term_hook",
@@ -262,7 +294,7 @@ describe("workspace activity", () => {
       workspaceRegistry,
       workspaceId,
       {
-        event: "waiting.completed",
+        event: "permission.resolved",
         kind: "approval",
         terminalId: "term_hook",
         turnId: "turn_1",
@@ -285,7 +317,7 @@ describe("workspace activity", () => {
       workspaceRegistry,
       workspaceId,
       {
-        event: "tool.completed",
+        event: "tool_call.completed",
         name: "Bash",
         terminalId: "term_hook",
         turnId: "turn_1",

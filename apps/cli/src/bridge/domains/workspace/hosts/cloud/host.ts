@@ -141,7 +141,13 @@ export class CloudWorkspaceHost implements WorkspaceHostAdapter {
     const cwd = input.cwd ?? connection.cwd ?? "/workspace";
     const prepareCommand = [
       ...syncEnvironment,
-      buildEnsureTmuxSessionCommand(tmuxProfile, sessionName, cwd),
+      buildEnsureTmuxSessionCommand(
+        tmuxProfile,
+        sessionName,
+        cwd,
+        "shell",
+        buildLifecycleTerminalEnvironment(workspace),
+      ),
       "exit",
     ].join("; ");
     const attachCommand = buildTmuxCommandText(tmuxProfile, ["attach-session", "-t", sessionName]);
@@ -332,6 +338,7 @@ export class CloudWorkspaceHost implements WorkspaceHostAdapter {
         connectionId,
         terminalId,
         context.cwd,
+        buildLifecycleTerminalEnvironment(workspace),
       ),
       "exit",
     ].join("; ");
@@ -548,7 +555,13 @@ export class CloudWorkspaceHost implements WorkspaceHostAdapter {
     const result = await this.execWorkspaceCommand(requireWorkspaceId(workspace), [
       "sh",
       "-lc",
-      buildEnsureTmuxSessionCommand(context.profile, context.sessionName, context.cwd),
+      buildEnsureTmuxSessionCommand(
+        context.profile,
+        context.sessionName,
+        context.cwd,
+        "shell",
+        buildLifecycleTerminalEnvironment(workspace),
+      ),
     ]);
     this.throwIfCommandFailed(result, "Lifecycle could not prepare the cloud terminal runtime.");
   }
@@ -608,6 +621,10 @@ export class CloudWorkspaceHost implements WorkspaceHostAdapter {
     const detail = [result.stderr.trim(), result.stdout.trim()].find((value) => value.length > 0);
     throw new Error(detail ? `${message} ${detail}` : message);
   }
+}
+
+function buildLifecycleTerminalEnvironment(workspace: WorkspaceRecord): Array<[string, string]> {
+  return [["LIFECYCLE_WORKSPACE_ID", workspace.id]];
 }
 
 interface CloudTerminalContext {

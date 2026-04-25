@@ -1,7 +1,7 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
 import { LifecycleSettingsSchema, LifecycleSettingsUpdateSchema } from "@lifecycle/contracts";
-import { updateBridgeSettings } from "../domains/auth/settings";
+import { updateBridgeSettings } from "../domains/settings/service";
 
 const BridgeSettingsEnvelopeSchema = z
   .object({

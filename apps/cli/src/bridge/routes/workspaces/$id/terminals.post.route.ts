@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createWorkspaceTerminal } from "../../../domains/terminal/service";
 
 const BridgeTerminalKindSchema = z
-  .enum(["shell", "claude", "codex", "custom"])
+  .enum(["shell", "claude", "codex", "opencode", "custom"])
   .meta({ id: "BridgeTerminalKind" });
 const BridgeWorkspaceScopeSchema = z
   .object({

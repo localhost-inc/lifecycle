@@ -1,10 +1,10 @@
 export const WORKSPACE_ACTIVITY_EVENT_NAMES = [
   "turn.started",
   "turn.completed",
-  "tool.started",
-  "tool.completed",
-  "waiting.started",
-  "waiting.completed",
+  "tool_call.started",
+  "tool_call.completed",
+  "permission.requested",
+  "permission.resolved",
 ] as const;
 
 export type WorkspaceActivityEventName = (typeof WORKSPACE_ACTIVITY_EVENT_NAMES)[number];
@@ -27,9 +27,11 @@ export interface WorkspaceActivityTerminalRecord {
   last_event_at: string | null;
   metadata: Record<string, unknown> | null;
   provider: string | null;
+  prompt: string | null;
   source: "explicit" | "shell" | "heuristic";
   state: TerminalActivityState;
   terminal_id: string;
+  title: string | null;
   tool_name: string | null;
   turn_id: string | null;
   updated_at: string | null;

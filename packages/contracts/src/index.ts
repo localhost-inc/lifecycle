@@ -183,6 +183,8 @@ export { getManifestFingerprint, LifecycleConfigSchema, parseManifest } from "./
 export type { RepositoryRecord } from "./repository";
 export { RepositoryRecordSchema } from "./repository";
 export {
+  LifecycleAppearanceFontSettingsSchema,
+  LifecycleAppearanceFontSettingsUpdateSchema,
   LifecycleAppearanceSettingsSchema,
   LifecycleAppearanceSettingsUpdateSchema,
   LifecycleClaudeLoginMethodSchema,
@@ -199,7 +201,18 @@ export {
   LifecycleCodexTerminalProfileSettingsSchema,
   LifecycleCodexWebSearchModeSchema,
   LifecycleCommandTerminalLaunchProfileSchema,
+  LifecycleDefaultAppearanceFontSettings,
+  LifecycleDefaultAppearanceSettings,
+  LifecycleDefaultClaudeProviderSettings,
+  LifecycleDefaultDeveloperSettings,
+  LifecycleDefaultProviderSettings,
+  LifecycleDefaultTerminalCommandSettings,
   LifecycleDefaultTerminalProfileItems,
+  LifecycleDefaultTerminalPersistenceSettings,
+  LifecycleDefaultTerminalSettings,
+  LifecycleDeveloperSettingsSchema,
+  LifecycleDeveloperSettingsUpdateSchema,
+  LifecycleOpenCodeTerminalLaunchProfileSchema,
   LifecycleProvidersSettingsSchema,
   LifecycleProvidersSettingsUpdateSchema,
   LifecycleShellTerminalLaunchProfileSchema,
@@ -221,6 +234,7 @@ export {
   LifecycleThemePreferenceSchema,
 } from "./settings";
 export type {
+  LifecycleAppearanceFontSettings,
   LifecycleAppearanceSettings,
   LifecycleClaudeLoginMethod,
   LifecycleClaudePermissionMode,
@@ -232,6 +246,7 @@ export type {
   LifecycleCodexReasoningEffort,
   LifecycleCodexTerminalProfileSettings,
   LifecycleCodexWebSearchMode,
+  LifecycleDeveloperSettings,
   LifecycleProvidersSettings,
   LifecycleSettings,
   LifecycleSettingsUpdate,

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const InstallStepIdSchema = z
-  .enum(["proxy", "claude-code", "codex", "agents-md", "claude-md"])
+  .enum(["proxy", "claude-code", "codex", "opencode", "agents-md", "claude-md"])
   .meta({ id: "InstallStepId" });
 const InstallDocumentScopeSchema = z.enum(["project", "user"]).meta({ id: "InstallDocumentScope" });
 const InstallStepScopeSchema = z

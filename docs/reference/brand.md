@@ -72,6 +72,7 @@ Extended token categories (sidebar, terminal ANSI, git status) are defined per-t
 - Display/headings: Geist, with Inter as system fallback
 - Technical content, UI chrome, code: Geist Mono, with JetBrains Mono as fallback
 - Brand/display moments: Geist Pixel Square
+- User-configurable app fonts are settings-backed at `appearance.fonts.ui` and `appearance.fonts.code`; defaults are Geist and Geist Mono.
 - Tight tracking on display type, open tracking on small caps/labels
 - Maximize weight contrast: heavy display, light/regular labels
 - Minimum body text: 14px. No text below 12px except all-caps labels.
