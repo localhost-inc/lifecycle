@@ -232,10 +232,6 @@ function App(props: { client: BridgeClient; initialWorkspaceId: string | null })
   const estimatedCanvasRows = Math.max(MIN_CANVAS_ROWS, height - BODY_HEIGHT_OVERHEAD);
   const canvasCols = measuredCanvasSize?.cols ?? estimatedCanvasCols;
   const canvasRows = measuredCanvasSize?.rows ?? estimatedCanvasRows;
-  const terminalRenderRows = useMemo(
-    () => estimateTerminalRenderRows(terminalAnsi, canvasRows),
-    [canvasRows, terminalAnsi],
-  );
   const workspaces = useMemo(() => flattenWorkspaceGroups(repositoryGroups), [repositoryGroups]);
   const collapsedRepositoryIdSet = useMemo(
     () => new Set(collapsedRepositoryIds),
@@ -1166,7 +1162,6 @@ function App(props: { client: BridgeClient; initialWorkspaceId: string | null })
               shellError={shellError ?? runtimeError}
               terminalAnsi={terminalAnsi}
               terminalPlaceholder={terminalPlaceholder}
-              terminalRenderRows={terminalRenderRows}
               terminalScrollRef={terminalScrollRef}
               theme={theme}
             />
@@ -1190,47 +1185,6 @@ function App(props: { client: BridgeClient; initialWorkspaceId: string | null })
       </box>
     </box>
   );
-}
-
-function estimateTerminalRenderRows(ansi: string, viewportRows: number): number {
-  const lines = ansi === "" ? [] : ansi.replace(/\r\n/g, "\n").split("\n");
-  while (lines.length > 0 && isBlankTerminalLineForEstimate(lines.at(-1) ?? "")) {
-    lines.pop();
-  }
-
-  return Math.max(viewportRows, Math.min(4_000, lines.length + viewportRows));
-}
-
-function isBlankTerminalLineForEstimate(value: string): boolean {
-  let index = 0;
-
-  while (index < value.length) {
-    const current = value[index] ?? "";
-
-    if (current === "\u001b") {
-      index += 1;
-      if ((value[index] ?? "") === "[") {
-        index += 1;
-        while (index < value.length) {
-          const code = value.charCodeAt(index);
-          if (code >= 0x40 && code <= 0x7e) {
-            index += 1;
-            break;
-          }
-          index += 1;
-        }
-      }
-      continue;
-    }
-
-    if (current.trim() !== "") {
-      return false;
-    }
-
-    index += 1;
-  }
-
-  return true;
 }
 
 async function runLaunchSpec(spec: WorkspaceShellLaunchSpec): Promise<number> {

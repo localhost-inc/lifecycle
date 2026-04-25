@@ -14,7 +14,6 @@ interface WorkspaceShellPanelProps {
   shellError: string | null;
   terminalAnsi: string;
   terminalPlaceholder: string;
-  terminalRenderRows: number;
   terminalScrollRef: RefObject<ScrollBoxRenderable | null>;
   theme: TuiTheme;
 }
@@ -46,9 +45,9 @@ export function WorkspaceShellPanel(props: WorkspaceShellPanelProps) {
           <ghostty-terminal
             ansi={props.terminalAnsi}
             cols={props.canvasCols}
-            rows={props.terminalRenderRows}
+            rows={props.canvasRows}
             showCursor={props.focus === "canvas"}
-            style={{ height: props.terminalRenderRows, width: props.canvasCols }}
+            style={{ height: props.canvasRows, width: props.canvasCols }}
             trimEnd
           />
         </scrollbox>

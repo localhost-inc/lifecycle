@@ -20,7 +20,6 @@ describe("workspace shell panel", () => {
         shellError: null,
         terminalAnsi: "hello\nworld\nprompt$ ",
         terminalPlaceholder: "Waiting for terminal output...",
-        terminalRenderRows: 40,
         terminalScrollRef: createRef<ScrollBoxRenderable | null>(),
         theme: defaultTuiTheme,
       }),
