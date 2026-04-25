@@ -180,7 +180,9 @@ async function readStoredWorkspaceActivity(
   try {
     const raw = JSON.parse(await readFile(path, "utf8")) as Partial<StoredWorkspaceActivityState>;
     return {
-      terminals: isRecord(raw.terminals) ? (raw.terminals as StoredWorkspaceActivityState["terminals"]) : {},
+      terminals: isRecord(raw.terminals)
+        ? (raw.terminals as StoredWorkspaceActivityState["terminals"])
+        : {},
       updated_at: typeof raw.updated_at === "string" ? raw.updated_at : null,
       workspace_id: typeof raw.workspace_id === "string" ? raw.workspace_id : workspaceId,
     };
@@ -255,21 +257,11 @@ function applyActivityEvent(
     }
     case "turn.completed": {
       let changed = false;
-      changed = clearSignalByTurnId(
-        terminal,
-        "turn",
-        normalizeOptionalString(input.turnId),
-      ) || changed;
-      changed = clearToolSignal(
-        terminal,
-        normalizeOptionalString(input.turnId),
-        null,
-      ) || changed;
-      changed = clearWaitingSignal(
-        terminal,
-        normalizeOptionalString(input.turnId),
-        null,
-      ) || changed;
+      changed =
+        clearSignalByTurnId(terminal, "turn", normalizeOptionalString(input.turnId)) || changed;
+      changed = clearToolSignal(terminal, normalizeOptionalString(input.turnId), null) || changed;
+      changed =
+        clearWaitingSignal(terminal, normalizeOptionalString(input.turnId), null) || changed;
       if (changed) {
         terminal.last_event_at = now;
       }

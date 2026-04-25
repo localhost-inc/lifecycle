@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { parseTmuxTerminalRecords } from "./tmux-runtime";
+import {
+  buildEnsureTmuxConnectionCommand,
+  parseTmuxTerminalRecords,
+  resolveTmuxRuntimeProfile,
+} from "./tmux-runtime";
 
 describe("tmux terminal runtime", () => {
   test("preserves Claude and Codex kinds for numbered launcher tabs", () => {
@@ -19,5 +23,19 @@ describe("tmux terminal runtime", () => {
         busy: true,
       },
     ]);
+  });
+
+  test("enables mouse mode for per-surface mirror sessions", () => {
+    const command = buildEnsureTmuxConnectionCommand(
+      resolveTmuxRuntimeProfile({ persistenceMode: "managed" }),
+      "workspace-session",
+      "workspace-session--conn--surface--_4",
+      "@4",
+      "/tmp/workspace",
+    );
+
+    expect(command).toContain(
+      "'tmux' '-L' 'lifecycle-managed-v2' '-f' '/dev/null' 'set-option' '-t' 'workspace-session--conn--surface--_4' 'mouse' 'on'",
+    );
   });
 });

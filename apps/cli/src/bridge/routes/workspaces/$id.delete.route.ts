@@ -26,10 +26,7 @@ export default createRoute({
     const [
       { broadcastMessage, requestWorkspaceWatchSync },
       { BRIDGE_GLOBAL_TOPIC, buildAppSnapshotInvalidatedMessage },
-    ] = await Promise.all([
-      import("../../lib/server"),
-      import("../../lib/socket-topics"),
-    ]);
+    ] = await Promise.all([import("../../lib/server"), import("../../lib/socket-topics")]);
     const response = await archiveWorkspace(db, workspaceRegistry, {
       force: query.force === "true",
       workspaceId: params.id,

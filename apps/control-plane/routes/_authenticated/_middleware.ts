@@ -27,11 +27,7 @@ export default createMiddleware(async ({ ctx, next }) => {
 
   // Look up internal user by WorkOS ID
   const db = ctx.get("db");
-  const rows = await db
-    .select()
-    .from(user)
-    .where(eq(user.workosUserId, workosUserId))
-    .limit(1);
+  const rows = await db.select().from(user).where(eq(user.workosUserId, workosUserId)).limit(1);
   if (rows.length === 0) throw unauthenticated("User not found.");
 
   ctx.set("userId", rows[0]!.id);

@@ -41,7 +41,7 @@ fix:
   bun run format
   bun run qa
 
-# Start a dev loop. Default: CLI-owned TUI. Targets: tui, desktop, desktop-services, desktop-app, desktop-smoke.
+# Start a dev loop. Primary targets: tui, desktop. Support targets: desktop-services, desktop-app, desktop-smoke.
 dev target="tui":
   ./scripts/dev {{target}}
 
@@ -57,9 +57,13 @@ stop:
 logs service="bridge":
   ./scripts/dev logs {{service}}
 
-# Open the native macOS desktop app.
+# Start the primary native macOS desktop dev loop.
 desktop:
-  bun run desktop:mac
+  ./scripts/dev desktop
+
+# Start the primary CLI-owned TUI dev loop.
+tui:
+  ./scripts/dev tui
 
 # Smoke test the desktop dev loop.
 smoke:

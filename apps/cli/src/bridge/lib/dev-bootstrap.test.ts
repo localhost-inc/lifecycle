@@ -20,7 +20,9 @@ afterEach(async () => {
   }
 });
 
-function createLocalOnlyWorkspaceRegistry(getGitCurrentBranch: (repoPath: string) => Promise<string>) {
+function createLocalOnlyWorkspaceRegistry(
+  getGitCurrentBranch: (repoPath: string) => Promise<string>,
+) {
   const unsupported = async (): Promise<never> => {
     throw new Error("unsupported in test");
   };

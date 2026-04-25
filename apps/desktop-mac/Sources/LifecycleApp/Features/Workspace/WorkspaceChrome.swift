@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import LifecyclePresentation
 
 enum WorkspaceStatusBarLayoutMode: Equatable {
@@ -26,4 +27,9 @@ func workspaceStatusBarLayoutMode(for layout: CanvasLayout) -> WorkspaceStatusBa
   case .spatial:
     return .spatial
   }
+}
+
+@MainActor
+func zoomActiveWorkspaceWindow() {
+  (NSApp.keyWindow ?? NSApp.mainWindow)?.zoom(nil)
 }

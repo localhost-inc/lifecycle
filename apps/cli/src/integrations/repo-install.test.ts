@@ -42,20 +42,24 @@ describe("repo install provider plan", () => {
       repoPath: dir,
     });
 
-    expect(results.map((result) => [result.harness_id, result.integration, result.status])).toEqual([
-      ["lifecycle", "hook-adapter", "created"],
-      ["codex", "hook-features", "created"],
-      ["codex", "hooks", "created"],
-      ["codex", "mcp", "updated"],
-    ]);
+    expect(results.map((result) => [result.harness_id, result.integration, result.status])).toEqual(
+      [
+        ["lifecycle", "hook-adapter", "created"],
+        ["codex", "hook-features", "created"],
+        ["codex", "hooks", "created"],
+        ["codex", "mcp", "updated"],
+      ],
+    );
 
     expect(await readFile(join(dir, ".lifecycle", "hooks", "activity.sh"), "utf8")).toContain(
-      'workspace activity emit',
+      "workspace activity emit",
     );
     expect(await readFile(join(dir, ".codex", "hooks.json"), "utf8")).toContain("turn.started");
-    expect(await readFile(join(dir, ".codex", "config.toml"), "utf8")).toContain("codex_hooks = true");
     expect(await readFile(join(dir, ".codex", "config.toml"), "utf8")).toContain(
-      '[mcp_servers.lifecycle]',
+      "codex_hooks = true",
+    );
+    expect(await readFile(join(dir, ".codex", "config.toml"), "utf8")).toContain(
+      "[mcp_servers.lifecycle]",
     );
   });
 
@@ -64,11 +68,7 @@ describe("repo install provider plan", () => {
     tempDirs.push(dir);
 
     await mkdir(join(dir, ".lifecycle", "hooks"), { recursive: true });
-    await writeFile(
-      join(dir, ".lifecycle", "hooks", "activity.sh"),
-      "#!/bin/sh\nexit 0\n",
-      "utf8",
-    );
+    await writeFile(join(dir, ".lifecycle", "hooks", "activity.sh"), "#!/bin/sh\nexit 0\n", "utf8");
 
     const results = runRepoInstall({
       check: true,
@@ -77,7 +77,9 @@ describe("repo install provider plan", () => {
     });
 
     expect(
-      results.filter((result) => result.harness_id === "lifecycle" && result.integration === "hook-adapter"),
+      results.filter(
+        (result) => result.harness_id === "lifecycle" && result.integration === "hook-adapter",
+      ),
     ).toHaveLength(1);
     expect(results[0]).toMatchObject({
       harness_id: "lifecycle",

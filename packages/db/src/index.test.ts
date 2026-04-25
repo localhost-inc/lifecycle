@@ -5,7 +5,12 @@ import { tmpdir } from "node:os";
 import { createLocalDb } from "./index";
 import { applyDbMigrations } from "./migrations";
 import { resolveLifecycleDbPath, resolveLifecycleRootPath } from "./paths";
-import { getRepositoryById, getWorkspaceRecordById, insertRepository, insertWorkspace } from "./queries";
+import {
+  getRepositoryById,
+  getWorkspaceRecordById,
+  insertRepository,
+  insertWorkspace,
+} from "./queries";
 import { createTursoDb } from "./turso";
 
 const tempDirs: string[] = [];

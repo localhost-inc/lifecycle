@@ -64,9 +64,16 @@ describe("managed docs installer", () => {
     expect(installManagedDocumentTarget(agentsTarget!)).toBe("unchanged");
 
     expect(await readFile(agentsPath, "utf8")).toBe(
-      ["# Repo instructions", "", "Keep this intro.", "", managedDocumentBlock, "", "Keep this footer.", ""].join(
-        "\n",
-      ),
+      [
+        "# Repo instructions",
+        "",
+        "Keep this intro.",
+        "",
+        managedDocumentBlock,
+        "",
+        "Keep this footer.",
+        "",
+      ].join("\n"),
     );
   });
 
@@ -83,6 +90,8 @@ describe("managed docs installer", () => {
     expect(checkManagedDocumentTarget(claudeTarget!)).toBe("missing");
     expect(installManagedDocumentTarget(claudeTarget!)).toBe("updated");
 
-    expect(await readFile(claudePath, "utf8")).toBe(`# Project notes\n\nKeep me.\n\n${managedDocumentBlock}\n`);
+    expect(await readFile(claudePath, "utf8")).toBe(
+      `# Project notes\n\nKeep me.\n\n${managedDocumentBlock}\n`,
+    );
   });
 });

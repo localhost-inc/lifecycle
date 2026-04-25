@@ -1,47 +1,53 @@
-export { createSqlCollection, type SqlCollection, type SqlCollectionUtils } from "./collection";
+export {
+  createBridgeCollection,
+  createFetchBridgeTransport,
+  type BridgeCollection,
+  type BridgeCollectionUtils,
+  type BridgeRequestOptions,
+  type BridgeTransport,
+} from "./collection";
 export type { Collection } from "@tanstack/db";
 
 export {
   createRepositoryCollection,
-  selectAllRepositories,
-  selectRepositoryById,
+  fetchRepositories,
+  type BridgeRepositorySummary,
+  type BridgeRepositoryWorkspaceSummary,
 } from "./collections/repositories";
 
 export {
   createWorkspaceCollection,
-  selectAllWorkspaces,
-  selectWorkspaceById,
-  selectWorkspacesByRepository,
+  createWorkspaceDetailCollection,
+  fetchWorkspaceDetail,
+  fetchWorkspaceSummaries,
   groupWorkspacesByRepository,
+  type BridgeWorkspaceDetail,
+  type BridgeWorkspaceSummary,
 } from "./collections/workspaces";
 
 export {
   createServiceCollection,
-  selectAllServices,
-  selectServiceByWorkspaceAndName,
-  selectServicesByWorkspace,
+  fetchWorkspaceServices,
+  fetchWorkspaceStack,
 } from "./collections/services";
 
 export {
-  selectAgentsByWorkspace,
-  selectAgentById,
-  saveAgent,
+  createAgentCollection,
   createAgentCollectionRegistry,
+  createWorkspaceAgent,
+  fetchWorkspaceAgents,
+  getOrCreateAgentCollection,
+  refreshAgentCollection,
+  upsertAgentInCollection,
   type AgentCollectionRegistry,
 } from "./collections/agents";
 
 export {
-  insertAgentEvent,
-  selectAgentEventsByAgent,
-  selectNextAgentEventIndex,
-} from "./collections/agent-events";
-
-export {
-  selectAgentMessageById,
-  selectAgentMessagesByAgent,
-  upsertAgentMessageWithParts,
+  createAgentMessageCollection,
   createAgentMessageCollectionRegistry,
+  fetchAgentMessages,
+  fetchAgentSnapshot,
+  getOrCreateAgentMessageCollection,
+  upsertAgentMessageInCollection,
   type AgentMessageCollectionRegistry,
 } from "./collections/agent-messages";
-
-export { reconcileWorkspaceServices } from "./services/reconcile";

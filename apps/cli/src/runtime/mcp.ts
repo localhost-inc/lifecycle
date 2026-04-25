@@ -40,7 +40,10 @@ async function discoverCommands(
       const module = await import(url);
       if (!module.default || module.default.kind !== "command") continue;
 
-      commands.set(name, { command: module.default as CommandDefinition<any>, filePath: normalized });
+      commands.set(name, {
+        command: module.default as CommandDefinition<any>,
+        filePath: normalized,
+      });
     }
   }
 

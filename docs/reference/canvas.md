@@ -50,6 +50,7 @@ For terminal surfaces:
 3. native clients render that terminal surface through a native terminal host such as Ghostty
 4. if multiple terminal surfaces are visible at once, each visible native host should attach through its own per-surface session context so focus and input stay isolated
 5. if only one terminal surface is visible, clients may attach through the workspace session directly and select the bound window first
+6. Lifecycle-prepared tmux sessions enable mouse mode so wheel input scrolls tmux pane history instead of leaking to foreground prompts as arrow-key history navigation
 
 The canvas still owns:
 

@@ -177,14 +177,23 @@ export const app = new Hono()
   .use("/repos/*", wrapMiddleware(middleware1))
   .use("/users/*", wrapMiddleware(middleware1))
   .use("/workspaces/*", wrapMiddleware(middleware1))
-  .get("/organizations/:orgId/cloud-accounts", routeHandler(route0, "/organizations/:orgId/cloud-accounts"))
-  .post("/organizations/:orgId/cloud-accounts", routeHandler(route1, "/organizations/:orgId/cloud-accounts"))
+  .get(
+    "/organizations/:orgId/cloud-accounts",
+    routeHandler(route0, "/organizations/:orgId/cloud-accounts"),
+  )
+  .post(
+    "/organizations/:orgId/cloud-accounts",
+    routeHandler(route1, "/organizations/:orgId/cloud-accounts"),
+  )
   .get("/organizations/:orgId", routeHandler(route2, "/organizations/:orgId"))
   .get("/organizations", routeHandler(route3, "/organizations"))
   .post("/organizations", routeHandler(route4, "/organizations"))
   .get("/workspaces/:workspaceId/shell", routeHandler(route5, "/workspaces/:workspaceId/shell"))
   .post("/workspaces/:workspaceId/exec", routeHandler(route6, "/workspaces/:workspaceId/exec"))
-  .post("/workspaces/:workspaceId/pr/merge", routeHandler(route7, "/workspaces/:workspaceId/pr/merge"))
+  .post(
+    "/workspaces/:workspaceId/pr/merge",
+    routeHandler(route7, "/workspaces/:workspaceId/pr/merge"),
+  )
   .post("/workspaces/:workspaceId/pr", routeHandler(route8, "/workspaces/:workspaceId/pr"))
   .delete("/workspaces/:workspaceId", routeHandler(route9, "/workspaces/:workspaceId"))
   .get("/workspaces/:workspaceId", routeHandler(route10, "/workspaces/:workspaceId"))
@@ -199,7 +208,6 @@ export const app = new Hono()
   .post("/auth/device-code", routeHandler(route19, "/auth/device-code"))
   .post("/auth/refresh", routeHandler(route20, "/auth/refresh"))
   .post("/auth/token", routeHandler(route21, "/auth/token"))
-  .get("/auth/me", routeHandler(route22, "/auth/me"))
-;
+  .get("/auth/me", routeHandler(route22, "/auth/me"));
 
 export type AppType = typeof app;

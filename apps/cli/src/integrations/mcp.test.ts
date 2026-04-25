@@ -68,7 +68,10 @@ describe("repo MCP installer", () => {
     const entry = { args: ["mcp"], command: "lifecycle" };
 
     expect(targets.map((target) => target.harness_id)).toEqual(["claude-code", "codex"]);
-    expect(targets.map((target) => installMcpTarget(target, entry))).toEqual(["updated", "updated"]);
+    expect(targets.map((target) => installMcpTarget(target, entry))).toEqual([
+      "updated",
+      "updated",
+    ]);
 
     const jsonConfig = JSON.parse(await readFile(join(dir, ".mcp.json"), "utf8")) as {
       mcpServers: Record<string, Record<string, unknown>>;
@@ -132,7 +135,7 @@ describe("repo MCP installer", () => {
     await mkdir(join(dir, ".codex"), { recursive: true });
     await writeFile(
       join(dir, ".codex", "config.toml"),
-      ['[mcp_servers.lifecycle]', 'command = "lifecycle"', 'args = ["mcp"]', ""].join("\n"),
+      ["[mcp_servers.lifecycle]", 'command = "lifecycle"', 'args = ["mcp"]', ""].join("\n"),
       "utf8",
     );
 

@@ -22,7 +22,9 @@ export const repositoryIdFlag = z
 export const terminalIdFlag = z
   .string()
   .optional()
-  .describe("Terminal id. If omitted, resolve from the current Lifecycle-managed terminal session.");
+  .describe(
+    "Terminal id. If omitted, resolve from the current Lifecycle-managed terminal session.",
+  );
 
 export function resolveWorkspaceId(explicitWorkspaceId?: string): string {
   const workspaceId = explicitWorkspaceId ?? process.env[LIFECYCLE_WORKSPACE_ID_ENV];

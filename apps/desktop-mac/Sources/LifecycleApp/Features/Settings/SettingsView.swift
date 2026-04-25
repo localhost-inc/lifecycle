@@ -103,7 +103,8 @@ struct SettingsView: View {
                   SettingsFormGroup {
                     SettingsFormRow(
                       label: "Theme",
-                      description: themeDescription
+                      description: themeDescription,
+                      showsDivider: true
                     ) {
                       Picker("", selection: themeBinding) {
                         ForEach(AppThemePreference.allCases) { option in
@@ -113,6 +114,30 @@ struct SettingsView: View {
                       .pickerStyle(.menu)
                       .tint(theme.primaryTextColor)
                       .lcPointerCursor()
+                    }
+
+                    SettingsFormRow(
+                      label: "Dim inactive panes",
+                      description: "Reduce inactive workspace pane opacity until the pane is focused or hovered.",
+                      showsDivider: settingsStore.settings.appearance.dimInactivePanes
+                    ) {
+                      Toggle("", isOn: dimInactivePanesBinding)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(theme.accentColor)
+                    }
+
+                    if settingsStore.settings.appearance.dimInactivePanes {
+                      SettingsFormRow(
+                        label: "Dim opacity",
+                        description: "Opacity used for inactive panes.",
+                        stacked: true
+                      ) {
+                        SettingsOpacitySlider(
+                          value: inactivePaneOpacityBinding,
+                          range: 0.2...1
+                        )
+                      }
                     }
                   }
                 }
@@ -224,6 +249,20 @@ struct SettingsView: View {
     Binding(
       get: { settingsStore.preference },
       set: { settingsStore.setThemePreference($0) }
+    )
+  }
+
+  private var dimInactivePanesBinding: Binding<Bool> {
+    Binding(
+      get: { settingsStore.settings.appearance.dimInactivePanes },
+      set: { settingsStore.setDimInactivePanes($0) }
+    )
+  }
+
+  private var inactivePaneOpacityBinding: Binding<Double> {
+    Binding(
+      get: { settingsStore.settings.appearance.inactivePaneOpacity },
+      set: { settingsStore.setInactivePaneOpacity($0) }
     )
   }
 
@@ -1204,6 +1243,26 @@ private struct SettingsReadOnlyValue: View {
           .stroke(theme.borderColor, lineWidth: 1)
       )
       .fixedSize(horizontal: false, vertical: true)
+  }
+}
+
+private struct SettingsOpacitySlider: View {
+  @Environment(\.appTheme) private var theme
+  let value: Binding<Double>
+  let range: ClosedRange<Double>
+
+  var body: some View {
+    HStack(spacing: 10) {
+      Slider(value: value, in: range)
+        .tint(theme.accentColor)
+        .frame(minWidth: 180)
+
+      Text("\(Int((value.wrappedValue * 100).rounded()))%")
+        .font(.lc(size: 11, weight: .medium, design: .monospaced))
+        .foregroundStyle(theme.primaryTextColor)
+        .frame(width: 44, alignment: .trailing)
+    }
+    .frame(maxWidth: .infinity, alignment: .trailing)
   }
 }
 

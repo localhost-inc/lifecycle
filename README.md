@@ -114,7 +114,7 @@ See [docs/reference/architecture.md](./docs/reference/architecture.md) for the f
 2. Optional: Docker for container-hosted workspaces
 3. Optional: Daytona for remote workspaces
 4. Optional: Modal for cloud sandboxes
-5. Recommended: `just` for the documented repo workflows (`just setup`, `just check`, `just dev`, `just tui-local`)
+5. Recommended: `just` for the documented repo workflows (`just setup`, `just check`, `just dev tui`, `just dev desktop`)
 
 ## Quick Start
 
@@ -124,7 +124,7 @@ cd lifecycle
 just setup
 just check
 lifecycle proxy install --dry-run         # inspect machine-scoped preview routing changes
-just dev                                  # primary dev path: CLI-owned TUI
+just dev tui                              # primary CLI/TUI dev path
 ```
 
 ## Common Commands
@@ -142,16 +142,24 @@ The root [`justfile`](./justfile) is the canonical workflow layer for documented
 7. `just build` — workspace builds
 8. `just check` or `just qa` — full quality gate
 9. `just fix` — format first, then run the full quality gate
-10. `just dev` — primary CLI-owned TUI loop against the standard local Lifecycle runtime
-11. `just tui-local` — focused CLI-owned TUI loop with auto-restart against repo-local bridge + control plane
-12. `just dev desktop` — desktop loop: bridge, control plane, and `desktop-mac`
+10. `just dev tui` — primary CLI-owned TUI loop against the standard local Lifecycle runtime
+11. `just dev desktop` — primary desktop loop: bridge, control plane, and `desktop-mac`
+12. `just tui-local` — focused CLI-owned TUI loop with auto-restart against repo-local bridge + control plane
 13. `just dev desktop-services` — bridge + control plane only, for Xcode/native debugging
 14. `just dev desktop-app` — desktop app build/reload loop only
-15. `just desktop` — open the native macOS desktop app
+15. `just desktop` — alias for `just dev desktop`
 16. `just smoke` — smoke test the desktop dev loop
 17. `just bridge-generate` — regenerate bridge routed/OpenAPI artifacts after route-contract changes
 18. `just xcode-env` — print the canonical Xcode Run environment for `desktop-mac`
 19. `just status`, `just stop`, `just logs bridge` — inspect and manage the owned dev services
+
+## Local Dev Contract
+
+1. `just dev tui` and `just dev desktop` are the primary entrypoints.
+2. `just dev desktop` owns bridge, control plane, and the native app as one supervised runtime.
+3. `just status` reports both supervisor-owned services and any bridge listener already occupying the fixed dev port.
+4. In repo dev mode, the native app only accepts a healthy bridge whose `/health` metadata matches the current repo root.
+5. Use `just stop` before switching dev modes; it clears supervisor-owned processes and same-repo stale bridge listeners.
 
 ## Repository Layout
 

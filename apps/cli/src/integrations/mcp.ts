@@ -231,9 +231,7 @@ function upsertTomlLifecycleBlock(
 
   const blockLines = lines.slice(headerIndex, nextHeaderIndex);
   const headerLine = blockLines[0] ?? "[mcp_servers.lifecycle]";
-  const bodyLines = blockLines
-    .slice(1)
-    .filter((line) => !/^\s*(command|args)\s*=/.test(line));
+  const bodyLines = blockLines.slice(1).filter((line) => !/^\s*(command|args)\s*=/.test(line));
   const trailingBlankLines: string[] = [];
   while (bodyLines.length > 0 && bodyLines[bodyLines.length - 1]?.trim() === "") {
     trailingBlankLines.unshift(bodyLines.pop()!);
@@ -264,10 +262,7 @@ function renderTomlAssignment(key: string, value: unknown): string {
   return TOML.stringify({ [key]: value }).trimEnd();
 }
 
-function lifecycleCommandMatches(
-  lifecycle: Record<string, unknown>,
-  entry: McpEntry,
-): boolean {
+function lifecycleCommandMatches(lifecycle: Record<string, unknown>, entry: McpEntry): boolean {
   return (
     lifecycle.command === entry.command &&
     Array.isArray(lifecycle.args) &&

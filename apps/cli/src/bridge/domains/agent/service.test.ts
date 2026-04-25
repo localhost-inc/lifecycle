@@ -83,7 +83,9 @@ async function prepareBridgeAgentSchema(db: Awaited<ReturnType<typeof createTurs
     turn_id TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
-  await db.execute(`CREATE INDEX idx_agent_message_agent ON agent_message(agent_id, created_at ASC)`);
+  await db.execute(
+    `CREATE INDEX idx_agent_message_agent ON agent_message(agent_id, created_at ASC)`,
+  );
   await db.execute(`CREATE TABLE agent_message_part (
     id TEXT PRIMARY KEY NOT NULL,
     message_id TEXT NOT NULL REFERENCES agent_message(id) ON DELETE CASCADE,
@@ -95,7 +97,9 @@ async function prepareBridgeAgentSchema(db: Awaited<ReturnType<typeof createTurs
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(message_id, part_index)
   )`);
-  await db.execute(`CREATE INDEX idx_agent_message_part_message ON agent_message_part(message_id, part_index ASC)`);
+  await db.execute(
+    `CREATE INDEX idx_agent_message_part_message ON agent_message_part(message_id, part_index ASC)`,
+  );
   await db.execute(`CREATE TABLE agent_event (
     id TEXT PRIMARY KEY NOT NULL,
     agent_id TEXT NOT NULL REFERENCES agent(id) ON DELETE CASCADE,

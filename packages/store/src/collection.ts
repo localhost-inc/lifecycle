@@ -4,14 +4,13 @@ import {
   type CollectionConfig,
   type PendingMutation,
 } from "@tanstack/db";
-import type { SqlDriver } from "@lifecycle/db";
 
 type ChangeMessage<T> =
   | { type: "insert"; value: T }
   | { type: "update"; key: string; value: T }
   | { type: "delete"; key: string; value: T };
 
-interface SqlSyncControls<T extends object> {
+interface BridgeSyncControls<T extends object> {
   begin: () => void;
   write: (msg: ChangeMessage<T>) => void;
   commit: () => void;
@@ -19,45 +18,85 @@ interface SqlSyncControls<T extends object> {
   markReady: () => void;
 }
 
-export interface SqlCollectionUtils<T extends object> {
+export interface BridgeRequestOptions<Body = unknown> {
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  path: string;
+  query?: Record<string, string | number | boolean | null | undefined>;
+  body?: Body;
+}
+
+export interface BridgeTransport {
+  request<Response, Body = unknown>(options: BridgeRequestOptions<Body>): Promise<Response>;
+}
+
+export interface BridgeCollectionUtils<T extends object> {
   [key: string]: (...args: Array<any>) => any;
-  /** Full reload from SQL. Use sparingly — prefer upsert() for incremental updates. */
   refresh: () => Promise<void>;
-  /** Push a single item into the synced layer. Instant, no SQL round-trip, no truncate. */
   upsert: (item: T) => void;
   getError: () => Error | null;
   subscribeState: (listener: () => void) => () => void;
 }
 
-export type SqlCollection<T extends object> = Collection<
+export type BridgeCollection<T extends object> = Collection<
   T,
   string,
-  SqlCollectionUtils<T>,
+  BridgeCollectionUtils<T>,
   never,
   T
 >;
 
-type SqlMutationHandler<T extends object> = Pick<
+type BridgeMutationHandler<T extends object> = Pick<
   CollectionConfig<T, string>,
   "onInsert" | "onUpdate" | "onDelete"
 >;
 
-/**
- * Creates a TanStack DB collection backed by a SQL query.
- *
- * - Initial hydration loads all rows via `loadFn`.
- * - `upsert(item)` pushes a single item into the synced layer (instant).
- * - `refresh()` does a full reload (use sparingly).
- */
-export function createSqlCollection<T extends object>(
+export function createFetchBridgeTransport(baseUrl: string): BridgeTransport {
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+
+  return {
+    async request<Response, Body = unknown>({
+      method = "GET",
+      path,
+      query,
+      body,
+    }: BridgeRequestOptions<Body>): Promise<Response> {
+      const url = new URL(`${normalizedBaseUrl}${path.startsWith("/") ? path : `/${path}`}`);
+      for (const [key, value] of Object.entries(query ?? {})) {
+        if (value !== null && value !== undefined) {
+          url.searchParams.set(key, String(value));
+        }
+      }
+
+      const response = await fetch(url, {
+        method,
+        headers: body === undefined ? undefined : { "content-type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(
+          `Lifecycle bridge ${method} ${url.pathname} failed with ${response.status}${text ? `: ${text}` : ""}`,
+        );
+      }
+
+      if (response.status === 204) {
+        return undefined as Response;
+      }
+
+      return (await response.json()) as Response;
+    },
+  };
+}
+
+export function createBridgeCollection<T extends object>(
   opts: {
     id: string;
-    driver: SqlDriver;
-    loadFn: (driver: SqlDriver) => Promise<T[]>;
+    load: () => Promise<T[]>;
     getKey: (item: T) => string;
-  } & SqlMutationHandler<T>,
-): SqlCollection<T> {
-  let controls: SqlSyncControls<T> | null = null;
+  } & BridgeMutationHandler<T>,
+): BridgeCollection<T> {
+  let controls: BridgeSyncControls<T> | null = null;
   let ready = false;
   let loadError: Error | null = null;
   const pendingUpserts: T[] = [];
@@ -65,9 +104,7 @@ export function createSqlCollection<T extends object>(
   const knownKeys = new Set<string>();
 
   function notifyState(): void {
-    for (const listener of stateListeners) {
-      listener();
-    }
+    for (const listener of stateListeners) listener();
   }
 
   function setLoadError(error: unknown): void {
@@ -76,19 +113,13 @@ export function createSqlCollection<T extends object>(
   }
 
   function clearLoadError(): void {
-    if (!loadError) {
-      return;
-    }
-
+    if (!loadError) return;
     loadError = null;
     notifyState();
   }
 
   function applySnapshot(rows: T[]): void {
-    if (!controls) {
-      return;
-    }
-
+    if (!controls) return;
     controls.begin();
     controls.truncate();
     knownKeys.clear();
@@ -100,10 +131,7 @@ export function createSqlCollection<T extends object>(
   }
 
   function applyChange(change: ChangeMessage<T>): void {
-    if (!controls) {
-      return;
-    }
-
+    if (!controls) return;
     switch (change.type) {
       case "insert":
         knownKeys.add(opts.getKey(change.value));
@@ -121,33 +149,25 @@ export function createSqlCollection<T extends object>(
   }
 
   function confirmOperationsSync(mutations: Array<PendingMutation<T>>): void {
-    if (!controls) {
-      return;
-    }
-
+    if (!controls) return;
     controls.begin();
     for (const mutation of mutations) {
       if (mutation.type === "delete") {
-        applyChange({
-          type: "delete",
-          key: String(mutation.key),
-          value: mutation.original as T,
-        });
+        applyChange({ type: "delete", key: String(mutation.key), value: mutation.original as T });
         continue;
       }
 
       const key = opts.getKey(mutation.modified);
-      if (knownKeys.has(key)) {
-        applyChange({ type: "update", key, value: mutation.modified });
-        continue;
-      }
-
-      applyChange({ type: "insert", value: mutation.modified });
+      applyChange(
+        knownKeys.has(key)
+          ? { type: "update", key, value: mutation.modified }
+          : { type: "insert", value: mutation.modified },
+      );
     }
     controls.commit();
   }
 
-  const wrappedOnInsert: SqlMutationHandler<T>["onInsert"] = opts.onInsert
+  const wrappedOnInsert: BridgeMutationHandler<T>["onInsert"] = opts.onInsert
     ? async (params) => {
         const handlerResult = (await opts.onInsert?.(params)) ?? {};
         confirmOperationsSync(params.transaction.mutations);
@@ -155,7 +175,7 @@ export function createSqlCollection<T extends object>(
       }
     : undefined;
 
-  const wrappedOnUpdate: SqlMutationHandler<T>["onUpdate"] = opts.onUpdate
+  const wrappedOnUpdate: BridgeMutationHandler<T>["onUpdate"] = opts.onUpdate
     ? async (params) => {
         const handlerResult = (await opts.onUpdate?.(params)) ?? {};
         confirmOperationsSync(params.transaction.mutations);
@@ -163,7 +183,7 @@ export function createSqlCollection<T extends object>(
       }
     : undefined;
 
-  const wrappedOnDelete: SqlMutationHandler<T>["onDelete"] = opts.onDelete
+  const wrappedOnDelete: BridgeMutationHandler<T>["onDelete"] = opts.onDelete
     ? async (params) => {
         const handlerResult = (await opts.onDelete?.(params)) ?? {};
         confirmOperationsSync(params.transaction.mutations);
@@ -178,14 +198,14 @@ export function createSqlCollection<T extends object>(
       sync: (params) => {
         controls = {
           begin: params.begin,
-          write: params.write as SqlSyncControls<T>["write"],
+          write: params.write as BridgeSyncControls<T>["write"],
           commit: params.commit,
           truncate: params.truncate,
           markReady: params.markReady,
         };
 
         void opts
-          .loadFn(opts.driver)
+          .load()
           .then((rows) => {
             if (!controls) return;
             applySnapshot(rows);
@@ -208,7 +228,7 @@ export function createSqlCollection<T extends object>(
             }
           })
           .catch((error) => {
-            console.error(`[sql-collection:${opts.id}] hydration failed`, error);
+            console.error(`[bridge-collection:${opts.id}] hydration failed`, error);
             if (controls) {
               controls.begin();
               controls.truncate();
@@ -238,16 +258,15 @@ export function createSqlCollection<T extends object>(
           stateListeners.delete(listener);
         };
       },
-    } satisfies SqlCollectionUtils<T>,
-  } satisfies CollectionConfig<T, string, never, SqlCollectionUtils<T>>;
+    } satisfies BridgeCollectionUtils<T>,
+  } satisfies CollectionConfig<T, string, never, BridgeCollectionUtils<T>>;
 
-  const collection = createCollection<T, string, SqlCollectionUtils<T>>(collectionConfig);
+  const collection = createCollection<T, string, BridgeCollectionUtils<T>>(collectionConfig);
 
   async function refresh(): Promise<void> {
     if (!controls) return;
     try {
-      const rows = await opts.loadFn(opts.driver);
-      applySnapshot(rows);
+      applySnapshot(await opts.load());
       clearLoadError();
     } catch (error) {
       setLoadError(error);

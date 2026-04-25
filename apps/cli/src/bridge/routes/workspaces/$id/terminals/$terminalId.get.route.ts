@@ -71,7 +71,12 @@ export default createRoute({
   handler: async ({ params, ctx }) => {
     const db = ctx.get("db");
     const workspaceRegistry = ctx.get("workspaceRegistry");
-    const response = await readWorkspaceTerminal(db, workspaceRegistry, params.id, params.terminalId);
+    const response = await readWorkspaceTerminal(
+      db,
+      workspaceRegistry,
+      params.id,
+      params.terminalId,
+    );
     if (!response.terminal) {
       ctx.status(404);
       return {

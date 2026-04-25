@@ -61,6 +61,32 @@ final class AppThemeTests: XCTestCase {
     XCTAssertEqual(raw["customUserField"] as? Int, 42)
   }
 
+  func testAppThemeStorePersistsPaneDimmingAppearanceSettings() throws {
+    let rootURL = temporaryRootURL()
+    let settingsURL = rootURL.appendingPathComponent("settings.json")
+    try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+
+    let store = AppThemeStore(
+      environment: [
+        "HOME": NSHomeDirectory(),
+        "LIFECYCLE_ROOT": rootURL.path,
+      ]
+    )
+
+    store.setDimInactivePanes(false)
+    store.setInactivePaneOpacity(0.41)
+
+    let data = try Data(contentsOf: settingsURL)
+    let raw = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let appearance = try XCTUnwrap(raw["appearance"] as? [String: Any])
+    let inactivePaneOpacity = try XCTUnwrap(appearance["inactivePaneOpacity"] as? Double)
+
+    XCTAssertEqual(appearance["dimInactivePanes"] as? Bool, false)
+    XCTAssertEqual(inactivePaneOpacity, 0.41, accuracy: 0.001)
+    XCTAssertEqual(store.workspacePaneDimmingSettings.isEnabled, false)
+    XCTAssertEqual(store.workspacePaneDimmingSettings.inactiveOpacity, 0.41, accuracy: 0.001)
+  }
+
   func testAppThemeStoreWritesTerminalThemeConfigIntoLifecycleCache() throws {
     let rootURL = temporaryRootURL()
     let store = AppThemeStore(

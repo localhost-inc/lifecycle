@@ -37,7 +37,8 @@ export const commandRegistry = {
   "stack/stop": async () => (await import("./commands/stack/stop")).default,
   sync: async () => (await import("./commands/sync")).default,
   "tmux/clean": async () => (await import("./commands/tmux/clean")).default,
-  "workspace/activity/emit": async () => (await import("./commands/workspace/activity/emit")).default,
+  "workspace/activity/emit": async () =>
+    (await import("./commands/workspace/activity/emit")).default,
   "workspace/activity/status": async () =>
     (await import("./commands/workspace/activity/status")).default,
   "workspace/archive": async () => (await import("./commands/workspace/archive")).default,

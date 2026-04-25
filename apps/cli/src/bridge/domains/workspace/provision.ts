@@ -43,7 +43,13 @@ export function resolveLocalWorktreeRoot(input: {
     "repository",
   );
 
-  return join(input.homePath ?? homedir(), ".lifecycle", "worktrees", organizationSlug, repositorySlug);
+  return join(
+    input.homePath ?? homedir(),
+    ".lifecycle",
+    "worktrees",
+    organizationSlug,
+    repositorySlug,
+  );
 }
 
 export async function createWorkspace(

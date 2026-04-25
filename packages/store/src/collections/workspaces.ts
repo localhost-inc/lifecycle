@@ -1,76 +1,75 @@
-import type { SqlDriver } from "@lifecycle/db";
-import type { WorkspaceRecord } from "@lifecycle/contracts";
-import {
-  listAllWorkspaces as listAllWorkspaceRows,
-  getWorkspaceById as getWorkspaceByIdRow,
-  listWorkspacesByRepository as listWorkspacesByRepoRows,
-  insertWorkspaceStatement,
-  updateWorkspaceStatement,
-  deleteWorkspaceStatement,
-  type WorkspaceInsertOptions,
-} from "@lifecycle/db/queries";
-import { createSqlCollection, type SqlCollection } from "../collection";
+import type { StackSummaryRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import { createBridgeCollection, type BridgeCollection, type BridgeTransport } from "../collection";
+import type { BridgeRepositoryWorkspaceSummary } from "./repositories";
+import { fetchRepositories } from "./repositories";
 
-export async function selectAllWorkspaces(driver: SqlDriver): Promise<WorkspaceRecord[]> {
-  return listAllWorkspaceRows(driver) as Promise<WorkspaceRecord[]>;
+export interface BridgeWorkspaceSummary extends BridgeRepositoryWorkspaceSummary {
+  repository_id: string;
+  repository_name: string;
 }
 
-export async function selectWorkspaceById(
-  driver: SqlDriver,
+export interface BridgeWorkspaceDetail {
+  workspace: WorkspaceRecord;
+  stack: StackSummaryRecord;
+}
+
+export async function fetchWorkspaceSummaries(
+  bridge: BridgeTransport,
+): Promise<BridgeWorkspaceSummary[]> {
+  const repositories = await fetchRepositories(bridge);
+  return repositories.flatMap((repository) =>
+    repository.workspaces.map((workspace) => ({
+      ...workspace,
+      repository_id: repository.id,
+      repository_name: repository.name,
+    })),
+  );
+}
+
+export async function fetchWorkspaceDetail(
+  bridge: BridgeTransport,
   workspaceId: string,
-): Promise<WorkspaceRecord | undefined> {
-  return getWorkspaceByIdRow(driver, workspaceId) as Promise<WorkspaceRecord | undefined>;
+): Promise<BridgeWorkspaceDetail> {
+  return bridge.request<BridgeWorkspaceDetail>({ path: `/workspaces/${workspaceId}` });
 }
 
-export async function selectWorkspacesByRepository(
-  driver: SqlDriver,
-  repositoryId: string,
-): Promise<WorkspaceRecord[]> {
-  return listWorkspacesByRepoRows(driver, repositoryId) as Promise<WorkspaceRecord[]>;
-}
-
-export function groupWorkspacesByRepository(
-  workspaces: WorkspaceRecord[],
-): Record<string, WorkspaceRecord[]> {
-  const groups: Record<string, WorkspaceRecord[]> = {};
-  for (const ws of workspaces) {
-    (groups[ws.repository_id] ??= []).push(ws);
-  }
-  for (const list of Object.values(groups)) {
-    list.sort((a, b) => {
-      if (a.checkout_type === "root" && b.checkout_type !== "root") return -1;
-      if (b.checkout_type === "root" && a.checkout_type !== "root") return 1;
-      return b.last_active_at.localeCompare(a.last_active_at);
-    });
-  }
-  return groups;
-}
-
-export function createWorkspaceCollection(driver: SqlDriver): SqlCollection<WorkspaceRecord> {
-  return createSqlCollection<WorkspaceRecord>({
+export function createWorkspaceCollection(
+  bridge: BridgeTransport,
+): BridgeCollection<BridgeWorkspaceSummary> {
+  return createBridgeCollection<BridgeWorkspaceSummary>({
     id: "workspaces",
-    driver,
-    loadFn: selectAllWorkspaces,
+    load: () => fetchWorkspaceSummaries(bridge),
     getKey: (workspace) => workspace.id,
-    onInsert: async ({ transaction }) => {
-      await driver.transaction(
+    onDelete: async ({ transaction }) => {
+      await Promise.all(
         transaction.mutations.map((mutation) =>
-          insertWorkspaceStatement(
-            mutation.modified as any,
-            (mutation.metadata ?? undefined) as WorkspaceInsertOptions | undefined,
-          ),
+          bridge.request<void>({ method: "DELETE", path: `/workspaces/${String(mutation.key)}` }),
         ),
       );
     },
-    onUpdate: async ({ transaction }) => {
-      await driver.transaction(
-        transaction.mutations.map((mutation) => updateWorkspaceStatement(mutation.modified as any)),
-      );
-    },
-    onDelete: async ({ transaction }) => {
-      await driver.transaction(
-        transaction.mutations.map((mutation) => deleteWorkspaceStatement(String(mutation.key))),
-      );
-    },
   });
+}
+
+export function createWorkspaceDetailCollection(
+  bridge: BridgeTransport,
+  workspaceId: string,
+): BridgeCollection<WorkspaceRecord> {
+  return createBridgeCollection<WorkspaceRecord>({
+    id: `workspace-${workspaceId}`,
+    load: async () => [(await fetchWorkspaceDetail(bridge, workspaceId)).workspace],
+    getKey: (workspace) => workspace.id,
+  });
+}
+
+export function groupWorkspacesByRepository(
+  workspaces: BridgeWorkspaceSummary[],
+): Record<string, BridgeWorkspaceSummary[]> {
+  const groups: Record<string, BridgeWorkspaceSummary[]> = {};
+  for (const workspace of workspaces) {
+    (groups[workspace.repository_id] ??= []).push(workspace);
+  }
+  for (const list of Object.values(groups)) {
+    list.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return groups;
 }

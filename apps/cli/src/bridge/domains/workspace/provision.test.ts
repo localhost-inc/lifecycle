@@ -8,11 +8,7 @@ import { applyDbMigrations } from "@lifecycle/db/migrations";
 import { createWorkspaceHostRegistry, type WorkspaceHostAdapter } from "../workspace";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 
-import {
-  archiveWorkspace,
-  createWorkspace,
-  resolveLocalWorktreeRoot,
-} from "./provision";
+import { archiveWorkspace, createWorkspace, resolveLocalWorktreeRoot } from "./provision";
 
 const tempDirs: string[] = [];
 
@@ -536,7 +532,9 @@ describe("archiveWorkspace", () => {
         repoPath: "/tmp/lifecycle",
         workspaceId,
       }),
-    ).rejects.toThrow('Workspace "feature-x" has uncommitted changes. Retry with force to archive anyway.');
+    ).rejects.toThrow(
+      'Workspace "feature-x" has uncommitted changes. Retry with force to archive anyway.',
+    );
     expect(archiveCalls).toBe(0);
 
     const archived = await archiveWorkspace(db, workspaceRegistry, {

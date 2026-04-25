@@ -85,11 +85,7 @@ export default createRoute({
   },
 });
 
-async function resolveRepositorySlug(
-  db: Db,
-  organizationId: string,
-  name: string,
-) {
+async function resolveRepositorySlug(db: Db, organizationId: string, name: string) {
   const baseSlug = toSlug(name, "repository");
   const rows = await db
     .select({ slug: repository.slug })

@@ -58,12 +58,13 @@ export default defineCommand({
       const snapshots =
         input.args.length > 0
           ? await Promise.all(
-              input.args.map(async (service) =>
-                await readBridgeLogs({
-                  service,
-                  ...(input.tail ? { tail: input.tail } : {}),
-                  ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
-                }),
+              input.args.map(
+                async (service) =>
+                  await readBridgeLogs({
+                    service,
+                    ...(input.tail ? { tail: input.tail } : {}),
+                    ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+                  }),
               ),
             )
           : [

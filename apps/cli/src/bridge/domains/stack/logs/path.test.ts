@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  stackLogDir,
-  stackLogFileName,
-  stackLogFilePath,
-  stackLogPathSegments,
-} from "./path";
+import { stackLogDir, stackLogFileName, stackLogFilePath, stackLogPathSegments } from "./path";
 
 describe("stack log path", () => {
   test("builds a slug-scoped path without an organization segment", () => {

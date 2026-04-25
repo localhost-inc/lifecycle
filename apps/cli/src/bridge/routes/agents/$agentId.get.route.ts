@@ -1,9 +1,6 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
-import {
-  AgentMessageWithPartsSchema,
-  AgentRecordSchema,
-} from "@lifecycle/contracts";
+import { AgentMessageWithPartsSchema, AgentRecordSchema } from "@lifecycle/contracts";
 import { getAgentSnapshot } from "../../domains/agent/service";
 
 const BridgeAgentSnapshotEnvelopeSchema = z

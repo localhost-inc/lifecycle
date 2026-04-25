@@ -169,18 +169,25 @@ function runLocalProxyInstall(): number {
 export default defineCommand({
   description: "Run the Lifecycle setup wizard for proxy, harness integrations, and managed docs.",
   input: z.object({
-    check: z.boolean().default(false).describe("Inspect Lifecycle install status without changing files."),
+    check: z
+      .boolean()
+      .default(false)
+      .describe("Inspect Lifecycle install status without changing files."),
     documentScope: documentScopeFlag,
     json: jsonFlag,
     path: z.string().optional().describe("Repository path. Defaults to the current directory."),
-    yes: z.boolean().default(false).describe("Apply the default recommended install steps without prompting."),
+    yes: z
+      .boolean()
+      .default(false)
+      .describe("Apply the default recommended install steps without prompting."),
   }),
   run: async (input, context) => {
     try {
       const repoPath = await resolveRepoPath(input.path);
-      const documentScope = input.check || input.json || input.yes
-        ? defaultDocumentScope(input.documentScope)
-        : (await selectDocumentScope()) ?? null;
+      const documentScope =
+        input.check || input.json || input.yes
+          ? defaultDocumentScope(input.documentScope)
+          : ((await selectDocumentScope()) ?? null);
       if (!documentScope) {
         return 1;
       }
@@ -205,9 +212,7 @@ export default defineCommand({
       }
 
       const selectedStepIds = input.yes
-        ? inspection.steps
-            .filter((step) => step.selected_by_default)
-            .map((step) => step.id)
+        ? inspection.steps.filter((step) => step.selected_by_default).map((step) => step.id)
         : await selectSteps(inspection);
       if (selectedStepIds === null) {
         return 1;
@@ -253,7 +258,11 @@ export default defineCommand({
         ready = refreshedInspection.ready;
       }
 
-      outro(ready ? "Lifecycle install complete." : "Lifecycle install finished with follow-up remaining.");
+      outro(
+        ready
+          ? "Lifecycle install complete."
+          : "Lifecycle install finished with follow-up remaining.",
+      );
       return ready ? 0 : 1;
     } catch (error) {
       return failCommand(error, { json: input.json, stderr: context.stderr });

@@ -50,17 +50,15 @@ export default defineCommand({
       .default(false)
       .describe("Inspect repo-scoped Lifecycle harness integration without writing files."),
     json: jsonFlag,
-    path: z
-      .string()
-      .optional()
-      .describe("Repository path. Defaults to the current directory."),
+    path: z.string().optional().describe("Repository path. Defaults to the current directory."),
   }),
   run: async (input, context) => {
     try {
       const repoPath = await resolveRepoPath(input.path);
-      const providerIds = input.check || input.json
-        ? listRepoInstallProviders().map((provider) => provider.id)
-        : await selectProviders();
+      const providerIds =
+        input.check || input.json
+          ? listRepoInstallProviders().map((provider) => provider.id)
+          : await selectProviders();
       if (!providerIds) {
         return 1;
       }
@@ -76,9 +74,7 @@ export default defineCommand({
         providerIds,
         repoPath,
       });
-      const ready = input.check
-        ? results.every((result) => result.status === "installed")
-        : true;
+      const ready = input.check ? results.every((result) => result.status === "installed") : true;
 
       if (input.json) {
         context.stdout(

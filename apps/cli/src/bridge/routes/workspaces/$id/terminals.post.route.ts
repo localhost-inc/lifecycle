@@ -65,10 +65,7 @@ export default createRoute({
     const db = ctx.get("db");
     const workspaceRegistry = ctx.get("workspaceRegistry");
     const [{ broadcastMessage }, { buildWorkspaceSnapshotInvalidatedMessage, workspaceTopic }] =
-      await Promise.all([
-        import("../../../lib/server"),
-        import("../../../lib/socket-topics"),
-      ]);
+      await Promise.all([import("../../../lib/server"), import("../../../lib/socket-topics")]);
     const response = await createWorkspaceTerminal(db, workspaceRegistry, params.id, {
       ...(body.kind ? { kind: body.kind } : {}),
       ...(body.title !== undefined ? { title: body.title } : {}),

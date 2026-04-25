@@ -13,10 +13,7 @@ export default createRoute({
     const db = ctx.get("db");
     const workspaceRegistry = ctx.get("workspaceRegistry");
     const [{ broadcastMessage }, { buildWorkspaceSnapshotInvalidatedMessage, workspaceTopic }] =
-      await Promise.all([
-        import("../../../lib/server"),
-        import("../../../lib/socket-topics"),
-      ]);
+      await Promise.all([import("../../../lib/server"), import("../../../lib/socket-topics")]);
 
     const response = await resetWorkspaceStack(db, workspaceRegistry, params.id);
     broadcastMessage(

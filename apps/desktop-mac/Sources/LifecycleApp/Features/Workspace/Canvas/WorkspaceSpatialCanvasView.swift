@@ -293,6 +293,7 @@ struct WorkspaceSpatialCanvasView: View {
   let workspaceID: String
   let canvasState: CanvasState
   let isActiveWorkspace: Bool
+  let dimmingSettings: WorkspacePaneDimmingSettings
 
   @State private var viewport = CanvasSpatialViewportState.identity
   @State private var panStartTranslation: CGSize?
@@ -366,7 +367,8 @@ struct WorkspaceSpatialCanvasView: View {
             model: model,
             workspaceID: workspaceID,
             item: item,
-            scale: viewport.scale
+            scale: viewport.scale,
+            dimmingSettings: dimmingSettings
           )
           .frame(
             width: item.frame.width * viewport.scale,
@@ -897,6 +899,7 @@ private struct CanvasSpatialGroupWindow: View {
   let workspaceID: String
   let item: CanvasSpatialGroupItem
   let scale: CGFloat
+  let dimmingSettings: WorkspacePaneDimmingSettings
 
   @State private var draftFrame: CanvasSpatialFrame?
   @State private var interactionStartFrame: CanvasSpatialFrame?
@@ -973,6 +976,15 @@ private struct CanvasSpatialGroupWindow: View {
       alignment: .topLeading
     )
     .offset(x: liveDraftOffset.width, y: liveDraftOffset.height)
+    .opacity(
+      workspacePaneOpacity(
+        isActive: item.isActive,
+        isHovering: isHoveringWindow,
+        settings: dimmingSettings
+      )
+    )
+    .animation(.easeOut(duration: 0.14), value: item.isActive)
+    .animation(.easeOut(duration: 0.14), value: isHoveringWindow)
     .onHover { hovering in
       isHoveringWindow = hovering
     }

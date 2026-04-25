@@ -2,7 +2,13 @@ import { defineCommand } from "@localhost-inc/cmd";
 import { ensureBridge } from "@/bridge";
 import { z } from "zod";
 
-import { failCommand, jsonFlag, resolveWorkspaceId, stackServices, workspaceIdFlag } from "../_shared";
+import {
+  failCommand,
+  jsonFlag,
+  resolveWorkspaceId,
+  stackServices,
+  workspaceIdFlag,
+} from "../_shared";
 
 export default defineCommand({
   description: "Show environment service status for the current workspace.",

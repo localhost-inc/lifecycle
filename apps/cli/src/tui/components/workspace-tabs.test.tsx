@@ -106,7 +106,9 @@ describe("workspace tabs", () => {
       }),
     );
 
-    expect(markup).toContain(">●</text><text fg=\"#faf8f5\"> web</text><box style=\"flex-grow:1\"></box><text fg=\"#60a5fa\">↗</text>");
+    expect(markup).toContain(
+      '>●</text><text fg="#faf8f5"> web</text><box style="flex-grow:1"></box><text fg="#60a5fa">↗</text>',
+    );
     expect(markup).not.toContain("https://preview.lifecycle.test");
     expect(markup).not.toContain("process");
   });

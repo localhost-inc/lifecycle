@@ -43,7 +43,9 @@ export default defineCommand({
         param: { id: workspaceId },
       });
       const result = await response.json();
-      const service = stackServices(result.stack).find((entry) => entry.name === (input.args[0] ?? ""));
+      const service = stackServices(result.stack).find(
+        (entry) => entry.name === (input.args[0] ?? ""),
+      );
       if (!service) {
         throw new Error(`Service "${input.args[0]}" was not found in workspace ${workspaceId}.`);
       }

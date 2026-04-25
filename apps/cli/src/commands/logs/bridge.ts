@@ -50,7 +50,8 @@ export async function streamBridgeLogs(
   const grepPattern = options.grep ? new RegExp(options.grep) : null;
   const matchesGrep = (text: string): boolean => (grepPattern ? grepPattern.test(text) : true);
 
-  const serviceKeys = options.serviceNames && options.serviceNames.length > 0 ? options.serviceNames : [undefined];
+  const serviceKeys =
+    options.serviceNames && options.serviceNames.length > 0 ? options.serviceNames : [undefined];
   const cursors = new Map<string, string>();
 
   for (const service of serviceKeys) {

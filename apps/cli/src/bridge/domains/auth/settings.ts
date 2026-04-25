@@ -109,6 +109,8 @@ function normalizeLifecycleSettings(raw: Record<string, unknown>): LifecycleSett
   return LifecycleSettingsSchema.parse({
     appearance: {
       theme: readAppearanceTheme(raw),
+      dimInactivePanes: readAppearanceDimInactivePanes(raw),
+      inactivePaneOpacity: readAppearanceInactivePaneOpacity(raw),
     },
     providers: {
       claude: {
@@ -133,6 +135,16 @@ function normalizeLifecycleSettings(raw: Record<string, unknown>): LifecycleSett
 function readAppearanceTheme(raw: Record<string, unknown>): unknown {
   const appearance = asObject(raw.appearance);
   return appearance?.theme ?? raw.theme;
+}
+
+function readAppearanceDimInactivePanes(raw: Record<string, unknown>): unknown {
+  const appearance = asObject(raw.appearance);
+  return appearance?.dimInactivePanes ?? true;
+}
+
+function readAppearanceInactivePaneOpacity(raw: Record<string, unknown>): unknown {
+  const appearance = asObject(raw.appearance);
+  return appearance?.inactivePaneOpacity ?? 0.52;
 }
 
 function readTerminalCommandProgram(raw: Record<string, unknown>): unknown {
@@ -202,6 +214,18 @@ function mergeSettingsUpdate(
     appearance.theme = update.appearance.theme;
     next.appearance = appearance;
     delete next.theme;
+  }
+
+  if (update.appearance?.dimInactivePanes !== undefined) {
+    const appearance = { ...asObject(next.appearance) };
+    appearance.dimInactivePanes = update.appearance.dimInactivePanes;
+    next.appearance = appearance;
+  }
+
+  if (update.appearance?.inactivePaneOpacity !== undefined) {
+    const appearance = { ...asObject(next.appearance) };
+    appearance.inactivePaneOpacity = update.appearance.inactivePaneOpacity;
+    next.appearance = appearance;
   }
 
   if (update.providers?.claude?.loginMethod !== undefined) {

@@ -1,14 +1,6 @@
-import type {
-  HookCheckStatus,
-  HookInstallStatus,
-  ResolvedHookTarget,
-} from "./hooks";
+import type { HookCheckStatus, HookInstallStatus, ResolvedHookTarget } from "./hooks";
 import { checkHookTarget, installHookTarget, resolveHookTargets } from "./hooks";
-import type {
-  McpCheckStatus,
-  McpInstallStatus,
-  ResolvedMcpTarget,
-} from "./mcp";
+import type { McpCheckStatus, McpInstallStatus, ResolvedMcpTarget } from "./mcp";
 import { checkMcpTarget, installMcpTarget, resolveMcpTargets } from "./mcp";
 
 export type RepoInstallProviderId = "claude-code" | "codex";
@@ -64,7 +56,8 @@ export function listRepoInstallProviders(): readonly RepoInstallProviderOption[]
 export function resolveRepoInstallTargets(repoPath: string): ProviderTarget[] {
   const mcpTargets = resolveMcpTargets("project", repoPath);
   const hookTargets = resolveHookTargets(repoPath);
-  const lifecycleHookAdapter = hookTargets.find((target) => target.integration === "hook-adapter") ?? null;
+  const lifecycleHookAdapter =
+    hookTargets.find((target) => target.integration === "hook-adapter") ?? null;
   const providerTargets: ProviderTarget[] = [];
 
   for (const provider of PROVIDER_OPTIONS) {
@@ -143,7 +136,10 @@ function createHookTarget(
   };
 }
 
-function createMcpTarget(providerId: RepoInstallProviderId, target: ResolvedMcpTarget): ProviderTarget {
+function createMcpTarget(
+  providerId: RepoInstallProviderId,
+  target: ResolvedMcpTarget,
+): ProviderTarget {
   const entry = {
     args: ["mcp"],
     command: "lifecycle",

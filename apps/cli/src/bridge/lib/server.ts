@@ -158,9 +158,31 @@ function processCommand(pid: number): string | null {
   return command.length > 0 ? command : null;
 }
 
+interface BridgeHealthMetadata {
+  dev?: boolean;
+  healthy?: boolean;
+  pid?: number;
+  repoRoot?: string | null;
+}
+
+async function readBridgeHealthOnPort(port: number): Promise<BridgeHealthMetadata | null> {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/health`, {
+      signal: AbortSignal.timeout(500),
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as BridgeHealthMetadata;
+    return body.healthy ? body : null;
+  } catch {
+    return null;
+  }
+}
+
 function isLifecycleBridgeCommand(command: string): boolean {
   return (
     command.includes("lifecycle bridge start") ||
+    command.includes("/src/index.ts bridge start") ||
+    command.includes("\\src\\index.ts bridge start") ||
     command.includes("/src/bridge/app.ts") ||
     command.includes("\\src\\bridge\\app.ts")
   );
@@ -192,7 +214,20 @@ async function stopProcess(pid: number): Promise<void> {
 
 async function reclaimLifecycleBridgePort(port: number): Promise<void> {
   const listenerPids = listeningPidsOnPort(port).filter((pid) => pid !== process.pid);
+  const bridgeHealth = listenerPids.length > 0 ? await readBridgeHealthOnPort(port) : null;
+  const expectedRepoRoot = process.env.LIFECYCLE_REPO_ROOT ?? null;
   for (const pid of listenerPids) {
+    if (bridgeHealth?.pid === pid) {
+      if (expectedRepoRoot && bridgeHealth.repoRoot && bridgeHealth.repoRoot !== expectedRepoRoot) {
+        throw new Error(
+          `Lifecycle bridge could not bind 127.0.0.1:${port} because it is owned by another repo at ${bridgeHealth.repoRoot}.`,
+        );
+      }
+
+      await stopProcess(pid);
+      continue;
+    }
+
     const command = processCommand(pid);
     if (!command || !isLifecycleBridgeCommand(command)) {
       throw new Error(
@@ -404,7 +439,16 @@ export async function startBridgeServer(input: { port?: number } = {}): Promise<
   });
   await activeWorkspaceWatchManager.sync();
 
-  await writeBridgeRegistration({ pid: process.pid, port: boundPort as number });
+  await writeBridgeRegistration({
+    pid: process.pid,
+    port: boundPort as number,
+    repoRoot: process.env.LIFECYCLE_REPO_ROOT ?? null,
+    dev: process.env.LIFECYCLE_DEV === "1" || process.env.LIFECYCLE_DEV_SUPERVISOR === "monorepo",
+    startedAt: new Date().toISOString(),
+    supervisorPid: process.env.LIFECYCLE_DEV_SUPERVISOR_PID
+      ? Number.parseInt(process.env.LIFECYCLE_DEV_SUPERVISOR_PID, 10)
+      : null,
+  });
 
   let shuttingDown = false;
   const shutdown = async () => {

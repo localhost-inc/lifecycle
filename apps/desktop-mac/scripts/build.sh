@@ -43,6 +43,7 @@ assert_bridge_openapi_symlink() {
 (
   cd "$ROOT_DIR/apps/cli"
   bunx routedjs generate >/dev/null
+  bunx routedjs openapi >/dev/null
   bun ./scripts/build-release.ts >/dev/null
 )
 assert_bridge_openapi_symlink

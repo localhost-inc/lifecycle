@@ -18,7 +18,9 @@ describe("tui selection state", () => {
       await saveWorkspaceSelection("ws_123", homeDir);
 
       expect(await loadWorkspaceSelection(homeDir)).toBe("ws_123");
-      expect(await readFile(selectionStatePath(homeDir), "utf8")).toContain('"workspace_id": "ws_123"');
+      expect(await readFile(selectionStatePath(homeDir), "utf8")).toContain(
+        '"workspace_id": "ws_123"',
+      );
     } finally {
       await rm(homeDir, { recursive: true, force: true });
     }

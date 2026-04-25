@@ -9,7 +9,12 @@ export function resolveCurrentCliInvocation(argv: string[] = process.argv): CliI
   const entrypoint = argv[1]?.trim();
   if (entrypoint) {
     const extension = extname(entrypoint);
-    if (extension === ".ts" || extension === ".js" || extension === ".mjs" || extension === ".cjs") {
+    if (
+      extension === ".ts" ||
+      extension === ".js" ||
+      extension === ".mjs" ||
+      extension === ".cjs"
+    ) {
       return {
         binary: process.execPath,
         argsPrefix: [resolve(entrypoint)],

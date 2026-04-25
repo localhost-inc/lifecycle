@@ -3,6 +3,7 @@ import SwiftUI
 struct WorkspaceSceneView: View {
   @Environment(\.appTheme) private var theme
   @ObservedObject var model: AppModel
+  let dimmingSettings: WorkspacePaneDimmingSettings
 
   var body: some View {
     Group {
@@ -22,10 +23,19 @@ struct WorkspaceSceneView: View {
                   .padding(.horizontal, 16)
                   .padding(.top, 8)
                   .padding(.bottom, 4)
+                  .frame(maxWidth: .infinity, alignment: .leading)
+                  .contentShape(Rectangle())
+                  .onTapGesture(count: 2) {
+                    zoomActiveWorkspaceWindow()
+                  }
 
-                WorkspaceContentCardView(model: model, workspace: workspace)
-                  .padding(.horizontal, 10)
-                  .padding(.bottom, 10)
+                WorkspaceContentPanelsView(
+                  model: model,
+                  workspace: workspace,
+                  dimmingSettings: dimmingSettings
+                )
+                  .padding(.horizontal, 6)
+                  .padding(.bottom, 6)
               }
               .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
               .allowsHitTesting(isSelected)
@@ -50,54 +60,71 @@ struct WorkspaceSceneView: View {
   }
 }
 
-private struct WorkspaceContentCardView: View {
+private struct WorkspaceContentPanelsView: View {
   @Environment(\.appTheme) private var theme
   @ObservedObject var model: AppModel
   let workspace: BridgeWorkspaceSummary
+  let dimmingSettings: WorkspacePaneDimmingSettings
   @State private var dragStartSidebarWidth: CGFloat?
   @State private var liveSidebarWidth: CGFloat?
 
+  private let panelSpacing: CGFloat = 6
+
   var body: some View {
     GeometryReader { geometry in
+      let availableWidth = geometry.size.width
       let persistedSidebarWidth = model.extensionSidebarWidth(
         for: workspace.id,
-        availableWidth: geometry.size.width
+        availableWidth: availableWidth
       )
       let sidebarWidth = clampedWorkspaceExtensionSidebarWidth(
         liveSidebarWidth ?? persistedSidebarWidth,
-        availableWidth: geometry.size.width
+        availableWidth: availableWidth
       )
+      let canvasWidth = max(availableWidth - sidebarWidth - panelSpacing, 0)
 
-      HStack(spacing: 0) {
-        WorkspaceCanvasContainerView(model: model, workspace: workspace)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
+      HStack(spacing: panelSpacing) {
+        WorkspaceCanvasContainerView(
+          model: model,
+          workspace: workspace,
+          dimmingSettings: dimmingSettings
+        )
+          .frame(width: canvasWidth)
+          .frame(height: geometry.size.height)
+          .background(theme.surfaceBackground)
+          .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+          .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+              .strokeBorder(theme.borderColor)
+          )
+          .shadow(color: theme.cardShadowColor, radius: 24, x: 0, y: 10)
+          .clipped()
 
         WorkspaceExtensionSidebarView(model: model, workspace: workspace)
           .frame(width: sidebarWidth)
+          .environment(\.workspaceExtensionSidebarResizeContext, workspaceExtensionSidebarResizeContext)
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .frame(width: availableWidth, height: geometry.size.height, alignment: .leading)
       .overlay(alignment: .leading) {
         workspaceExtensionDivider(
-          availableWidth: geometry.size.width,
+          availableWidth: availableWidth,
           sidebarWidth: sidebarWidth
         )
-        .offset(x: workspaceExtensionDividerOffset(
-          totalWidth: geometry.size.width,
-          sidebarWidth: sidebarWidth
-        ))
+          .offset(x: workspaceExtensionDividerOffset(
+            totalWidth: availableWidth,
+            sidebarWidth: sidebarWidth
+          ))
+      }
+      .transaction { transaction in
+        if liveSidebarWidth != nil {
+          transaction.animation = nil
+        }
       }
       .onChange(of: workspace.id) { _ in
         liveSidebarWidth = nil
         dragStartSidebarWidth = nil
       }
     }
-    .background(theme.surfaceBackground)
-    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    .overlay(
-      RoundedRectangle(cornerRadius: 12, style: .continuous)
-        .strokeBorder(theme.borderColor)
-    )
-    .shadow(color: theme.cardShadowColor, radius: 24, x: 0, y: 10)
   }
 
   private func workspaceExtensionDivider(
@@ -107,9 +134,9 @@ private struct WorkspaceContentCardView: View {
     ZStack {
       Color.clear
 
-      Rectangle()
-        .fill(theme.borderColor)
-        .frame(width: 1)
+      RoundedRectangle(cornerRadius: 1, style: .continuous)
+        .fill(theme.borderColor.opacity(0.75))
+        .frame(width: 2, height: 36)
     }
       .frame(width: workspaceExtensionSidebarDividerHitThickness)
       .contentShape(Rectangle())
@@ -141,6 +168,12 @@ private struct WorkspaceContentCardView: View {
   }
 
   private func workspaceExtensionDividerOffset(totalWidth: CGFloat, sidebarWidth: CGFloat) -> CGFloat {
-    max(totalWidth - sidebarWidth - (workspaceExtensionSidebarDividerHitThickness / 2), 0)
+    max(totalWidth - sidebarWidth - panelSpacing - (workspaceExtensionSidebarDividerHitThickness / 2), 0)
+  }
+
+  private var workspaceExtensionSidebarResizeContext: WorkspaceExtensionSidebarResizeContext {
+    WorkspaceExtensionSidebarResizeContext(
+      isResizing: liveSidebarWidth != nil
+    )
   }
 }

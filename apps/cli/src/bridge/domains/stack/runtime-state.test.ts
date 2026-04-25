@@ -41,7 +41,9 @@ describe("stack runtime state", () => {
 
     const state = await readStackRuntimeState("workspace_1");
 
-    expect(stackRuntimeStatePath("workspace_1")).toBe(join(dir, "stack-runtime", "workspace_1.json"));
+    expect(stackRuntimeStatePath("workspace_1")).toBe(
+      join(dir, "stack-runtime", "workspace_1.json"),
+    );
     expect(state.services.api).toEqual({
       assigned_port: 43123,
       created_at: "2026-04-07T10:00:00.000Z",

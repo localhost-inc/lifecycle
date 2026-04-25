@@ -1,115 +1,51 @@
-import type { SqlDriver, SqlStatement } from "@lifecycle/db";
-import type { ServiceRecord } from "@lifecycle/contracts";
-import { createSqlCollection, type SqlCollection } from "../collection";
+import type { ServiceRecord, StackManagedRecord, StackSummaryRecord } from "@lifecycle/contracts";
+import { createBridgeCollection, type BridgeCollection, type BridgeTransport } from "../collection";
 
-interface ServiceRow {
-  id: string;
-  workspace_id: string;
-  name: string;
-  status: string;
-  status_reason: string | null;
-  assigned_port: number | null;
-  created_at: string;
-  updated_at: string;
+interface BridgeWorkspaceStackResponse {
+  stack: StackSummaryRecord;
 }
 
-function rowToRecord(row: ServiceRow): ServiceRecord {
+function stackNodeToServiceRecord(node: StackManagedRecord): ServiceRecord {
   return {
-    ...row,
-    status: row.status as ServiceRecord["status"],
-    status_reason: row.status_reason as ServiceRecord["status_reason"],
-    // preview_url is derived client-side from the workspace preview route contract.
-    preview_url: null,
+    id: `${node.workspace_id}:${node.name}`,
+    workspace_id: node.workspace_id,
+    name: node.name,
+    status: node.status,
+    status_reason: node.status_reason,
+    assigned_port: node.assigned_port,
+    preview_url: node.preview_url,
+    created_at: node.created_at,
+    updated_at: node.updated_at,
   };
 }
 
-export async function selectServiceByWorkspaceAndName(
-  driver: SqlDriver,
+export async function fetchWorkspaceStack(
+  bridge: BridgeTransport,
   workspaceId: string,
-  name: string,
-): Promise<ServiceRecord | undefined> {
-  const rows = await driver.select<ServiceRow>(
-    `SELECT id, workspace_id, name, status, status_reason, assigned_port, created_at, updated_at
-     FROM service
-     WHERE workspace_id = $1 AND name = $2
-     LIMIT 1`,
-    [workspaceId, name],
-  );
-  const row = rows[0];
-  return row ? rowToRecord(row) : undefined;
+): Promise<StackSummaryRecord> {
+  const response = await bridge.request<BridgeWorkspaceStackResponse>({
+    path: `/workspaces/${workspaceId}/stack`,
+  });
+  return response.stack;
 }
 
-export async function selectServicesByWorkspace(
-  driver: SqlDriver,
+export async function fetchWorkspaceServices(
+  bridge: BridgeTransport,
   workspaceId: string,
 ): Promise<ServiceRecord[]> {
-  const rows = await driver.select<ServiceRow>(
-    `SELECT id, workspace_id, name, status, status_reason, assigned_port, created_at, updated_at
-     FROM service WHERE workspace_id = $1 ORDER BY name`,
-    [workspaceId],
-  );
-  return rows.map(rowToRecord);
+  const stack = await fetchWorkspaceStack(bridge, workspaceId);
+  return stack.nodes
+    .filter((node): node is StackManagedRecord => node.kind === "process" || node.kind === "image")
+    .map(stackNodeToServiceRecord);
 }
 
-export async function selectAllServices(driver: SqlDriver): Promise<ServiceRecord[]> {
-  const rows = await driver.select<ServiceRow>(
-    "SELECT id, workspace_id, name, status, status_reason, assigned_port, created_at, updated_at FROM service ORDER BY name",
-  );
-  return rows.map(rowToRecord);
-}
-
-function upsertServiceStatement(service: ServiceRecord): SqlStatement {
-  return {
-    sql: `INSERT INTO service (
-           id, workspace_id, name, status, status_reason,
-           assigned_port, created_at, updated_at
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT(workspace_id, name) DO UPDATE SET
-           status = excluded.status,
-           status_reason = excluded.status_reason,
-           assigned_port = excluded.assigned_port,
-           updated_at = excluded.updated_at`,
-    params: [
-      service.id,
-      service.workspace_id,
-      service.name,
-      service.status,
-      service.status_reason,
-      service.assigned_port,
-      service.created_at,
-      service.updated_at,
-    ],
-  };
-}
-
-function deleteServiceStatement(serviceId: string): SqlStatement {
-  return {
-    sql: "DELETE FROM service WHERE id = $1",
-    params: [serviceId],
-  };
-}
-
-export function createServiceCollection(driver: SqlDriver): SqlCollection<ServiceRecord> {
-  return createSqlCollection<ServiceRecord>({
-    id: "services",
-    driver,
-    loadFn: selectAllServices,
+export function createServiceCollection(
+  bridge: BridgeTransport,
+  workspaceId: string,
+): BridgeCollection<ServiceRecord> {
+  return createBridgeCollection<ServiceRecord>({
+    id: `services-${workspaceId}`,
+    load: () => fetchWorkspaceServices(bridge, workspaceId),
     getKey: (service) => service.id,
-    onInsert: async ({ transaction }) => {
-      await driver.transaction(
-        transaction.mutations.map((mutation) => upsertServiceStatement(mutation.modified)),
-      );
-    },
-    onUpdate: async ({ transaction }) => {
-      await driver.transaction(
-        transaction.mutations.map((mutation) => upsertServiceStatement(mutation.modified)),
-      );
-    },
-    onDelete: async ({ transaction }) => {
-      await driver.transaction(
-        transaction.mutations.map((mutation) => deleteServiceStatement(String(mutation.key))),
-      );
-    },
   });
 }

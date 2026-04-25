@@ -8,6 +8,7 @@ struct CanvasTiledLayoutNodeView: View {
   let canvasState: CanvasState
   let layoutNode: CanvasTiledLayoutNode
   let activeGroupID: String?
+  let dimmingSettings: WorkspacePaneDimmingSettings
 
   var body: some View {
     switch layoutNode {
@@ -18,7 +19,8 @@ struct CanvasTiledLayoutNodeView: View {
           workspaceID: workspaceID,
           group: group,
           surfaces: canvasState.orderedSurfaces(in: group),
-          isActive: group.id == activeGroupID
+          isActive: group.id == activeGroupID,
+          dimmingSettings: dimmingSettings
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       } else {
@@ -32,7 +34,8 @@ struct CanvasTiledLayoutNodeView: View {
         workspaceID: workspaceID,
         canvasState: canvasState,
         split: split,
-        activeGroupID: activeGroupID
+        activeGroupID: activeGroupID,
+        dimmingSettings: dimmingSettings
       )
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }

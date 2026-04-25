@@ -123,7 +123,10 @@ async function main(): Promise<void> {
   await rm(outputDir, { force: true, recursive: true });
   await mkdir(outputDir, { recursive: true });
 
-  await runCommand(["bun", "build", "--target", "bun", "--outdir", outputDir, cliEntrypoint], repoRoot);
+  await runCommand(
+    ["bun", "build", "--target", "bun", "--outdir", outputDir, cliEntrypoint],
+    repoRoot,
+  );
 
   await copyFile(process.execPath, bunRuntimePath);
   await chmod(bunRuntimePath, 0o755);
@@ -133,9 +136,9 @@ async function main(): Promise<void> {
     [
       "#!/bin/sh",
       "set -eu",
-      "SCRIPT_DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
+      'SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)',
       `export BUN_PTY_LIB="$SCRIPT_DIR/rust-pty/target/release/${bunPtyLibraryName()}"`,
-      "exec \"$SCRIPT_DIR/bun\" \"$SCRIPT_DIR/index.js\" \"$@\"",
+      'exec "$SCRIPT_DIR/bun" "$SCRIPT_DIR/index.js" "$@"',
       "",
     ].join("\n"),
     "utf8",

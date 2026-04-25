@@ -42,7 +42,12 @@ interface GhUserResult {
 
 async function ghUser(): Promise<GhUserResult | null> {
   try {
-    const raw = await exec("gh", ["api", "user", "--jq", "[.login, .avatar_url, .name, .email] | @tsv"]);
+    const raw = await exec("gh", [
+      "api",
+      "user",
+      "--jq",
+      "[.login, .avatar_url, .name, .email] | @tsv",
+    ]);
     const parts = raw.trim().split("\t");
     if (!parts[0]) return null;
     return {

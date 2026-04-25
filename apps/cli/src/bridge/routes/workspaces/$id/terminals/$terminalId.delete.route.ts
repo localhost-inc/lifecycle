@@ -45,7 +45,12 @@ export default createRoute({
         import("../../../../lib/server"),
         import("../../../../lib/socket-topics"),
       ]);
-    const response = await closeWorkspaceTerminal(db, workspaceRegistry, params.id, params.terminalId);
+    const response = await closeWorkspaceTerminal(
+      db,
+      workspaceRegistry,
+      params.id,
+      params.terminalId,
+    );
     broadcastMessage(
       buildWorkspaceSnapshotInvalidatedMessage({
         reason: "terminal.closed",

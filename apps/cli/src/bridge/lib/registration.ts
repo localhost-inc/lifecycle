@@ -5,15 +5,17 @@ import { resolveLifecycleRuntimePath } from "./runtime-paths";
 export interface BridgeRegistration {
   pid: number;
   port: number;
+  repoRoot?: string | null;
+  dev?: boolean;
+  startedAt?: string;
+  supervisorPid?: number | null;
 }
 
 function dedupePaths(paths: string[]): string[] {
   return [...new Set(paths)];
 }
 
-function defaultRuntimeRegistrationEnvironment(
-  environment: NodeJS.ProcessEnv,
-): NodeJS.ProcessEnv {
+function defaultRuntimeRegistrationEnvironment(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const next = { ...environment };
   delete next.LIFECYCLE_BRIDGE_REGISTRATION;
   delete next.LIFECYCLE_RUNTIME_ROOT;
@@ -37,7 +39,9 @@ export function bridgeRegistrationLookupPaths(
   ]);
 }
 
-export async function readBridgeRegistrationAtPath(path: string): Promise<BridgeRegistration | null> {
+export async function readBridgeRegistrationAtPath(
+  path: string,
+): Promise<BridgeRegistration | null> {
   try {
     return JSON.parse(await readFile(path, "utf8")) as BridgeRegistration;
   } catch {
@@ -68,6 +72,8 @@ export async function removeBridgeRegistrationAtPath(path: string): Promise<void
   }
 }
 
-export async function removeBridgeRegistration(environment: NodeJS.ProcessEnv = process.env): Promise<void> {
+export async function removeBridgeRegistration(
+  environment: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
   await removeBridgeRegistrationAtPath(bridgeRegistrationPath(environment));
 }

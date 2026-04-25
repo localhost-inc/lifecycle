@@ -64,7 +64,8 @@ describe("repo hook installer", () => {
               {
                 hooks: [
                   {
-                    command: 'sh "$(git rev-parse --show-toplevel)/.lifecycle/hooks/activity.sh" turn.completed --provider codex --old-flag',
+                    command:
+                      'sh "$(git rev-parse --show-toplevel)/.lifecycle/hooks/activity.sh" turn.completed --provider codex --old-flag',
                     type: "command",
                   },
                 ],
@@ -89,10 +90,12 @@ describe("repo hook installer", () => {
     ]);
 
     const adapter = await readFile(join(dir, ".lifecycle", "hooks", "activity.sh"), "utf8");
-    expect(adapter).toContain('LIFECYCLE_WORKSPACE_ID');
-    expect(adapter).toContain('workspace activity emit');
+    expect(adapter).toContain("LIFECYCLE_WORKSPACE_ID");
+    expect(adapter).toContain("workspace activity emit");
 
-    const claudeConfig = JSON.parse(await readFile(join(dir, ".claude", "settings.json"), "utf8")) as {
+    const claudeConfig = JSON.parse(
+      await readFile(join(dir, ".claude", "settings.json"), "utf8"),
+    ) as {
       hooks: Record<string, Array<{ hooks: Array<Record<string, unknown>>; matcher?: string }>>;
       permissions: Record<string, unknown>;
     };
@@ -127,7 +130,8 @@ describe("repo hook installer", () => {
     };
     expect(codexHooks.version).toBe(1);
     expect(codexHooks.hooks.Stop?.[0]?.hooks[0]).toEqual({
-      command: 'sh "$(git rev-parse --show-toplevel)/.lifecycle/hooks/activity.sh" turn.completed --provider codex',
+      command:
+        'sh "$(git rev-parse --show-toplevel)/.lifecycle/hooks/activity.sh" turn.completed --provider codex',
       type: "command",
     });
     expect(codexHooks.hooks.PreToolUse?.[0]?.hooks[0]).toEqual({
@@ -177,11 +181,7 @@ describe("repo hook installer", () => {
     ]);
 
     await mkdir(join(dir, ".lifecycle", "hooks"), { recursive: true });
-    await writeFile(
-      join(dir, ".lifecycle", "hooks", "activity.sh"),
-      "#!/bin/sh\nexit 0\n",
-      "utf8",
-    );
+    await writeFile(join(dir, ".lifecycle", "hooks", "activity.sh"), "#!/bin/sh\nexit 0\n", "utf8");
     await mkdir(join(dir, ".claude"), { recursive: true });
     await writeFile(
       join(dir, ".claude", "settings.json"),

@@ -40,6 +40,18 @@ struct WorkspaceGroupRenderedSurface: Identifiable {
   let surface: CanvasSurface
 }
 
+func workspacePaneOpacity(
+  isActive: Bool,
+  isHovering: Bool,
+  settings: WorkspacePaneDimmingSettings
+) -> CGFloat {
+  guard settings.isEnabled else {
+    return 1
+  }
+
+  return isActive || isHovering ? 1 : CGFloat(clampedInactivePaneOpacity(settings.inactiveOpacity))
+}
+
 func renderedSurfaces(
   for surfaces: [CanvasSurface],
   activeSurfaceID: String?,
@@ -72,8 +84,10 @@ struct WorkspaceGroupView: View {
   let group: CanvasGroup
   let surfaces: [CanvasSurface]
   let isActive: Bool
+  let dimmingSettings: WorkspacePaneDimmingSettings
 
   @State private var draggedSurfaceID: String?
+  @State private var isHoveringPane = false
   @State private var hoveredSurfaceID: String?
   @State private var selectedTabFrame: CGRect?
 
@@ -145,25 +159,31 @@ struct WorkspaceGroupView: View {
       if !renderedSurfaceStates.isEmpty {
         let isDragging = model.draggingSurfaceID != nil
 
-        ZStack {
-          ForEach(renderedSurfaceStates) { renderedSurface in
-            renderedSurface.surface.content.body(renderState: renderedSurface.renderState)
-              .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-              .allowsHitTesting(renderedSurface.renderState.isVisible && !isDragging)
-              .opacity(renderedSurface.renderState.isVisible ? 1 : 0)
-              .zIndex(renderedSurface.renderState.isVisible ? 1 : 0)
-          }
+        GeometryReader { geometry in
+          ZStack {
+            ForEach(renderedSurfaceStates) { renderedSurface in
+              renderedSurface.surface.content.body(renderState: renderedSurface.renderState)
+                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+                .clipped()
+                .allowsHitTesting(renderedSurface.renderState.isVisible && !isDragging)
+                .opacity(renderedSurface.renderState.isVisible ? 1 : 0)
+                .zIndex(renderedSurface.renderState.isVisible ? 1 : 0)
+            }
 
-          if isDragging {
-            CanvasDropZoneOverlay(
-              model: model,
-              workspaceID: workspaceID,
-              groupID: group.id
-            )
-            .zIndex(10)
+            if isDragging {
+              CanvasDropZoneOverlay(
+                model: model,
+                workspaceID: workspaceID,
+                groupID: group.id
+              )
+              .zIndex(10)
+            }
           }
+          .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+          .clipped()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .clipped()
       } else {
         Text("Group is empty")
           .foregroundStyle(theme.mutedColor)
@@ -177,6 +197,18 @@ struct WorkspaceGroupView: View {
     )
     .clipShape(Rectangle())
     .contentShape(Rectangle())
+    .opacity(
+      workspacePaneOpacity(
+        isActive: isActive,
+        isHovering: isHoveringPane,
+        settings: dimmingSettings
+      )
+    )
+    .animation(.easeOut(duration: 0.14), value: isActive)
+    .animation(.easeOut(duration: 0.14), value: isHoveringPane)
+    .onHover { hovering in
+      isHoveringPane = hovering
+    }
     .onTapGesture {
       model.selectGroup(group.id, workspaceID: workspaceID)
     }

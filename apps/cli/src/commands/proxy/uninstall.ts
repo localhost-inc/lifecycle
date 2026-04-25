@@ -7,9 +7,13 @@ import { failCommand, jsonFlag } from "../_shared";
 
 function rerunWithSudo(): number {
   const argv = process.argv.slice(1);
-  const result = spawnSync("sudo", ["env", "LIFECYCLE_INSTALL_AS_ROOT=1", process.execPath, ...argv], {
-    stdio: "inherit",
-  });
+  const result = spawnSync(
+    "sudo",
+    ["env", "LIFECYCLE_INSTALL_AS_ROOT=1", process.execPath, ...argv],
+    {
+      stdio: "inherit",
+    },
+  );
   return result.status ?? 1;
 }
 
@@ -21,7 +25,11 @@ export default defineCommand({
   }),
   run: async (input, context) => {
     try {
-      if (!input.dryRun && process.getuid?.() !== 0 && process.env.LIFECYCLE_INSTALL_AS_ROOT !== "1") {
+      if (
+        !input.dryRun &&
+        process.getuid?.() !== 0 &&
+        process.env.LIFECYCLE_INSTALL_AS_ROOT !== "1"
+      ) {
         return rerunWithSudo();
       }
 

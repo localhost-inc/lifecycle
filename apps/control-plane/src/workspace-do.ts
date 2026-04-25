@@ -210,10 +210,12 @@ export class WorkspaceDO extends DurableObject<WorkspaceDOEnv> {
     };
     server.serializeAttachment(attachment);
 
-    server.send(JSON.stringify({
-      type: "connected",
-      state: this.getState(),
-    }));
+    server.send(
+      JSON.stringify({
+        type: "connected",
+        state: this.getState(),
+      }),
+    );
 
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -268,7 +270,12 @@ export class WorkspaceDO extends DurableObject<WorkspaceDOEnv> {
     }
   }
 
-  async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
+  async webSocketClose(
+    ws: WebSocket,
+    code: number,
+    reason: string,
+    _wasClean: boolean,
+  ): Promise<void> {
     ws.close(code, reason);
   }
 
@@ -280,7 +287,9 @@ export class WorkspaceDO extends DurableObject<WorkspaceDOEnv> {
 
   private getState(): WorkspaceStateRow | null {
     const rows = this.ctx.storage.sql
-      .exec("SELECT workspace_id, status, sandbox_id, failure_reason, last_heartbeat_at FROM workspace_state WHERE id = 'singleton'")
+      .exec(
+        "SELECT workspace_id, status, sandbox_id, failure_reason, last_heartbeat_at FROM workspace_state WHERE id = 'singleton'",
+      )
       .toArray() as unknown as WorkspaceStateRow[];
     return rows[0] ?? null;
   }
@@ -309,17 +318,15 @@ export class WorkspaceDO extends DurableObject<WorkspaceDOEnv> {
 
   private listSessions(): SessionRow[] {
     return this.ctx.storage.sql
-      .exec("SELECT id, provider, provider_session_id, title, status, last_message_at, created_at, updated_at FROM session ORDER BY created_at ASC")
+      .exec(
+        "SELECT id, provider, provider_session_id, title, status, last_message_at, created_at, updated_at FROM session ORDER BY created_at ASC",
+      )
       .toArray() as unknown as SessionRow[];
   }
 
   // ── Prompt queue ────────────────────────────────────────────────────────
 
-  private enqueuePrompt(input: {
-    id: string;
-    sessionId?: string;
-    content: string;
-  }): PromptRow {
+  private enqueuePrompt(input: { id: string; sessionId?: string; content: string }): PromptRow {
     this.ctx.storage.sql.exec(
       "INSERT INTO prompt_queue (id, session_id, content) VALUES (?, ?, ?)",
       input.id,
@@ -362,7 +369,10 @@ export class WorkspaceDO extends DurableObject<WorkspaceDOEnv> {
 
   private getEvents(afterId: number): EventLogRow[] {
     return this.ctx.storage.sql
-      .exec("SELECT id, kind, payload, created_at FROM event_log WHERE id > ? ORDER BY id ASC LIMIT 1000", afterId)
+      .exec(
+        "SELECT id, kind, payload, created_at FROM event_log WHERE id > ? ORDER BY id ASC LIMIT 1000",
+        afterId,
+      )
       .toArray() as unknown as EventLogRow[];
   }
 

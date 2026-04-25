@@ -105,14 +105,14 @@ struct WorkspaceExtensionEmptyStateView: View {
   var details: [String] = []
 
   var body: some View {
-    VStack(spacing: 18) {
+    VStack(spacing: 12) {
       WorkspaceExtensionEmptyStateGlyphView(
         symbolName: symbolName,
         tone: tone,
         accentColor: accentColor
       )
 
-      VStack(spacing: 7) {
+      VStack(spacing: 5) {
         Text(title)
           .font(.lc(size: 15, weight: .semibold))
           .foregroundStyle(theme.primaryTextColor)
@@ -127,7 +127,7 @@ struct WorkspaceExtensionEmptyStateView: View {
       }
 
       if !details.isEmpty {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
           ForEach(Array(details.enumerated()), id: \.offset) { _, detail in
             Text(detail)
               .font(.lc(size: 11, weight: .medium, design: .monospaced))
@@ -137,8 +137,8 @@ struct WorkspaceExtensionEmptyStateView: View {
           }
         }
         .frame(maxWidth: 290, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(theme.surfaceRaised.opacity(0.52))
         .overlay {
           RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -146,8 +146,8 @@ struct WorkspaceExtensionEmptyStateView: View {
         }
       }
     }
-    .padding(.horizontal, 24)
-    .padding(.vertical, 32)
+    .padding(.horizontal, 12)
+    .padding(.vertical, 18)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 

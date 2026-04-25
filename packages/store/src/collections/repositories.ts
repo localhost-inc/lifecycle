@@ -1,77 +1,47 @@
-import type { SqlDriver } from "@lifecycle/db";
-import type { RepositoryRecord } from "@lifecycle/contracts";
-import {
-  listRepositories as listRepositoryRows,
-  getRepositoryById as getRepositoryByIdRow,
-  insertRepositoryStatement,
-  updateRepositoryStatement,
-  deleteRepositoryStatement,
-  type RepositoryRow,
-} from "@lifecycle/db/queries";
-import { createSqlCollection, type SqlCollection } from "../collection";
+import { createBridgeCollection, type BridgeCollection, type BridgeTransport } from "../collection";
 
-function rowToRecord(row: RepositoryRow): RepositoryRecord {
-  return {
-    id: row.id,
-    path: row.path,
-    name: row.name,
-    slug: row.slug,
-    manifestPath: row.manifest_path,
-    manifestValid: row.manifest_valid === 1,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
+export interface BridgeRepositoryWorkspaceSummary {
+  id: string;
+  name: string;
+  slug: string;
+  host: "local" | "docker" | "remote" | "cloud";
+  status: string;
+  ref?: string;
+  path?: string;
 }
 
-function recordToRow(record: RepositoryRecord): RepositoryRow {
-  return {
-    id: record.id,
-    path: record.path,
-    name: record.name,
-    slug: record.slug,
-    manifest_path: record.manifestPath,
-    manifest_valid: record.manifestValid ? 1 : 0,
-    created_at: record.createdAt,
-    updated_at: record.updatedAt,
-  };
+export interface BridgeRepositorySummary {
+  id: string;
+  name: string;
+  slug: string;
+  path: string;
+  source: "local";
+  workspaces: BridgeRepositoryWorkspaceSummary[];
 }
 
-export async function selectAllRepositories(driver: SqlDriver): Promise<RepositoryRecord[]> {
-  const rows = await listRepositoryRows(driver);
-  return rows.map(rowToRecord);
+interface BridgeRepositoriesResponse {
+  repositories: BridgeRepositorySummary[];
 }
 
-export async function selectRepositoryById(
-  driver: SqlDriver,
-  repositoryId: string,
-): Promise<RepositoryRecord | undefined> {
-  const row = await getRepositoryByIdRow(driver, repositoryId);
-  return row ? rowToRecord(row) : undefined;
+export async function fetchRepositories(
+  bridge: BridgeTransport,
+): Promise<BridgeRepositorySummary[]> {
+  const response = await bridge.request<BridgeRepositoriesResponse>({ path: "/repos" });
+  return response.repositories;
 }
 
-export function createRepositoryCollection(driver: SqlDriver): SqlCollection<RepositoryRecord> {
-  return createSqlCollection<RepositoryRecord>({
+export function createRepositoryCollection(
+  bridge: BridgeTransport,
+): BridgeCollection<BridgeRepositorySummary> {
+  return createBridgeCollection<BridgeRepositorySummary>({
     id: "repositories",
-    driver,
-    loadFn: selectAllRepositories,
+    load: () => fetchRepositories(bridge),
     getKey: (repository) => repository.id,
-    onInsert: async ({ transaction }) => {
-      await driver.transaction(
-        transaction.mutations.map((mutation) =>
-          insertRepositoryStatement(recordToRow(mutation.modified)),
-        ),
-      );
-    },
-    onUpdate: async ({ transaction }) => {
-      await driver.transaction(
-        transaction.mutations.map((mutation) =>
-          updateRepositoryStatement(recordToRow(mutation.modified)),
-        ),
-      );
-    },
     onDelete: async ({ transaction }) => {
-      await driver.transaction(
-        transaction.mutations.map((mutation) => deleteRepositoryStatement(String(mutation.key))),
+      await Promise.all(
+        transaction.mutations.map((mutation) =>
+          bridge.request<void>({ method: "DELETE", path: `/repos/${String(mutation.key)}` }),
+        ),
       );
     },
   });

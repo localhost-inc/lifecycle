@@ -39,7 +39,11 @@ describe("bridge settings", () => {
 
     expect(result.settings_path).toBe(join(root, "settings.json"));
     expect(result.settings).toEqual({
-      appearance: { theme: "monokai" },
+      appearance: {
+        theme: "monokai",
+        dimInactivePanes: true,
+        inactivePaneOpacity: 0.52,
+      },
       providers: {
         claude: {
           loginMethod: "claudeai",
@@ -100,7 +104,11 @@ describe("bridge settings", () => {
 
     const result = await updateBridgeSettings(
       {
-        appearance: { theme: "rose-pine" },
+        appearance: {
+          theme: "rose-pine",
+          dimInactivePanes: false,
+          inactivePaneOpacity: 0.41,
+        },
       },
       {
         HOME: root,
@@ -109,11 +117,17 @@ describe("bridge settings", () => {
     );
 
     expect(result.settings.appearance.theme).toBe("rose-pine");
+    expect(result.settings.appearance.dimInactivePanes).toBe(false);
+    expect(result.settings.appearance.inactivePaneOpacity).toBe(0.41);
 
     const persisted = JSON.parse(await readFile(settingsPath, "utf8")) as Record<string, unknown>;
     expect(persisted.customUserField).toBe(42);
     expect(persisted.theme).toBeUndefined();
-    expect(persisted.appearance).toEqual({ theme: "rose-pine" });
+    expect(persisted.appearance).toEqual({
+      theme: "rose-pine",
+      dimInactivePanes: false,
+      inactivePaneOpacity: 0.41,
+    });
   });
 
   test("updates provider auth settings while preserving unknown fields", async () => {

@@ -101,6 +101,10 @@ struct WorkspaceExtensionSidebarState {
   var activeExtension: ResolvedWorkspaceExtension {
     extensions.first(where: { $0.kind == activeKind }) ?? extensions[0]
   }
+
+  var visibleExtensions: [ResolvedWorkspaceExtension] {
+    extensions
+  }
 }
 
 @MainActor

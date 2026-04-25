@@ -29,9 +29,7 @@ const jwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 function getJWKS(clientId: string): ReturnType<typeof createRemoteJWKSet> {
   let jwks = jwksCache.get(clientId);
   if (!jwks) {
-    jwks = createRemoteJWKSet(
-      new URL(`https://api.workos.com/sso/jwks/${clientId}`),
-    );
+    jwks = createRemoteJWKSet(new URL(`https://api.workos.com/sso/jwks/${clientId}`));
     jwksCache.set(clientId, jwks);
   }
   return jwks;

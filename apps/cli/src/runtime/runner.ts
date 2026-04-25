@@ -310,7 +310,8 @@ export async function runCli(options: RunCliOptions): Promise<number> {
   const source = await createCommandSource(options);
   const namespaceDepth = resolveNamespaceDepth(segments, source.index);
   const commandMatch = await resolveCommand(segments, source);
-  const shouldRenderNamespace = namespaceDepth >= 0 && (!commandMatch || namespaceDepth >= commandMatch.depth);
+  const shouldRenderNamespace =
+    namespaceDepth >= 0 && (!commandMatch || namespaceDepth >= commandMatch.depth);
 
   if (shouldRenderNamespace) {
     const namespacePath = namespaceDepth === 0 ? null : segments.slice(0, namespaceDepth).join(" ");

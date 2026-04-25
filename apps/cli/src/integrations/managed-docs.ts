@@ -61,11 +61,15 @@ export function resolveManagedDocumentTargets(options: {
   }));
 }
 
-export function checkManagedDocumentTarget(target: ManagedDocumentTarget): ManagedDocumentCheckStatus {
+export function checkManagedDocumentTarget(
+  target: ManagedDocumentTarget,
+): ManagedDocumentCheckStatus {
   return evaluateManagedDocumentTarget(target).status;
 }
 
-export function installManagedDocumentTarget(target: ManagedDocumentTarget): ManagedDocumentInstallStatus {
+export function installManagedDocumentTarget(
+  target: ManagedDocumentTarget,
+): ManagedDocumentInstallStatus {
   const snapshot = evaluateManagedDocumentTarget(target);
   if (!snapshot.nextContent) {
     return "unchanged";

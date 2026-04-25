@@ -127,6 +127,8 @@ process_command() {
 is_lifecycle_bridge_command() {
   local command="$1"
   [[ "$command" == *"lifecycle bridge start"* ]] ||
+    [[ "$command" == *"/src/index.ts bridge start"* ]] ||
+    [[ "$command" == *"\\src\\index.ts bridge start"* ]] ||
     [[ "$command" == *"/src/bridge/app.ts"* ]] ||
     [[ "$command" == *"\\src\\bridge\\app.ts"* ]]
 }
@@ -420,7 +422,7 @@ run_monorepo() {
   echo "Logs: $DEV_LOG_DIR"
 
   start_service "bridge" "lifecycle bridge:" \
-    "cd \"$REPO_ROOT/apps/cli\" && exec env LIFECYCLE_DEV_SUPERVISOR=monorepo ./scripts/bridge-dev.sh"
+    "cd \"$REPO_ROOT/apps/cli\" && exec env LIFECYCLE_DEV_SUPERVISOR=monorepo LIFECYCLE_DEV_SUPERVISOR_PID=$$ ./scripts/bridge-dev.sh"
   launch_service_wrapper 0
 
   start_service "control-plane" "@lifecycle/control-plane:dev:" \

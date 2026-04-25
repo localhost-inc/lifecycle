@@ -1543,58 +1543,13 @@ describe("lifecycle cli", () => {
     const repoPath = await mkdtemp(join(tmpdir(), "lifecycle-cli-install-status-"));
 
     try {
-      await withHttpBridge(async ({ method, pathname, search }) => {
-        expect(method).toBe("GET");
-        expect(pathname).toBe("/install");
-        expect(search.get("document_scope")).toBe("project");
-        expect(search.get("path")).toBe(repoPath);
-
-        return {
-          document_scope: "project",
-          ready: false,
-          repo_path: repoPath,
-          steps: [
-            {
-              detail: "Routes http://*.lifecycle.localhost/ to the Lifecycle bridge",
-              id: "proxy",
-              label: "Local preview proxy",
-              path: null,
-              requires_elevation: true,
-              scope: "machine",
-              selected_by_default: true,
-              status: "missing",
-              targets: [],
-            },
-          ],
-        };
-      }, async () => {
-        const code = await main(["install", "--path", repoPath, "--json"], sink.io);
-
-        expect(code).toBe(1);
-        expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
-          document_scope: "project",
-          ready: false,
-          repo_path: repoPath,
-          steps: [{ id: "proxy", status: "missing" }],
-        });
-        expect(sink.stderr).toEqual([]);
-      });
-    } finally {
-      await rm(repoPath, { force: true, recursive: true });
-    }
-  });
-
-  test("applies the default bridge-backed install steps in json mode", async () => {
-    const sink = createIo();
-    const repoPath = await mkdtemp(join(tmpdir(), "lifecycle-cli-install-apply-"));
-    const requests: string[] = [];
-
-    try {
-      await withHttpBridge(async ({ body, method, pathname, search }) => {
-        requests.push(`${method} ${pathname}`);
-        if (method === "GET" && pathname === "/install") {
+      await withHttpBridge(
+        async ({ method, pathname, search }) => {
+          expect(method).toBe("GET");
+          expect(pathname).toBe("/install");
           expect(search.get("document_scope")).toBe("project");
           expect(search.get("path")).toBe(repoPath);
+
           return {
             document_scope: "project",
             ready: false,
@@ -1611,53 +1566,122 @@ describe("lifecycle cli", () => {
                 status: "missing",
                 targets: [],
               },
+            ],
+          };
+        },
+        async () => {
+          const code = await main(["install", "--path", repoPath, "--json"], sink.io);
+
+          expect(code).toBe(1);
+          expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
+            document_scope: "project",
+            ready: false,
+            repo_path: repoPath,
+            steps: [{ id: "proxy", status: "missing" }],
+          });
+          expect(sink.stderr).toEqual([]);
+        },
+      );
+    } finally {
+      await rm(repoPath, { force: true, recursive: true });
+    }
+  });
+
+  test("applies the default bridge-backed install steps in json mode", async () => {
+    const sink = createIo();
+    const repoPath = await mkdtemp(join(tmpdir(), "lifecycle-cli-install-apply-"));
+    const requests: string[] = [];
+
+    try {
+      await withHttpBridge(
+        async ({ body, method, pathname, search }) => {
+          requests.push(`${method} ${pathname}`);
+          if (method === "GET" && pathname === "/install") {
+            expect(search.get("document_scope")).toBe("project");
+            expect(search.get("path")).toBe(repoPath);
+            return {
+              document_scope: "project",
+              ready: false,
+              repo_path: repoPath,
+              steps: [
+                {
+                  detail: "Routes http://*.lifecycle.localhost/ to the Lifecycle bridge",
+                  id: "proxy",
+                  label: "Local preview proxy",
+                  path: null,
+                  requires_elevation: true,
+                  scope: "machine",
+                  selected_by_default: true,
+                  status: "missing",
+                  targets: [],
+                },
+                {
+                  detail: "Lifecycle bridge-first guidance block for this repository",
+                  id: "agents-md",
+                  label: "AGENTS.md managed block",
+                  path: join(repoPath, "AGENTS.md"),
+                  requires_elevation: false,
+                  scope: "repository",
+                  selected_by_default: true,
+                  status: "missing",
+                  targets: [],
+                },
+              ],
+            };
+          }
+
+          expect(method).toBe("POST");
+          expect(pathname).toBe("/install/apply");
+          expect(body).toMatchObject({
+            document_scope: "project",
+            path: repoPath,
+            step_ids: ["proxy", "agents-md"],
+          });
+          return {
+            document_scope: "project",
+            ready: false,
+            repo_path: repoPath,
+            steps: [
               {
-                detail: "Lifecycle bridge-first guidance block for this repository",
+                actions: [],
+                detail: null,
+                id: "proxy",
+                label: "Local preview proxy",
+                path: null,
+                scope: "machine",
+                status: "requires_elevation",
+                targets: [],
+              },
+              {
+                actions: [],
+                detail: null,
                 id: "agents-md",
                 label: "AGENTS.md managed block",
                 path: join(repoPath, "AGENTS.md"),
-                requires_elevation: false,
                 scope: "repository",
-                selected_by_default: true,
-                status: "missing",
+                status: "applied",
                 targets: [],
               },
             ],
           };
-        }
+        },
+        async () => {
+          const code = await main(["install", "--path", repoPath, "--yes", "--json"], sink.io);
 
-        expect(method).toBe("POST");
-        expect(pathname).toBe("/install/apply");
-        expect(body).toMatchObject({
-          document_scope: "project",
-          path: repoPath,
-          step_ids: ["proxy", "agents-md"],
-        });
-        return {
-          document_scope: "project",
-          ready: false,
-          repo_path: repoPath,
-          steps: [
-            { actions: [], detail: null, id: "proxy", label: "Local preview proxy", path: null, scope: "machine", status: "requires_elevation", targets: [] },
-            { actions: [], detail: null, id: "agents-md", label: "AGENTS.md managed block", path: join(repoPath, "AGENTS.md"), scope: "repository", status: "applied", targets: [] },
-          ],
-        };
-      }, async () => {
-        const code = await main(["install", "--path", repoPath, "--yes", "--json"], sink.io);
-
-        expect(code).toBe(1);
-        expect(requests).toEqual(["GET /install", "POST /install/apply"]);
-        expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
-          document_scope: "project",
-          ready: false,
-          repo_path: repoPath,
-          steps: [
-            { id: "proxy", status: "requires_elevation" },
-            { id: "agents-md", status: "applied" },
-          ],
-        });
-        expect(sink.stderr).toEqual([]);
-      });
+          expect(code).toBe(1);
+          expect(requests).toEqual(["GET /install", "POST /install/apply"]);
+          expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
+            document_scope: "project",
+            ready: false,
+            repo_path: repoPath,
+            steps: [
+              { id: "proxy", status: "requires_elevation" },
+              { id: "agents-md", status: "applied" },
+            ],
+          });
+          expect(sink.stderr).toEqual([]);
+        },
+      );
     } finally {
       await rm(repoPath, { force: true, recursive: true });
     }

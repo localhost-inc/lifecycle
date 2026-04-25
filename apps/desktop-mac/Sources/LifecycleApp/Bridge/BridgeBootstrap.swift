@@ -183,8 +183,20 @@ func bridgeURL(fromRegistrationData data: Data) -> URL? {
 
 struct HealthPayload: Decodable {
   let healthy: Bool
+  let repoRoot: String?
 }
 
 func bridgeHealthSupportsDesktopRuntime(_ payload: HealthPayload) -> Bool {
-  payload.healthy
+  guard payload.healthy else { return false }
+
+  let environment = LifecycleEnvironment()
+  guard environment.string(for: LifecycleEnvironmentKey.dev) == "1" else {
+    return true
+  }
+
+  guard let expectedRepoRoot = environment.string(for: LifecycleEnvironmentKey.repoRoot) else {
+    return true
+  }
+
+  return payload.repoRoot == expectedRepoRoot
 }

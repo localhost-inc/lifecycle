@@ -347,28 +347,13 @@ export const routeTree = defineRouteTree([
 
 export const app = new Hono()
   .use("*", wrapMiddleware(middleware0))
-  .post(
-    "/organizations/:orgId/cloud-accounts",
-    routeHandler(route0, "/organizations/:orgId/cloud-accounts"),
-  )
+  .post("/organizations/:orgId/cloud-accounts", routeHandler(route0, "/organizations/:orgId/cloud-accounts"))
   .get("/organizations", routeHandler(route1, "/organizations"))
   .post("/organizations", routeHandler(route2, "/organizations"))
-  .delete(
-    "/workspaces/:id/terminals/:terminalId/connections/:connectionId",
-    routeHandler(route3, "/workspaces/:id/terminals/:terminalId/connections/:connectionId"),
-  )
-  .post(
-    "/workspaces/:id/terminals/:terminalId/connections",
-    routeHandler(route4, "/workspaces/:id/terminals/:terminalId/connections"),
-  )
-  .delete(
-    "/workspaces/:id/terminals/:terminalId",
-    routeHandler(route5, "/workspaces/:id/terminals/:terminalId"),
-  )
-  .get(
-    "/workspaces/:id/terminals/:terminalId",
-    routeHandler(route6, "/workspaces/:id/terminals/:terminalId"),
-  )
+  .delete("/workspaces/:id/terminals/:terminalId/connections/:connectionId", routeHandler(route3, "/workspaces/:id/terminals/:terminalId/connections/:connectionId"))
+  .post("/workspaces/:id/terminals/:terminalId/connections", routeHandler(route4, "/workspaces/:id/terminals/:terminalId/connections"))
+  .delete("/workspaces/:id/terminals/:terminalId", routeHandler(route5, "/workspaces/:id/terminals/:terminalId"))
+  .get("/workspaces/:id/terminals/:terminalId", routeHandler(route6, "/workspaces/:id/terminals/:terminalId"))
   .get("/workspaces/:id/terminals", routeHandler(route7, "/workspaces/:id/terminals"))
   .post("/workspaces/:id/terminals", routeHandler(route8, "/workspaces/:id/terminals"))
   .get("/workspaces/:id/activity", routeHandler(route9, "/workspaces/:id/activity"))
@@ -396,10 +381,7 @@ export const app = new Hono()
   .put("/settings", routeHandler(route31, "/settings"))
   .post("/install/apply", routeHandler(route32, "/install/apply"))
   .get("/install", routeHandler(route33, "/install"))
-  .post(
-    "/agents/:agentId/approvals/:approvalId",
-    routeHandler(route34, "/agents/:agentId/approvals/:approvalId"),
-  )
+  .post("/agents/:agentId/approvals/:approvalId", routeHandler(route34, "/agents/:agentId/approvals/:approvalId"))
   .post("/agents/:agentId/cancel", routeHandler(route35, "/agents/:agentId/cancel"))
   .post("/agents/:agentId/turns", routeHandler(route36, "/agents/:agentId/turns"))
   .get("/agents/:agentId", routeHandler(route37, "/agents/:agentId"))
@@ -412,6 +394,7 @@ export const app = new Hono()
   .post("/auth/device-code", routeHandler(route44, "/auth/device-code"))
   .post("/auth/refresh", routeHandler(route45, "/auth/refresh"))
   .post("/auth/token", routeHandler(route46, "/auth/token"))
-  .get("/auth/me", routeHandler(route47, "/auth/me"));
+  .get("/auth/me", routeHandler(route47, "/auth/me"))
+;
 
 export type AppType = typeof app;

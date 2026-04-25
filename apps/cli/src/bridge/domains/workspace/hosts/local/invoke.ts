@@ -32,7 +32,10 @@ export async function invokeLocalWorkspaceCommand(
     case "resolve_lifecycle_root_path":
       return resolveLifecycleRootPath();
     case "remove_git_worktree":
-      removeGitWorktree(requireStringArg(args, "repoPath"), requireStringArg(args, "workspaceRoot"));
+      removeGitWorktree(
+        requireStringArg(args, "repoPath"),
+        requireStringArg(args, "workspaceRoot"),
+      );
       return undefined;
     case "git_branch_has_upstream":
       return gitBranchHasUpstream(
@@ -250,17 +253,20 @@ function listGitLog(repoPath: string, limit: number): GitLogEntry[] {
       return [];
     }
 
-    return output.split(/\r?\n/).filter(Boolean).map((line) => {
-      const [sha, shortSha, message, author, email, timestamp] = line.split("\u001f");
-      return {
-        sha: sha ?? "",
-        shortSha: shortSha ?? "",
-        message: message ?? "",
-        author: author ?? "",
-        email: email ?? "",
-        timestamp: timestamp ?? "",
-      };
-    });
+    return output
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => {
+        const [sha, shortSha, message, author, email, timestamp] = line.split("\u001f");
+        return {
+          sha: sha ?? "",
+          shortSha: shortSha ?? "",
+          message: message ?? "",
+          author: author ?? "",
+          email: email ?? "",
+          timestamp: timestamp ?? "",
+        };
+      });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("does not have any commits yet")) {
@@ -476,11 +482,7 @@ function renameGitWorktreeBranch(input: {
 }
 
 function copyLocalConfigFiles(repoPath: string, workspaceRoot: string): void {
-  const dotfiles = [
-    ".env",
-    ".env.local",
-    ".mise.toml",
-  ];
+  const dotfiles = [".env", ".env.local", ".mise.toml"];
 
   for (const name of dotfiles) {
     const src = join(repoPath, name);

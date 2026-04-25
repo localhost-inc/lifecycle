@@ -17,6 +17,19 @@ struct AppTerminalThemeContext: Equatable, Sendable {
 
 struct AppAppearanceSettings: Equatable, Sendable {
   var theme: AppThemePreference = .dark
+  var dimInactivePanes = true
+  var inactivePaneOpacity: Double = 0.52
+}
+
+struct WorkspacePaneDimmingSettings: Equatable, Sendable {
+  var isEnabled = true
+  var inactiveOpacity: Double = 0.52
+
+  static let `default` = WorkspacePaneDimmingSettings()
+}
+
+func clampedInactivePaneOpacity(_ opacity: Double) -> Double {
+  min(max(opacity, 0.2), 1)
 }
 
 enum AppClaudeLoginMethod: String, CaseIterable, Equatable, Identifiable, Sendable {
@@ -315,7 +328,11 @@ struct AppSettingsSnapshot: Equatable, Sendable {
     developer: AppDeveloperSettings = AppDeveloperSettings()
   ) {
     appearance = AppAppearanceSettings(
-      theme: AppThemePreference(rawValue: bridgeSettings.appearance.theme) ?? .dark
+      theme: AppThemePreference(rawValue: bridgeSettings.appearance.theme) ?? .dark,
+      dimInactivePanes: bridgeSettings.appearance.dimInactivePanes ?? true,
+      inactivePaneOpacity: clampedInactivePaneOpacity(
+        bridgeSettings.appearance.inactivePaneOpacity ?? 0.52
+      )
     )
     providers = AppProviderSettings(
       claude: AppClaudeProviderSettings(
@@ -397,6 +414,13 @@ final class AppSettingsStore: ObservableObject {
 
   var theme: AppTheme { resolvedTheme.theme }
 
+  var workspacePaneDimmingSettings: WorkspacePaneDimmingSettings {
+    WorkspacePaneDimmingSettings(
+      isEnabled: settings.appearance.dimInactivePanes,
+      inactiveOpacity: settings.appearance.inactivePaneOpacity
+    )
+  }
+
   var preferredColorScheme: ColorScheme? {
     switch preference {
     case .system:
@@ -443,6 +467,39 @@ final class AppSettingsStore: ObservableObject {
       ]
     ) { nextSettings in
       nextSettings.appearance.theme = preference
+    }
+  }
+
+  func setDimInactivePanes(_ isEnabled: Bool) {
+    guard settings.appearance.dimInactivePanes != isEnabled else {
+      return
+    }
+
+    updateSettings(
+      bridgePayload: [
+        "appearance": [
+          "dimInactivePanes": isEnabled
+        ]
+      ]
+    ) { nextSettings in
+      nextSettings.appearance.dimInactivePanes = isEnabled
+    }
+  }
+
+  func setInactivePaneOpacity(_ opacity: Double) {
+    let clampedOpacity = clampedInactivePaneOpacity(opacity)
+    guard settings.appearance.inactivePaneOpacity != clampedOpacity else {
+      return
+    }
+
+    updateSettings(
+      bridgePayload: [
+        "appearance": [
+          "inactivePaneOpacity": clampedOpacity
+        ]
+      ]
+    ) { nextSettings in
+      nextSettings.appearance.inactivePaneOpacity = clampedOpacity
     }
   }
 
@@ -1168,6 +1225,8 @@ enum LifecycleSettingsFile {
     var nextObject = current.object
     var appearanceObject = (nextObject["appearance"] as? [String: Any]) ?? [:]
     appearanceObject["theme"] = settings.appearance.theme.rawValue
+    appearanceObject["dimInactivePanes"] = settings.appearance.dimInactivePanes
+    appearanceObject["inactivePaneOpacity"] = settings.appearance.inactivePaneOpacity
     nextObject["appearance"] = appearanceObject
     nextObject.removeValue(forKey: "theme")
 
@@ -1257,6 +1316,10 @@ enum LifecycleSettingsFile {
     let theme = AppThemePreference(
       rawValue: (appearanceObject?["theme"] as? String) ?? (object["theme"] as? String) ?? ""
     ) ?? .dark
+    let dimInactivePanes = (appearanceObject?["dimInactivePanes"] as? Bool) ?? true
+    let inactivePaneOpacity = clampedInactivePaneOpacity(
+      (appearanceObject?["inactivePaneOpacity"] as? NSNumber)?.doubleValue ?? 0.52
+    )
     let commandProgram = (commandObject?["program"] as? String) ?? (shellObject?["program"] as? String)
     let claudeLoginMethod = AppClaudeLoginMethod(
       rawValue: claudeObject?["loginMethod"] as? String ?? ""
@@ -1273,7 +1336,11 @@ enum LifecycleSettingsFile {
     let profiles = appTerminalProfiles(from: profileObjects)
 
     return AppSettingsSnapshot(
-      appearance: AppAppearanceSettings(theme: theme),
+      appearance: AppAppearanceSettings(
+        theme: theme,
+        dimInactivePanes: dimInactivePanes,
+        inactivePaneOpacity: inactivePaneOpacity
+      ),
       providers: AppProviderSettings(
         claude: AppClaudeProviderSettings(loginMethod: claudeLoginMethod)
       ),

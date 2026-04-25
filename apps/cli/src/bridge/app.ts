@@ -19,7 +19,10 @@ function resolveRequestedPort(argv: string[], env: NodeJS.ProcessEnv): number | 
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-export async function main(argv: string[] = Bun.argv.slice(2), env: NodeJS.ProcessEnv = process.env) {
+export async function main(
+  argv: string[] = Bun.argv.slice(2),
+  env: NodeJS.ProcessEnv = process.env,
+) {
   const requestedPort = resolveRequestedPort(argv, env);
   const processHandle = await startBridgeServer(
     requestedPort === undefined ? {} : { port: requestedPort },

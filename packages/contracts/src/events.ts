@@ -392,11 +392,13 @@ export type LifecycleEvent =
       workspaceId: string;
       agentId: string;
       turnId: string;
-      usage?: {
-        inputTokens: number;
-        outputTokens: number;
-        cacheReadTokens?: number | undefined;
-      } | undefined;
+      usage?:
+        | {
+            inputTokens: number;
+            outputTokens: number;
+            cacheReadTokens?: number | undefined;
+          }
+        | undefined;
       costUsd?: number | undefined;
     }
   | {

@@ -14,7 +14,7 @@ struct DebugExtensionView: View {
         terminalsSection
         canvasSection
       }
-      .padding(12)
+      .padding(8)
     }
     .scrollIndicators(.automatic)
   }
@@ -179,15 +179,15 @@ struct DebugExtensionView: View {
       Text(title.uppercased())
         .font(.lc(size: 10, weight: .bold, design: .monospaced))
         .foregroundStyle(theme.mutedColor.opacity(0.7))
-        .padding(.horizontal, 12)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 10)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
 
       VStack(alignment: .leading, spacing: 0) {
         content()
       }
-      .padding(.horizontal, 12)
-      .padding(.bottom, 10)
+      .padding(.horizontal, 10)
+      .padding(.bottom, 8)
     }
     .background(
       RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -235,7 +235,7 @@ struct DebugExtensionView: View {
 
       Spacer(minLength: 0)
     }
-    .padding(.vertical, 3)
+    .padding(.vertical, 2)
   }
 
   // MARK: - Issues Collection

@@ -3368,7 +3368,9 @@
         "properties": {
           "appearance": {
             "default": {
-              "theme": "dark"
+              "theme": "dark",
+              "dimInactivePanes": true,
+              "inactivePaneOpacity": 0.52
             },
             "type": "object",
             "properties": {
@@ -3387,10 +3389,22 @@
                   "dracula",
                   "rose-pine"
                 ]
+              },
+              "dimInactivePanes": {
+                "default": true,
+                "type": "boolean"
+              },
+              "inactivePaneOpacity": {
+                "default": 0.52,
+                "type": "number",
+                "minimum": 0.2,
+                "maximum": 1
               }
             },
             "required": [
-              "theme"
+              "theme",
+              "dimInactivePanes",
+              "inactivePaneOpacity"
             ],
             "additionalProperties": false
           },
@@ -3861,6 +3875,16 @@
                   "dracula",
                   "rose-pine"
                 ]
+              },
+              "dimInactivePanes": {
+                "default": true,
+                "type": "boolean"
+              },
+              "inactivePaneOpacity": {
+                "default": 0.52,
+                "type": "number",
+                "minimum": 0.2,
+                "maximum": 1
               }
             },
             "additionalProperties": false
@@ -4577,11 +4601,38 @@
           },
           "healthy": {
             "type": "boolean"
+          },
+          "pid": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "repoRoot": {
+            "nullable": true,
+            "type": "string"
+          },
+          "dev": {
+            "type": "boolean"
+          },
+          "supervisorPid": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "gitSha": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
           "ok",
-          "healthy"
+          "healthy",
+          "pid",
+          "repoRoot",
+          "dev",
+          "supervisorPid",
+          "gitSha"
         ],
         "additionalProperties": false
       },

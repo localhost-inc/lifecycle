@@ -1,6 +1,9 @@
 import { defineCommand } from "@localhost-inc/cmd";
 import { ensureBridge } from "@/bridge";
-import type { WorkspaceActivitySummary, WorkspaceActivityTerminalRecord } from "@lifecycle/contracts";
+import type {
+  WorkspaceActivitySummary,
+  WorkspaceActivityTerminalRecord,
+} from "@lifecycle/contracts";
 import { z } from "zod";
 
 import { failCommand, jsonFlag, resolveWorkspaceId, workspaceIdFlag } from "../../_shared";

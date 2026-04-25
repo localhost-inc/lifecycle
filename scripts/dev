@@ -41,6 +41,21 @@ service_status() {
       return
     fi
   fi
+  if [[ "$name" == "bridge" ]]; then
+    local bridge_port="${LIFECYCLE_BRIDGE_PORT:-52300}"
+    local listener_pid=""
+    listener_pid="$(lsof -tiTCP:"$bridge_port" -sTCP:LISTEN 2>/dev/null | tr '\n' ' ' | sed -e 's/[[:space:]]*$//' || true)"
+    if [[ -n "$listener_pid" ]]; then
+      local health=""
+      health="$(curl -fsS "http://127.0.0.1:$bridge_port/health" 2>/dev/null || true)"
+      if [[ -n "$health" ]]; then
+        printf '%-16s external pid=%s  health=%s  log=%s\n' "$name" "$listener_pid" "$health" "$(service_log_file "$name")"
+      else
+        printf '%-16s foreign  pid=%s  port=%s  log=%s\n' "$name" "$listener_pid" "$bridge_port" "$(service_log_file "$name")"
+      fi
+      return
+    fi
+  fi
   printf '%-16s stopped  pid=-      log=%s\n' "$name" "$(service_log_file "$name")"
 }
 
@@ -82,6 +97,8 @@ process_command() {
 is_lifecycle_bridge_command() {
   local command="$1"
   [[ "$command" == *"lifecycle bridge start"* ]] ||
+    [[ "$command" == *"/src/index.ts bridge start"* ]] ||
+    [[ "$command" == *"\\src\\index.ts bridge start"* ]] ||
     [[ "$command" == *"/src/bridge/app.ts"* ]] ||
     [[ "$command" == *"\\src\\bridge\\app.ts"* ]]
 }

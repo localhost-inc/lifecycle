@@ -496,6 +496,8 @@ struct BridgeSettings: Decodable, Equatable {
 
 struct BridgeAppearanceSettings: Decodable, Equatable {
   let theme: String
+  let dimInactivePanes: Bool?
+  let inactivePaneOpacity: Double?
 }
 
 struct BridgeProviderSettings: Decodable, Equatable {
@@ -836,7 +838,8 @@ func bridgeTerminalCommandText(_ connection: BridgeTerminalConnection) -> String
 
 private func bridgeSpawnShellCommand(_ transport: BridgeTerminalSpawnTransport) -> String? {
   let prepareCommand = transport.prepare?.shellCommand
-  let execCommand = transport.spec.map { "exec \($0.shellCommand)" }
+  let disableAlternateScrollCommand = "printf '\\033[?1007l'"
+  let execCommand = transport.spec.map { "\(disableAlternateScrollCommand) && exec \($0.shellCommand)" }
 
   let script: String?
   switch (prepareCommand, execCommand) {

@@ -42,15 +42,20 @@ struct CanvasTiledSplitView: View {
   let canvasState: CanvasState
   let split: CanvasTiledLayoutSplit
   let activeGroupID: String?
+  let dimmingSettings: WorkspacePaneDimmingSettings
 
   @State private var dragStartRatio: Double?
+  @State private var liveRatio: Double?
 
   var body: some View {
     GeometryReader { geometry in
       let isRow = split.direction == .row
       let totalLength = isRow ? geometry.size.width : geometry.size.height
       let layoutLength = max(totalLength, 1)
-      let metrics = canvasTiledSplitLayoutMetrics(ratio: split.ratio, totalLength: layoutLength)
+      let metrics = canvasTiledSplitLayoutMetrics(
+        ratio: liveRatio ?? split.ratio,
+        totalLength: layoutLength
+      )
 
       Group {
         if isRow {
@@ -60,7 +65,8 @@ struct CanvasTiledSplitView: View {
               workspaceID: workspaceID,
               canvasState: canvasState,
               layoutNode: split.first,
-              activeGroupID: activeGroupID
+              activeGroupID: activeGroupID,
+              dimmingSettings: dimmingSettings
             )
             .frame(width: metrics.firstLength)
 
@@ -69,7 +75,8 @@ struct CanvasTiledSplitView: View {
               workspaceID: workspaceID,
               canvasState: canvasState,
               layoutNode: split.second,
-              activeGroupID: activeGroupID
+              activeGroupID: activeGroupID,
+              dimmingSettings: dimmingSettings
             )
             .frame(width: metrics.secondLength)
           }
@@ -85,7 +92,8 @@ struct CanvasTiledSplitView: View {
               workspaceID: workspaceID,
               canvasState: canvasState,
               layoutNode: split.first,
-              activeGroupID: activeGroupID
+              activeGroupID: activeGroupID,
+              dimmingSettings: dimmingSettings
             )
             .frame(height: metrics.firstLength)
 
@@ -94,7 +102,8 @@ struct CanvasTiledSplitView: View {
               workspaceID: workspaceID,
               canvasState: canvasState,
               layoutNode: split.second,
-              activeGroupID: activeGroupID
+              activeGroupID: activeGroupID,
+              dimmingSettings: dimmingSettings
             )
             .frame(height: metrics.secondLength)
           }
@@ -105,6 +114,10 @@ struct CanvasTiledSplitView: View {
           }
         }
       }
+    }
+    .onChange(of: split.id) { _ in
+      dragStartRatio = nil
+      liveRatio = nil
     }
   }
 
@@ -133,14 +146,18 @@ struct CanvasTiledSplitView: View {
 
           let delta = split.direction == .row ? value.translation.width : value.translation.height
           let nextRatio = (CGFloat(dragStartRatio) * availableLength + delta) / availableLength
-          model.setSplitRatio(
-            split.id,
-            ratio: clampedSplitRatio(Double(nextRatio), availableLength: availableLength),
-            workspaceID: workspaceID
-          )
+          liveRatio = clampedSplitRatio(Double(nextRatio), availableLength: availableLength)
         }
         .onEnded { _ in
+          if let liveRatio {
+            model.setSplitRatio(
+              split.id,
+              ratio: liveRatio,
+              workspaceID: workspaceID
+            )
+          }
           dragStartRatio = nil
+          liveRatio = nil
         }
     )
   }

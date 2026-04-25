@@ -85,7 +85,13 @@ export interface InstallRuntimeOptions {
   platform?: NodeJS.Platform;
 }
 
-const INSTALL_STEP_ORDER: InstallStepId[] = ["proxy", "claude-code", "codex", "agents-md", "claude-md"];
+const INSTALL_STEP_ORDER: InstallStepId[] = [
+  "proxy",
+  "claude-code",
+  "codex",
+  "agents-md",
+  "claude-md",
+];
 const REPO_REQUIRED_MESSAGE =
   "Select a workspace or pass a repository path to configure repo-scoped Lifecycle files.";
 
@@ -145,7 +151,9 @@ function proxyStatusOptions(runtime?: InstallRuntimeOptions): {
   };
 }
 
-function aggregateRepoCheckStatus(results: RepoInstallResult[]): Extract<InstallInspectStatus, "installed" | "missing" | "outdated"> {
+function aggregateRepoCheckStatus(
+  results: RepoInstallResult[],
+): Extract<InstallInspectStatus, "installed" | "missing" | "outdated"> {
   if (results.every((result) => result.status === "installed")) {
     return "installed";
   }
@@ -157,15 +165,22 @@ function aggregateRepoCheckStatus(results: RepoInstallResult[]): Extract<Install
   return "missing";
 }
 
-function aggregateRepoApplyStatus(results: RepoInstallResult[]): Extract<InstallApplyStatus, "applied" | "unchanged"> {
+function aggregateRepoApplyStatus(
+  results: RepoInstallResult[],
+): Extract<InstallApplyStatus, "applied" | "unchanged"> {
   return results.some((result) => result.status !== "unchanged") ? "applied" : "unchanged";
 }
 
 function providerLabel(providerId: RepoInstallProviderId): string {
-  return listRepoInstallProviders().find((provider) => provider.id === providerId)?.label ?? providerId;
+  return (
+    listRepoInstallProviders().find((provider) => provider.id === providerId)?.label ?? providerId
+  );
 }
 
-function providerInspectStep(providerId: RepoInstallProviderId, repoPath: string | null): InstallInspectStep {
+function providerInspectStep(
+  providerId: RepoInstallProviderId,
+  repoPath: string | null,
+): InstallInspectStep {
   const label = providerLabel(providerId);
   if (!repoPath) {
     return {
@@ -206,7 +221,10 @@ function providerInspectStep(providerId: RepoInstallProviderId, repoPath: string
   };
 }
 
-function providerApplyStep(providerId: RepoInstallProviderId, repoPath: string | null): InstallApplyStep {
+function providerApplyStep(
+  providerId: RepoInstallProviderId,
+  repoPath: string | null,
+): InstallApplyStep {
   const label = providerLabel(providerId);
   if (!repoPath) {
     return {

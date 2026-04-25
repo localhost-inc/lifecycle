@@ -48,6 +48,23 @@ final class CanvasRuntimeTests: XCTestCase {
     XCTAssertFalse(sessionName.contains(" "))
   }
 
+  func testWorkspacePaneOpacityDimsOnlyInactiveUnhoveredPanes() {
+    let settings = WorkspacePaneDimmingSettings(isEnabled: true, inactiveOpacity: 0.52)
+
+    XCTAssertEqual(workspacePaneOpacity(isActive: true, isHovering: false, settings: settings), 1, accuracy: 0.001)
+    XCTAssertEqual(workspacePaneOpacity(isActive: false, isHovering: true, settings: settings), 1, accuracy: 0.001)
+    XCTAssertEqual(workspacePaneOpacity(isActive: false, isHovering: false, settings: settings), 0.52, accuracy: 0.001)
+    XCTAssertEqual(
+      workspacePaneOpacity(
+        isActive: false,
+        isHovering: false,
+        settings: WorkspacePaneDimmingSettings(isEnabled: false, inactiveOpacity: 0.52)
+      ),
+      1,
+      accuracy: 0.001
+    )
+  }
+
   func testBridgeTerminalCommandWrapsPrepareAndSpecInSingleShellScript() {
     let prepare = BridgeShellLaunchSpec(
       program: "tmux",
@@ -75,7 +92,7 @@ final class CanvasRuntimeTests: XCTestCase {
     )
 
     let command = bridgeTerminalCommandText(connection)
-    let expectedScript = "\(prepare.shellCommand) && exec \(spec.shellCommand)"
+    let expectedScript = "\(prepare.shellCommand) && printf '\\033[?1007l' && exec \(spec.shellCommand)"
     let expected = ["/bin/sh", "-c", expectedScript].map(shellEscape).joined(separator: " ")
 
     XCTAssertEqual(command, expected)
@@ -108,10 +125,11 @@ final class CanvasRuntimeTests: XCTestCase {
     )
 
     let command = bridgeTerminalCommandText(connection)
-    let expectedScript = "\(prepare.shellCommand) && exec \(spec.shellCommand)"
+    let expectedScript = "\(prepare.shellCommand) && printf '\\033[?1007l' && exec \(spec.shellCommand)"
     let expected = ["/bin/sh", "-c", expectedScript].map(shellEscape).joined(separator: " ")
 
     XCTAssertEqual(command, expected)
+    XCTAssertTrue(expectedScript.contains("printf '\\033[?1007l'"))
     XCTAssertTrue(expectedScript.contains("'TMUX='"))
     XCTAssertTrue(expectedScript.contains("'TMUX_PANE='"))
   }
@@ -823,9 +841,9 @@ final class CanvasRuntimeTests: XCTestCase {
     XCTAssertEqual(path, "/tmp/custom-bridge.json")
   }
 
-  func testBridgeHealthOnlyRequiresHealthyBridge() throws {
+  func testBridgeHealthAllowsHealthyBridgeOutsideDevMode() throws {
     let compatibleData = """
-      {"ok":true,"healthy":true}
+      {"ok":true,"healthy":true,"repoRoot":null}
       """.data(using: .utf8)!
     let payload = try JSONDecoder().decode(HealthPayload.self, from: compatibleData)
 

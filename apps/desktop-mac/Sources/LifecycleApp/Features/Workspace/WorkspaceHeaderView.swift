@@ -116,13 +116,13 @@ struct WorkspaceHeaderView: View {
       }
       .contentShape(Rectangle())
       .onTapGesture(count: 2) {
-        NSApp.mainWindow?.zoom(nil)
+        zoomActiveWorkspaceWindow()
       }
 
       Spacer()
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
-          NSApp.mainWindow?.zoom(nil)
+          zoomActiveWorkspaceWindow()
         }
 
       WorkspaceHeaderActionRow(model: model, workspace: workspace)

@@ -222,10 +222,11 @@ export async function markWorkspacePrepared(
   workspaceId: string,
   preparedAt: string,
 ): Promise<void> {
-  await db.execute(
-    "UPDATE workspace SET prepared_at = $2, updated_at = $3 WHERE id = $1",
-    [workspaceId, preparedAt, preparedAt],
-  );
+  await db.execute("UPDATE workspace SET prepared_at = $2, updated_at = $3 WHERE id = $1", [
+    workspaceId,
+    preparedAt,
+    preparedAt,
+  ]);
 }
 
 export async function archiveWorkspace(

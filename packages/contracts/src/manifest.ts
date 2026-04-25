@@ -201,7 +201,7 @@ const ImageNodeSchema = z
     if (!node.image && !node.build) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Image nodes require either image or build',
+        message: "Image nodes require either image or build",
         path: ["image"],
       });
     }

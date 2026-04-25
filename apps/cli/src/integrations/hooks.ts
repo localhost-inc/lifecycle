@@ -110,7 +110,9 @@ const CLAUDE_HOOKS: Record<string, HookGroup[]> = {
   ],
   Stop: [
     {
-      hooks: [createHookHandler(`${CLAUDE_ACTIVITY_COMMAND} turn.completed --provider claude-code`)],
+      hooks: [
+        createHookHandler(`${CLAUDE_ACTIVITY_COMMAND} turn.completed --provider claude-code`),
+      ],
     },
   ],
   UserPromptSubmit: [
@@ -123,13 +125,17 @@ const CLAUDE_HOOKS: Record<string, HookGroup[]> = {
 const CODEX_HOOKS: Record<string, HookGroup[]> = {
   PostToolUse: [
     {
-      hooks: [createHookHandler(`${CODEX_ACTIVITY_COMMAND} tool.completed --provider codex --name Bash`)],
+      hooks: [
+        createHookHandler(`${CODEX_ACTIVITY_COMMAND} tool.completed --provider codex --name Bash`),
+      ],
       matcher: "Bash",
     },
   ],
   PreToolUse: [
     {
-      hooks: [createHookHandler(`${CODEX_ACTIVITY_COMMAND} tool.started --provider codex --name Bash`)],
+      hooks: [
+        createHookHandler(`${CODEX_ACTIVITY_COMMAND} tool.started --provider codex --name Bash`),
+      ],
       matcher: "Bash",
     },
   ],
@@ -185,9 +191,7 @@ function installScriptTarget(filePath: string): HookInstallStatus {
   return snapshot.fileExists ? "updated" : "created";
 }
 
-function evaluateScriptTarget(
-  filePath: string,
-): {
+function evaluateScriptTarget(filePath: string): {
   fileExists: boolean;
   nextContent: string | null;
   status: HookCheckStatus;
@@ -218,9 +222,7 @@ function installHookJsonTarget(target: ResolvedHookTarget): HookInstallStatus {
   return snapshot.fileExists ? "updated" : "created";
 }
 
-function evaluateHookJsonTarget(
-  target: ResolvedHookTarget,
-): {
+function evaluateHookJsonTarget(target: ResolvedHookTarget): {
   fileExists: boolean;
   nextContent: string | null;
   status: HookCheckStatus;
@@ -303,7 +305,9 @@ function mergeHookGroups(
 
   for (const desiredGroup of desiredGroups) {
     const matcher = desiredGroup.matcher;
-    const groupIndex = groups.findIndex((group) => normalizeMatcher(group.matcher) === normalizeMatcher(matcher));
+    const groupIndex = groups.findIndex(
+      (group) => normalizeMatcher(group.matcher) === normalizeMatcher(matcher),
+    );
     if (groupIndex === -1) {
       groups.push({
         ...(matcher ? { matcher } : {}),
@@ -317,7 +321,11 @@ function mergeHookGroups(
     for (const desiredHook of desiredGroup.hooks) {
       const hookIndex = group.hooks.findIndex(isManagedActivityHook);
       if (hookIndex === -1) {
-        if (!group.hooks.some((hook) => hook.command === desiredHook.command && hook.type === desiredHook.type)) {
+        if (
+          !group.hooks.some(
+            (hook) => hook.command === desiredHook.command && hook.type === desiredHook.type,
+          )
+        ) {
           group.hooks.push({ ...desiredHook });
           changed = true;
         }
@@ -402,7 +410,9 @@ function parseHookGroup(
     });
   }
 
-  const parsedHooks = hooks.map((hook, hookIndex) => parseHookHandler(filePath, eventName, index, hookIndex, hook));
+  const parsedHooks = hooks.map((hook, hookIndex) =>
+    parseHookHandler(filePath, eventName, index, hookIndex, hook),
+  );
   const matcher = value.matcher;
   if (matcher !== undefined && typeof matcher !== "string") {
     throw new LifecycleCliError({
@@ -461,9 +471,7 @@ function installCodexFeatureTarget(filePath: string): HookInstallStatus {
   return snapshot.fileExists ? "updated" : "created";
 }
 
-function evaluateCodexFeatureTarget(
-  filePath: string,
-): {
+function evaluateCodexFeatureTarget(filePath: string): {
   fileExists: boolean;
   nextContent: string | null;
   status: HookCheckStatus;
@@ -525,12 +533,10 @@ function upsertTomlTableBlock(
   const blockLines = lines.slice(headerIndex, nextHeaderIndex);
   const headerLine = blockLines[0] ?? `[${tableName}]`;
   const managedKeys = new Set(Object.keys(values));
-  const bodyLines = blockLines
-    .slice(1)
-    .filter((line) => {
-      const match = line.match(/^\s*([A-Za-z0-9_-]+)\s*=/);
-      return !match || !managedKeys.has(match[1]!);
-    });
+  const bodyLines = blockLines.slice(1).filter((line) => {
+    const match = line.match(/^\s*([A-Za-z0-9_-]+)\s*=/);
+    return !match || !managedKeys.has(match[1]!);
+  });
   const trailingBlankLines: string[] = [];
   while (bodyLines.length > 0 && bodyLines[bodyLines.length - 1]?.trim() === "") {
     trailingBlankLines.unshift(bodyLines.pop()!);

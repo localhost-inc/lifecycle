@@ -54,6 +54,20 @@ final class WorkspaceExtensionTests: XCTestCase {
     XCTAssertEqual(state?.activeExtension.id, "environment")
   }
 
+  func testWorkspaceExtensionSidebarStateKeepsAllExtensionsVisible() {
+    let first = resolvedExtension(kind: WorkspaceExtensionKind(rawValue: "stack"), title: "Stack")
+    let second = resolvedExtension(kind: WorkspaceExtensionKind(rawValue: "debug"), title: "Debug")
+
+    let state = WorkspaceExtensionSidebarState(
+      workspaceID: "workspace-1",
+      extensions: [first, second],
+      activeKind: WorkspaceExtensionKind(rawValue: "debug")
+    )
+
+    XCTAssertEqual(state?.activeExtension.id, "debug")
+    XCTAssertEqual(state?.visibleExtensions.map(\.id), ["stack", "debug"])
+  }
+
   func testExtensionSidebarWidthDefaultsToStandardWidth() {
     let model = AppModel()
 

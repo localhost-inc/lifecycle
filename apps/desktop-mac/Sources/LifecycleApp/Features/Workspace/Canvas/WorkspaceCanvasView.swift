@@ -6,6 +6,7 @@ struct WorkspaceCanvasView: View {
   let workspaceID: String
   let canvasState: CanvasState
   let isActiveWorkspace: Bool
+  let dimmingSettings: WorkspacePaneDimmingSettings
 
   var body: some View {
     Group {
@@ -16,14 +17,16 @@ struct WorkspaceCanvasView: View {
           workspaceID: workspaceID,
           canvasState: canvasState,
           layoutNode: tiledLayout,
-          activeGroupID: canvasState.activeGroupID
+          activeGroupID: canvasState.activeGroupID,
+          dimmingSettings: dimmingSettings
         )
       case .spatial:
         WorkspaceSpatialCanvasView(
           model: model,
           workspaceID: workspaceID,
           canvasState: canvasState,
-          isActiveWorkspace: isActiveWorkspace
+          isActiveWorkspace: isActiveWorkspace,
+          dimmingSettings: dimmingSettings
         )
       }
     }

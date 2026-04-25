@@ -26,7 +26,6 @@
   },
   "dependencies": {
     "@lifecycle/contracts": "workspace:*",
-    "@lifecycle/db": "workspace:*",
     "@tanstack/db": "^0.5.33"
   }
 }

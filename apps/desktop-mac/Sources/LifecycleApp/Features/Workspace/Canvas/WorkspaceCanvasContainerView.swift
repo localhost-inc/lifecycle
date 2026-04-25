@@ -4,6 +4,7 @@ struct WorkspaceCanvasContainerView: View {
   @Environment(\.appTheme) private var theme
   @ObservedObject var model: AppModel
   let workspace: BridgeWorkspaceSummary
+  let dimmingSettings: WorkspacePaneDimmingSettings
 
   var body: some View {
     Group {
@@ -12,7 +13,8 @@ struct WorkspaceCanvasContainerView: View {
           model: model,
           workspaceID: workspace.id,
           canvasState: canvasState,
-          isActiveWorkspace: workspace.id == model.selectedWorkspaceID
+          isActiveWorkspace: workspace.id == model.selectedWorkspaceID,
+          dimmingSettings: dimmingSettings
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       } else if model.terminalLoadingWorkspaceIDs.contains(workspace.id) && model.terminalEnvelope(for: workspace.id) == nil {

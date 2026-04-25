@@ -44,10 +44,7 @@ export async function listAgentsByWorkspace(
   );
 }
 
-export async function getAgentById(
-  db: SqlDriver,
-  agentId: string,
-): Promise<AgentRow | undefined> {
+export async function getAgentById(db: SqlDriver, agentId: string): Promise<AgentRow | undefined> {
   const rows = await db.select<AgentRow>(
     `SELECT ${AGENT_COLUMNS}
        FROM agent
@@ -105,19 +102,19 @@ export async function listAgentMessagesWithParts(
   return messages.map((message) => ({
     ...message,
     parts:
-      partsByMessageId.get(message.id)?.slice().sort((left, right) => {
-        if (left.part_index === right.part_index) {
-          return left.id.localeCompare(right.id);
-        }
-        return left.part_index - right.part_index;
-      }) ?? [],
+      partsByMessageId
+        .get(message.id)
+        ?.slice()
+        .sort((left, right) => {
+          if (left.part_index === right.part_index) {
+            return left.id.localeCompare(right.id);
+          }
+          return left.part_index - right.part_index;
+        }) ?? [],
   }));
 }
 
-export async function listAgentEvents(
-  db: SqlDriver,
-  agentId: string,
-): Promise<AgentEventRow[]> {
+export async function listAgentEvents(db: SqlDriver, agentId: string): Promise<AgentEventRow[]> {
   return db.select<AgentEventRow>(
     `SELECT ${AGENT_EVENT_COLUMNS}
        FROM agent_event
@@ -127,10 +124,7 @@ export async function listAgentEvents(
   );
 }
 
-export async function selectMaxAgentEventIndex(
-  db: SqlDriver,
-  agentId: string,
-): Promise<number> {
+export async function selectMaxAgentEventIndex(db: SqlDriver, agentId: string): Promise<number> {
   const rows = await db.select<{ max_event_index: number | null }>(
     `SELECT MAX(event_index) AS max_event_index
        FROM agent_event

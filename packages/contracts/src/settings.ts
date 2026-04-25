@@ -45,6 +45,8 @@ export const LifecycleCodexWebSearchModeSchema = z.enum(["disabled", "cached", "
 
 export const LifecycleAppearanceSettingsSchema = z.object({
   theme: LifecycleThemePreferenceSchema.default("dark"),
+  dimInactivePanes: z.boolean().default(true),
+  inactivePaneOpacity: z.number().min(0.2).max(1).default(0.52),
 });
 
 export const LifecycleTerminalCommandSettingsSchema = z.object({
@@ -178,7 +180,11 @@ export const LifecycleProvidersSettingsSchema = z.object({
 
 export const LifecycleSettingsSchema = z
   .object({
-    appearance: LifecycleAppearanceSettingsSchema.default({ theme: "dark" }),
+    appearance: LifecycleAppearanceSettingsSchema.default({
+      theme: "dark",
+      dimInactivePanes: true,
+      inactivePaneOpacity: 0.52,
+    }),
     providers: LifecycleProvidersSettingsSchema.default({
       claude: {
         loginMethod: "claudeai",

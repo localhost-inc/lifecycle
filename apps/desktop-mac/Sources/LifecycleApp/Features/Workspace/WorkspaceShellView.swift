@@ -55,7 +55,10 @@ struct WorkspaceShellView: View {
             AppSidebarView(model: model, onOpenSettings: onOpenSettings)
               .frame(width: sidebarWidth)
 
-            WorkspaceSceneView(model: model)
+            WorkspaceSceneView(
+              model: model,
+              dimmingSettings: settingsStore.workspacePaneDimmingSettings
+            )
               .frame(maxWidth: .infinity, maxHeight: .infinity)
               .background(theme.shellBackground)
           }
