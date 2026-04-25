@@ -349,6 +349,15 @@ struct WorkspaceSpatialCanvasView: View {
     )
   }
 
+  private func groupSurfaceScreenFrame(for item: CanvasSpatialGroupItem) -> CGRect {
+    CGRect(
+      x: item.frame.x * viewport.scale + viewport.translation.width,
+      y: item.frame.y * viewport.scale + viewport.translation.height,
+      width: item.frame.width * viewport.scale,
+      height: item.frame.height * viewport.scale
+    )
+  }
+
   var body: some View {
     GeometryReader { geometry in
       ZStack(alignment: .topLeading) {
@@ -390,6 +399,9 @@ struct WorkspaceSpatialCanvasView: View {
         if isActiveWorkspace {
           CanvasSpatialInputMonitor(
             excludedRects: spatialGroups.map(groupScreenFrame),
+            terminalScrollRects: spatialGroups.compactMap { group in
+              group.activeSurface?.surfaceKind == .terminal ? groupSurfaceScreenFrame(for: group) : nil
+            },
             onScrollPan: { delta in
               viewport = canvasSpatialViewportPanning(viewport, by: delta)
             },
@@ -698,6 +710,7 @@ private struct CanvasSpatialHUD: View {
 
 private struct CanvasSpatialInputMonitor: NSViewRepresentable {
   let excludedRects: [CGRect]
+  let terminalScrollRects: [CGRect]
   let onScrollPan: (CGSize) -> Void
   let onScrollZoom: (CGPoint, CGFloat) -> Void
   let onMagnify: (CGPoint, CGFloat) -> Void
@@ -705,6 +718,7 @@ private struct CanvasSpatialInputMonitor: NSViewRepresentable {
   func makeNSView(context: Context) -> CanvasSpatialInputNSView {
     let view = CanvasSpatialInputNSView()
     view.excludedRects = excludedRects
+    view.terminalScrollRects = terminalScrollRects
     view.onScrollPan = onScrollPan
     view.onScrollZoom = onScrollZoom
     view.onMagnify = onMagnify
@@ -713,6 +727,7 @@ private struct CanvasSpatialInputMonitor: NSViewRepresentable {
 
   func updateNSView(_ nsView: CanvasSpatialInputNSView, context: Context) {
     nsView.excludedRects = excludedRects
+    nsView.terminalScrollRects = terminalScrollRects
     nsView.onScrollPan = onScrollPan
     nsView.onScrollZoom = onScrollZoom
     nsView.onMagnify = onMagnify
@@ -725,6 +740,7 @@ private struct CanvasSpatialInputMonitor: NSViewRepresentable {
 
 private final class CanvasSpatialInputNSView: NSView {
   var excludedRects: [CGRect] = []
+  var terminalScrollRects: [CGRect] = []
   var onScrollPan: (CGSize) -> Void = { _ in }
   var onScrollZoom: (CGPoint, CGFloat) -> Void = { _, _ in }
   var onMagnify: (CGPoint, CGFloat) -> Void = { _, _ in }
@@ -789,6 +805,10 @@ private final class CanvasSpatialInputNSView: NSView {
 
     switch event.type {
     case .scrollWheel:
+      if terminalScrollRects.contains(where: { $0.contains(location) }) {
+        return event
+      }
+
       if canvasSpatialShouldHandleScrollAsZoom(modifiers: event.modifierFlags) {
         let delta = canvasSpatialNormalizedScrollZoomDelta(for: event)
         guard delta != 0 else {

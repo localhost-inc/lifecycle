@@ -19,6 +19,7 @@
   NSString *_mountedCommand;
   CGFloat _mountedFontSize;
   BOOL _hasMountedFontSize;
+  BOOL _terminalSyncScheduled;
 }
 
 + (BOOL)ensureGhosttyRuntime {
@@ -101,7 +102,23 @@
 - (void)layout {
   [super layout];
   _placeholderView.frame = self.bounds;
-  [self syncTerminalIfNeeded];
+  [self scheduleTerminalSync];
+}
+
+- (void)setFrame:(NSRect)frameRect {
+  [super setFrame:frameRect];
+  [self scheduleTerminalSync];
+}
+
+- (void)setBounds:(NSRect)bounds {
+  [super setBounds:bounds];
+  _placeholderView.frame = self.bounds;
+  [self scheduleTerminalSync];
+}
+
+- (void)viewDidMoveToWindow {
+  [super viewDidMoveToWindow];
+  [self scheduleTerminalSync];
 }
 
 - (void)applyHostConfiguration:(LifecycleTerminalHostConfiguration *)configuration {
@@ -114,6 +131,7 @@
 
   _configuration = [configuration copy];
   [self syncTerminalIfNeeded];
+  [self scheduleTerminalSync];
 }
 
 - (BOOL)configurationIsComplete:(LifecycleTerminalHostConfiguration *)configuration {
@@ -165,6 +183,24 @@
   }
 
   return NO;
+}
+
+- (void)scheduleTerminalSync {
+  if (_terminalSyncScheduled) {
+    return;
+  }
+
+  _terminalSyncScheduled = YES;
+  __weak LifecycleTerminalHostView *weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    LifecycleTerminalHostView *strongSelf = weakSelf;
+    if (strongSelf == nil) {
+      return;
+    }
+
+    strongSelf->_terminalSyncScheduled = NO;
+    [strongSelf syncTerminalIfNeeded];
+  });
 }
 
 - (void)syncTerminalIfNeeded {

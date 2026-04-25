@@ -1244,6 +1244,8 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   }
 
   @try {
+    [self mouseMoved:event];
+
     double deltaX = event.scrollingDeltaX;
     double deltaY = event.scrollingDeltaY;
     BOOL precision = event.hasPreciseScrollingDeltas;
@@ -2178,15 +2180,17 @@ bool lifecycle_ghostty_terminal_initialize(LifecycleGhosttyTerminalExitCallback 
       gTerminalViews = [[NSMutableDictionary alloc] init];
       gLastError = nil;
 
-      // Allow scroll-wheel events to reach unfocused terminal surfaces. The native
-      // terminal view returns nil from hitTest: when pointerPassthrough is set so
-      // that click events fall through to the webview for pane-focus handling. A
-      // local event monitor intercepts scroll-wheel events and delivers them
-      // directly to any passthrough terminal view under the cursor.
+      // Allow scroll-wheel events to reach terminal surfaces through SwiftUI canvas
+      // chrome and AppKit hit-testing layers. Click focus still follows normal
+      // hit-testing, but wheel input is terminal-owned whenever the pointer is
+      // over a visible native terminal view.
       if (gScrollWheelMonitor == nil) {
         gScrollWheelMonitor = [NSEvent
             addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
                                         handler:^NSEvent *(NSEvent *event) {
+                                          LifecycleGhosttyTerminalView *matchedView = nil;
+                                          NSInteger matchedSubviewIndex = NSIntegerMin;
+
                                           for (NSView *candidate in gTerminalViews.allValues) {
                                             if (![candidate isKindOfClass:
                                                                [LifecycleGhosttyTerminalView
@@ -2196,8 +2200,7 @@ bool lifecycle_ghostty_terminal_initialize(LifecycleGhosttyTerminalExitCallback 
 
                                             LifecycleGhosttyTerminalView *terminalView =
                                                 (LifecycleGhosttyTerminalView *)candidate;
-                                            if (!terminalView.pointerPassthrough ||
-                                                terminalView.hidden) {
+                                            if (terminalView.hidden || terminalView.surface == NULL) {
                                               continue;
                                             }
 
@@ -2212,7 +2215,23 @@ bool lifecycle_ghostty_terminal_initialize(LifecycleGhosttyTerminalExitCallback 
                                               continue;
                                             }
 
-                                            [terminalView scrollWheel:event];
+                                            NSArray<NSView *> *siblings =
+                                                terminalView.superview.subviews;
+                                            NSUInteger subviewIndex =
+                                                [siblings indexOfObjectIdenticalTo:terminalView];
+                                            NSInteger sortableSubviewIndex =
+                                                subviewIndex == NSNotFound
+                                                    ? NSIntegerMin
+                                                    : (NSInteger)subviewIndex;
+                                            if (matchedView == nil ||
+                                                sortableSubviewIndex >= matchedSubviewIndex) {
+                                              matchedView = terminalView;
+                                              matchedSubviewIndex = sortableSubviewIndex;
+                                            }
+                                          }
+
+                                          if (matchedView != nil) {
+                                            [matchedView scrollWheel:event];
                                             return nil;
                                           }
 

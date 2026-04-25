@@ -76,43 +76,35 @@ struct WorkspaceExtensionSidebarView: View {
     _ workspaceExtension: ResolvedWorkspaceExtension
   ) -> some View {
     let isCollapsed = collapsedExtensionKinds.contains(workspaceExtension.kind)
+    let stackActionState = stackHeaderActionState(for: workspaceExtension)
 
     VStack(alignment: .leading, spacing: 0) {
-      Button {
-        toggleExtensionPanel(workspaceExtension.kind)
-      } label: {
-        HStack(spacing: 8) {
-          Image(systemName: workspaceExtension.tab.icon)
-            .font(.lc(size: 12, weight: .semibold))
-            .frame(width: 14, height: 14)
+      HStack(spacing: 8) {
+        Image(systemName: workspaceExtension.tab.icon)
+          .font(.lc(size: 12, weight: .semibold))
+          .frame(width: 14, height: 14)
 
-          VStack(alignment: .leading, spacing: 1) {
-            Text(workspaceExtension.tab.title)
-              .font(.lc(size: 12, weight: .semibold))
-              .lineLimit(1)
+        Text(workspaceExtension.tab.title)
+          .font(.lc(size: 12, weight: .semibold))
+          .lineLimit(1)
 
-            if let subtitle = workspaceExtension.tab.subtitle, !subtitle.isEmpty {
-              Text(subtitle)
-                .font(.lc(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(theme.mutedColor)
-                .lineLimit(1)
-            }
+        Spacer(minLength: 0)
+
+        if let stackActionState {
+          WorkspaceExtensionStackActionChip(state: stackActionState) {
+            model.runPrimaryStackAction(workspaceID: workspace.id)
           }
-
-          Spacer(minLength: 0)
-
-          Image(systemName: "chevron.down")
-            .font(.lc(size: 10, weight: .bold))
-            .foregroundStyle(theme.mutedColor)
-            .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+          .help(stackActionState.helpText)
         }
-        .foregroundStyle(theme.primaryTextColor)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
       }
-      .buttonStyle(.plain)
+      .foregroundStyle(theme.primaryTextColor)
+      .padding(.horizontal, 8)
+      .padding(.vertical, 6)
+      .frame(maxWidth: .infinity, minHeight: theme.sizing.workspaceTabRailHeight, alignment: .leading)
+      .contentShape(Rectangle())
+      .onTapGesture {
+        toggleExtensionPanel(workspaceExtension.kind)
+      }
       .lcPointerCursor()
 
       Rectangle()
@@ -131,12 +123,6 @@ struct WorkspaceExtensionSidebarView: View {
       RoundedRectangle(cornerRadius: theme.radius.lg, style: .continuous)
         .strokeBorder(theme.borderColor, lineWidth: 1)
     }
-    .shadow(
-      color: theme.cardShadowColor,
-      radius: resizeContext.isResizing ? 0 : 6,
-      x: 0,
-      y: resizeContext.isResizing ? 0 : 3
-    )
   }
 
   private func toggleExtensionPanel(_ kind: WorkspaceExtensionKind) {
@@ -145,6 +131,62 @@ struct WorkspaceExtensionSidebarView: View {
       collapsedExtensionKinds.remove(kind)
     } else {
       collapsedExtensionKinds.insert(kind)
+    }
+  }
+
+  private func stackHeaderActionState(
+    for workspaceExtension: ResolvedWorkspaceExtension
+  ) -> WorkspaceStackHeaderActionState? {
+    guard workspaceExtension.kind == .stack else {
+      return nil
+    }
+
+    return workspaceStackHeaderActionState(
+      summary: model.stackSummary(for: workspace.id),
+      isMutating: model.isStackActionLoading(for: workspace.id),
+      hasStoppingServices: model.hasStoppingServices(for: workspace.id)
+    )
+  }
+}
+
+private struct WorkspaceExtensionStackActionChip: View {
+  @Environment(\.appTheme) private var theme
+
+  let state: WorkspaceStackHeaderActionState
+  let action: () -> Void
+
+  var body: some View {
+    LCButton(variant: .surface, size: .small, isEnabled: state.isEnabled, action: action) {
+      HStack(spacing: 5) {
+        Image(systemName: state.icon)
+          .font(.lc(size: 9, weight: .semibold))
+          .foregroundStyle(iconColor)
+
+        Text(state.label)
+          .font(.lc(size: 10, weight: .semibold))
+          .foregroundStyle(labelColor)
+      }
+    }
+  }
+
+  private var labelColor: Color {
+    state.isEnabled ? theme.primaryTextColor : theme.mutedColor
+  }
+
+  private var iconColor: Color {
+    guard state.isEnabled else {
+      return theme.mutedColor
+    }
+
+    switch state.kind {
+    case .start:
+      return theme.successColor
+    case .starting:
+      return theme.mutedColor
+    case .stop:
+      return theme.warningColor
+    case .stopping:
+      return theme.mutedColor
     }
   }
 }

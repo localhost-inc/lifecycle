@@ -138,28 +138,8 @@ private struct WorkspaceHeaderActionRow: View {
   let workspace: BridgeWorkspaceSummary
   @State private var isViewSettingsPresented = false
 
-  private var stackActionState: WorkspaceStackHeaderActionState? {
-    workspaceStackHeaderActionState(
-      summary: model.stackSummary(for: workspace.id),
-      isMutating: model.isStackActionLoading(for: workspace.id),
-      hasStoppingServices: model.hasStoppingServices(for: workspace.id)
-    )
-  }
-
   var body: some View {
     HStack(spacing: 6) {
-      if let stackActionState {
-        WorkspaceHeaderActionChip(
-          icon: stackActionState.icon,
-          label: stackActionState.label,
-          kind: stackActionState.kind,
-          isEnabled: stackActionState.isEnabled
-        ) {
-          model.runPrimaryStackAction(workspaceID: workspace.id)
-        }
-        .help(stackActionState.helpText)
-      }
-
       WorkspaceHeaderButton(icon: "slider.horizontal.3", isActive: isViewSettingsPresented) {
         isViewSettingsPresented.toggle()
       }

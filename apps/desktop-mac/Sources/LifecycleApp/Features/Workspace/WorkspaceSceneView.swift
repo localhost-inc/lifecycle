@@ -97,7 +97,6 @@ private struct WorkspaceContentPanelsView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
               .strokeBorder(theme.borderColor)
           )
-          .shadow(color: theme.cardShadowColor, radius: 24, x: 0, y: 10)
           .clipped()
 
         WorkspaceExtensionSidebarView(model: model, workspace: workspace)
@@ -131,13 +130,7 @@ private struct WorkspaceContentPanelsView: View {
     availableWidth: CGFloat,
     sidebarWidth: CGFloat
   ) -> some View {
-    ZStack {
-      Color.clear
-
-      RoundedRectangle(cornerRadius: 1, style: .continuous)
-        .fill(theme.borderColor.opacity(0.75))
-        .frame(width: 2, height: 36)
-    }
+    Color.clear
       .frame(width: workspaceExtensionSidebarDividerHitThickness)
       .contentShape(Rectangle())
       .lcResizeCursor(horizontal: true)
