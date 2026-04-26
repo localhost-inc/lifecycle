@@ -45,6 +45,7 @@ struct TerminalSurfaceView: NSViewRepresentable, Equatable {
   let darkAppearance: Bool
   let isFocused: Bool
   let isVisible: Bool
+  let isInteractionBlocked: Bool
   let presentationScale: CGFloat
 
   func makeNSView(context: Context) -> LifecycleTerminalHostView {
@@ -66,7 +67,7 @@ struct TerminalSurfaceView: NSViewRepresentable, Equatable {
       darkAppearance: darkAppearance,
       focusedTerminal: isFocused && isVisible,
       hiddenTerminal: !isVisible,
-      pointerPassthrough: !isVisible,
+      pointerPassthrough: !isVisible || isInteractionBlocked,
       terminalFontSize: terminalSurfacePresentationFontSize(for: presentationScale)
     )
     view.applyHostConfiguration(configuration.hostConfiguration)

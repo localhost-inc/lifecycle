@@ -13,6 +13,28 @@
 
 @end
 
+static NSString *const LifecycleTerminalWorkspaceShortcutNotificationName =
+    @"LifecycleTerminalWorkspaceShortcutRequested";
+static NSString *const LifecycleTerminalWorkspaceShortcutTerminalIDKey = @"terminalID";
+static NSString *const LifecycleTerminalWorkspaceShortcutKindKey = @"shortcutKind";
+static NSString *const LifecycleTerminalWorkspaceShortcutIndexKey = @"shortcutIndex";
+
+static void lifecycleTerminalHostHandleWorkspaceShortcut(const char *terminal_id,
+                                                        int32_t shortcut_kind,
+                                                        int32_t shortcut_index) {
+  NSString *terminalID = terminal_id == NULL ? @"" : [NSString stringWithUTF8String:terminal_id];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [NSNotificationCenter.defaultCenter
+        postNotificationName:LifecycleTerminalWorkspaceShortcutNotificationName
+                      object:nil
+                    userInfo:@{
+                      LifecycleTerminalWorkspaceShortcutTerminalIDKey : terminalID ?: @"",
+                      LifecycleTerminalWorkspaceShortcutKindKey : @(shortcut_kind),
+                      LifecycleTerminalWorkspaceShortcutIndexKey : @(shortcut_index),
+                    }];
+  });
+}
+
 @implementation LifecycleTerminalHostView {
   NSView *_placeholderView;
   NSString *_mountedWorkingDirectory;
@@ -31,7 +53,7 @@
   }
 
   attempted = YES;
-  initialized = lifecycle_ghostty_terminal_initialize(NULL, NULL);
+  initialized = lifecycle_ghostty_terminal_initialize(NULL, lifecycleTerminalHostHandleWorkspaceShortcut);
   return initialized;
 }
 

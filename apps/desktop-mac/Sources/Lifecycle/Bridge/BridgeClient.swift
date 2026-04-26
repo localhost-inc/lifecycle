@@ -342,6 +342,40 @@ struct BridgeClient {
     }
   }
 
+  func git(for workspaceID: String) async throws -> BridgeWorkspaceGitResponse {
+    let path = "workspaces/\(workspaceID)/git"
+    let requestURL = baseURL.appending(path: path)
+    var request = URLRequest(url: requestURL)
+    request.httpMethod = "GET"
+
+    do {
+      let (data, response) = try await URLSession.shared.data(for: request)
+      let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+      guard (200..<300).contains(statusCode) else {
+        throw bridgeResponseError(
+          statusCode: statusCode,
+          bodyData: data,
+          method: "GET",
+          path: path
+        )
+      }
+
+      return try decoder.decode(BridgeWorkspaceGitResponse.self, from: data)
+    } catch {
+      let wrappedError = BridgeRequestError(method: "GET", path: path, underlyingError: error)
+      AppLog.error(
+        .bridge,
+        "Bridge git request failed",
+        error: wrappedError,
+        metadata: [
+          "method": "GET",
+          "path": path,
+        ]
+      )
+      throw wrappedError
+    }
+  }
+
   func startStack(for workspaceID: String) async throws -> BridgeWorkspaceStackMutationResponse {
     let requestBody = try decodeJSONObject(
       [:],

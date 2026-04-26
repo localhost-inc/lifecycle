@@ -51,6 +51,7 @@ struct TerminalSurfaceDefinition: SurfaceDefinition {
           darkAppearance: context.terminalDarkAppearance,
           isFocused: renderState.isFocused,
           isVisible: renderState.isVisible,
+          isInteractionBlocked: renderState.isInteractionBlocked,
           presentationScale: renderState.presentationScale
         )
         .equatable()

@@ -99,6 +99,109 @@ struct BridgeStackNode: Decodable, Equatable, Identifiable {
   }
 }
 
+// MARK: - Git
+
+struct BridgeWorkspaceGitResponse: Decodable, Equatable {
+  let status: BridgeGitStatusResult
+  let commits: [BridgeGitLogEntry]
+  let currentBranch: BridgeGitBranchPullRequestResult
+  let pullRequests: BridgeGitPullRequestListResult
+}
+
+struct BridgeGitStatusResult: Decodable, Equatable {
+  let branch: String?
+  let headSha: String?
+  let upstream: String?
+  let ahead: Int
+  let behind: Int
+  let files: [BridgeGitFileStatus]
+}
+
+struct BridgeGitFileStatus: Decodable, Equatable, Identifiable {
+  let path: String
+  let originalPath: String?
+  let indexStatus: String?
+  let worktreeStatus: String?
+  let staged: Bool
+  let unstaged: Bool
+  let stats: BridgeGitFileStats
+
+  var id: String {
+    "\(originalPath ?? ""):\(path):\(indexStatus ?? ""):\(worktreeStatus ?? "")"
+  }
+}
+
+struct BridgeGitFileStats: Decodable, Equatable {
+  let insertions: Int?
+  let deletions: Int?
+}
+
+struct BridgeGitLogEntry: Decodable, Equatable, Identifiable {
+  let sha: String
+  let shortSha: String
+  let message: String
+  let author: String
+  let email: String
+  let timestamp: String
+
+  var id: String {
+    sha
+  }
+}
+
+struct BridgeGitPullRequestSupport: Decodable, Equatable {
+  let available: Bool
+  let provider: String?
+  let reason: String?
+  let message: String?
+}
+
+struct BridgeGitPullRequestCheckSummary: Decodable, Equatable, Identifiable {
+  let name: String
+  let status: String
+  let workflowName: String?
+  let detailsUrl: String?
+
+  var id: String {
+    "\(workflowName ?? ""):\(name)"
+  }
+}
+
+struct BridgeGitPullRequestSummary: Decodable, Equatable, Identifiable {
+  let number: Int
+  let title: String
+  let url: String
+  let state: String
+  let isDraft: Bool
+  let author: String
+  let headRefName: String
+  let baseRefName: String
+  let createdAt: String
+  let updatedAt: String
+  let mergeable: String
+  let mergeStateStatus: String?
+  let reviewDecision: String?
+  let checks: [BridgeGitPullRequestCheckSummary]?
+
+  var id: Int {
+    number
+  }
+}
+
+struct BridgeGitPullRequestListResult: Decodable, Equatable {
+  let support: BridgeGitPullRequestSupport
+  let pullRequests: [BridgeGitPullRequestSummary]
+}
+
+struct BridgeGitBranchPullRequestResult: Decodable, Equatable {
+  let support: BridgeGitPullRequestSupport
+  let branch: String?
+  let upstream: String?
+  let hasPullRequestChanges: Bool?
+  let suggestedBaseRef: String?
+  let pullRequest: BridgeGitPullRequestSummary?
+}
+
 struct BridgeAgentRecord: Decodable, Equatable, Identifiable {
   let id: String
   let workspaceID: String

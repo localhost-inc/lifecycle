@@ -1,8 +1,6 @@
 import Foundation
 import CoreGraphics
 
-private let workspaceExtensionSidebarLayoutStoreFileName = "extension-sidebar-layout-state.json"
-
 struct WorkspaceExtensionSidebarLayoutState: Codable, Equatable {
   var activeKind: WorkspaceExtensionKind?
   var collapsedKinds: Set<WorkspaceExtensionKind>
@@ -19,24 +17,18 @@ struct WorkspaceExtensionSidebarLayoutState: Codable, Equatable {
   }
 }
 
-private struct WorkspaceExtensionSidebarLayoutSnapshot: Codable {
-  let version: Int
-  let layoutByWorkspaceID: [String: WorkspaceExtensionSidebarLayoutState]
-}
-
 enum WorkspaceExtensionSidebarLayoutStore {
   static func read(
     environment: [String: String] = ProcessInfo.processInfo.environment,
     fileManager: FileManager = .default
   ) throws -> [String: WorkspaceExtensionSidebarLayoutState] {
-    let url = try storeURL(environment: environment)
-    guard fileManager.fileExists(atPath: url.path) else {
-      return [:]
-    }
-
-    let data = try Data(contentsOf: url)
-    let snapshot = try JSONDecoder().decode(WorkspaceExtensionSidebarLayoutSnapshot.self, from: data)
-    return snapshot.layoutByWorkspaceID
+    try DesktopUIStateStore.readSection(
+      DesktopUIStateSection.extensionSidebar,
+      as: [String: WorkspaceExtensionSidebarLayoutState].self,
+      default: [:],
+      environment: environment,
+      fileManager: fileManager
+    )
   }
 
   static func write(
@@ -44,27 +36,11 @@ enum WorkspaceExtensionSidebarLayoutStore {
     environment: [String: String] = ProcessInfo.processInfo.environment,
     fileManager: FileManager = .default
   ) throws {
-    let url = try storeURL(environment: environment)
-    try fileManager.createDirectory(
-      at: url.deletingLastPathComponent(),
-      withIntermediateDirectories: true,
-      attributes: nil
+    try DesktopUIStateStore.writeSection(
+      DesktopUIStateSection.extensionSidebar,
+      value: layoutByWorkspaceID,
+      environment: environment,
+      fileManager: fileManager
     )
-
-    let snapshot = WorkspaceExtensionSidebarLayoutSnapshot(
-      version: 1,
-      layoutByWorkspaceID: layoutByWorkspaceID
-    )
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    let data = try encoder.encode(snapshot)
-    try data.write(to: url, options: .atomic)
-  }
-
-  private static func storeURL(environment: [String: String]) throws -> URL {
-    try LifecyclePaths.lifecycleRootURL(environment: environment)
-      .appendingPathComponent(LifecyclePathDefaults.cacheDirectoryName, isDirectory: true)
-      .appendingPathComponent(LifecyclePathDefaults.desktopMacCacheDirectoryName, isDirectory: true)
-      .appendingPathComponent(workspaceExtensionSidebarLayoutStoreFileName)
   }
 }

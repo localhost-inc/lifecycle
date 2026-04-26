@@ -742,6 +742,30 @@ static BOOL lifecycleEventMatchesPasteShortcut(NSEvent *event) {
          (deviceIndependentFlags & disallowed) == 0;
 }
 
+static BOOL lifecycleEventIsShiftedTerminalInputKey(NSEvent *event) {
+  if (event.type != NSEventTypeKeyDown) {
+    return NO;
+  }
+
+  NSEventModifierFlags flags =
+      event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+  const NSEventModifierFlags required = NSEventModifierFlagShift;
+  const NSEventModifierFlags disallowed =
+      NSEventModifierFlagControl | NSEventModifierFlagOption | NSEventModifierFlagCommand;
+  if ((flags & required) != required || (flags & disallowed) != 0) {
+    return NO;
+  }
+
+  switch (event.keyCode) {
+  case 0x24: // Return
+  case 0x30: // Tab
+  case 0x4C: // Keypad Enter
+    return YES;
+  default:
+    return NO;
+  }
+}
+
 static BOOL lifecycleEventShouldPreflightAppMenuShortcut(NSEvent *event) {
   if (event.type != NSEventTypeKeyDown) {
     return NO;
@@ -1296,6 +1320,11 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
                  lifecycleWindowFirstResponderBelongsToView(self.window, self);
   if (!focused || self.surface == NULL) {
     return NO;
+  }
+
+  if (lifecycleEventIsShiftedTerminalInputKey(event)) {
+    [self keyDown:event];
+    return YES;
   }
 
   if (lifecycleGhosttyTerminalHandleWorkspaceShortcut(self, event)) {

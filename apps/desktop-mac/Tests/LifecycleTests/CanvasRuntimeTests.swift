@@ -281,6 +281,38 @@ final class CanvasRuntimeTests: XCTestCase {
     XCTAssertNil(lastClosedSurfaceIndex(in: snapshots, workspaceID: "workspace-3"))
   }
 
+  @MainActor
+  func testTerminalHostSurfaceContextResolvesOwningWorkspaceAndGroup() {
+    let model = AppModel()
+    let workspaceID = "workspace-1"
+    let groupID = defaultCanvasGroupID(for: workspaceID)
+    let surfaceID = terminalSurfaceID(for: workspaceID, terminalID: "@1")
+    model.canvasDocumentsByWorkspaceID[workspaceID] = WorkspaceCanvasDocument(
+      activeGroupID: groupID,
+      groupsByID: [
+        groupID: CanvasGroup(
+          id: groupID,
+          surfaceOrder: [surfaceID],
+          activeSurfaceID: surfaceID
+        ),
+      ],
+      surfacesByID: [
+        surfaceID: terminalSurfaceRecord(id: surfaceID, title: "Tab 1"),
+      ],
+      layout: .tiled(.group(groupID))
+    )
+
+    XCTAssertEqual(
+      model.terminalHostSurfaceContext(for: terminalHostID(for: surfaceID)),
+      TerminalHostSurfaceContext(
+        workspaceID: workspaceID,
+        surfaceID: surfaceID,
+        groupID: groupID
+      )
+    )
+    XCTAssertNil(model.terminalHostSurfaceContext(for: surfaceID))
+  }
+
   func testNormalizeCanvasDocumentAppendsUnassignedSurfaceToActiveGroup() {
     let workspaceID = "workspace-1"
     let rootGroupID = defaultCanvasGroupID(for: workspaceID)
@@ -787,6 +819,54 @@ final class CanvasRuntimeTests: XCTestCase {
     )
 
     XCTAssertEqual(restored.closedSurfaceIDsByWorkspaceID[workspaceID], [hiddenSurfaceID])
+  }
+
+  func testDesktopUIStateStoreKeepsTypedSectionsInOneFile() throws {
+    let rootURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer {
+      try? FileManager.default.removeItem(at: rootURL)
+    }
+
+    let environment = ["LIFECYCLE_ROOT": rootURL.path, "HOME": NSHomeDirectory()]
+    let workspaceID = "workspace-1"
+    let hiddenSurfaceID = terminalSurfaceID(for: workspaceID, terminalID: "@2")
+    let canvasState = WorkspaceCanvasDocumentStoreState(
+      documentsByWorkspaceID: [
+        workspaceID: defaultCanvasDocument(for: workspaceID),
+      ],
+      closedSurfaceIDsByWorkspaceID: [
+        workspaceID: [hiddenSurfaceID],
+      ]
+    )
+    let appSidebarState = AppSidebarLayoutState(
+      expandedRepositoryIDs: ["repo-1"],
+      width: 300
+    )
+    let extensionSidebarState = [
+      workspaceID: WorkspaceExtensionSidebarLayoutState(
+        activeKind: .debug,
+        collapsedKinds: [.stack],
+        width: 360
+      ),
+    ]
+
+    try WorkspaceCanvasDocumentStore.writeState(canvasState, environment: environment)
+    try AppSidebarLayoutStore.write(appSidebarState, environment: environment)
+    try WorkspaceExtensionSidebarLayoutStore.write(extensionSidebarState, environment: environment)
+
+    let restoredCanvasState = try WorkspaceCanvasDocumentStore.readState(environment: environment)
+    let restoredAppSidebarState = try AppSidebarLayoutStore.read(environment: environment)
+    let restoredExtensionSidebarState = try WorkspaceExtensionSidebarLayoutStore.read(environment: environment)
+    let uiURL = rootURL
+      .appendingPathComponent(LifecyclePathDefaults.cacheDirectoryName, isDirectory: true)
+      .appendingPathComponent(LifecyclePathDefaults.desktopMacCacheDirectoryName, isDirectory: true)
+      .appendingPathComponent("ui.json")
+
+    XCTAssertTrue(FileManager.default.fileExists(atPath: uiURL.path))
+    XCTAssertEqual(restoredCanvasState.closedSurfaceIDsByWorkspaceID[workspaceID], [hiddenSurfaceID])
+    XCTAssertEqual(restoredAppSidebarState, appSidebarState)
+    XCTAssertEqual(restoredExtensionSidebarState, extensionSidebarState)
   }
 
   func testWorkspaceCanvasDocumentDecodesLegacyLayoutPayload() throws {
@@ -1353,8 +1433,27 @@ final class CanvasRuntimeTests: XCTestCase {
     XCTAssertEqual(rendered.map(\.id), [secondSurface.id])
     XCTAssertEqual(
       rendered[0].renderState,
-      SurfaceRenderState(isFocused: true, isVisible: true, presentationScale: 1)
+      SurfaceRenderState(
+        isFocused: true,
+        isVisible: true,
+        isInteractionBlocked: false,
+        presentationScale: 1
+      )
     )
+  }
+
+  @MainActor
+  func testRenderedSurfacesCanBlockSurfaceInteractionDuringCanvasDrag() {
+    let surface = canvasSurface(id: "surface:workspace-1:@1", title: "Tab 1")
+
+    let rendered = renderedSurfaces(
+      for: [surface],
+      activeSurfaceID: surface.id,
+      groupIsActive: true,
+      isInteractionBlocked: true
+    )
+
+    XCTAssertEqual(rendered[0].renderState.isInteractionBlocked, true)
   }
 
   func testAgentSurfaceBindingRoundTripsWorkspaceAndAgent() throws {

@@ -61,12 +61,6 @@ struct AppCommands: Commands {
       .keyboardShortcut("t", modifiers: .command)
       .disabled(model?.selectedWorkspaceID == nil)
 
-      Button("Close Tab") {
-        model?.closeActiveSurface()
-      }
-      .keyboardShortcut("w", modifiers: .command)
-      .disabled(model?.canCloseActiveSurface() != true)
-
       Button("Reopen Closed Tab") {
         model?.reopenClosedSurface()
       }
@@ -74,6 +68,15 @@ struct AppCommands: Commands {
       .disabled(model?.canReopenClosedSurface() != true)
 
       Divider()
+    }
+
+    // Replace the default Close Window item so Cmd+W closes the active workspace tab.
+    CommandGroup(replacing: .saveItem) {
+      Button("Close Tab") {
+        model?.closeActiveSurface()
+      }
+      .keyboardShortcut("w", modifiers: .command)
+      .disabled(model?.canCloseActiveSurface() != true)
     }
 
     // Navigation commands

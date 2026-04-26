@@ -52,6 +52,11 @@ struct ContentView: View {
         ) { _ in
           handleAppCommandRequest(.toggleCommandPalette)
         }
+        .onReceive(
+          NotificationCenter.default.publisher(for: TerminalWorkspaceShortcut.notificationName)
+        ) { notification in
+          handleTerminalWorkspaceShortcut(notification)
+        }
       }
 
       CommandPaletteView(
@@ -82,6 +87,35 @@ struct ContentView: View {
     case .toggleCommandPalette:
       commandPalette.toggle()
     }
+  }
+
+  private func handleTerminalWorkspaceShortcut(_ notification: Notification) {
+    guard
+      let terminalHostID = notification.userInfo?[TerminalWorkspaceShortcut.terminalIDUserInfoKey] as? String,
+      let rawShortcut = terminalWorkspaceShortcutKind(from: notification),
+      let shortcut = TerminalWorkspaceShortcut(rawValue: rawShortcut)
+    else {
+      return
+    }
+
+    switch shortcut {
+    case .goBack:
+      navigateBack()
+    case .goForward:
+      navigateForward()
+    case .toggleZoom:
+      zoomActiveWorkspaceWindow()
+    case .previousTab, .nextTab, .closeActiveTab, .newTab, .reopenClosedTab:
+      model.performTerminalWorkspaceShortcut(shortcut, terminalHostID: terminalHostID)
+    }
+  }
+
+  private func terminalWorkspaceShortcutKind(from notification: Notification) -> Int? {
+    let value = notification.userInfo?[TerminalWorkspaceShortcut.kindUserInfoKey]
+    if let rawValue = value as? Int {
+      return rawValue
+    }
+    return (value as? NSNumber)?.intValue
   }
 
   private var appActions: AppActions {

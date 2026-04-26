@@ -7,6 +7,12 @@ struct ClosedSurfaceSnapshot: Equatable {
   let groupID: String?
 }
 
+struct TerminalHostSurfaceContext: Equatable {
+  let workspaceID: String
+  let surfaceID: String
+  let groupID: String?
+}
+
 func lastClosedSurfaceIndex(
   in snapshots: [ClosedSurfaceSnapshot],
   workspaceID: String?
@@ -22,6 +28,68 @@ func lastClosedSurfaceIndex(
 
 @MainActor
 extension AppModel {
+  func terminalHostSurfaceContext(for terminalHostID: String) -> TerminalHostSurfaceContext? {
+    let prefix = "terminal:"
+    guard terminalHostID.hasPrefix(prefix) else {
+      return nil
+    }
+
+    let surfaceID = String(terminalHostID.dropFirst(prefix.count))
+    for (workspaceID, document) in canvasDocumentsByWorkspaceID {
+      guard document.surfacesByID[surfaceID] != nil else {
+        continue
+      }
+
+      return TerminalHostSurfaceContext(
+        workspaceID: workspaceID,
+        surfaceID: surfaceID,
+        groupID: groupIDContainingSurface(surfaceID, in: document)
+      )
+    }
+
+    return nil
+  }
+
+  func performTerminalWorkspaceShortcut(_ shortcut: TerminalWorkspaceShortcut, terminalHostID: String) {
+    let context = terminalHostSurfaceContext(for: terminalHostID)
+    let targetWorkspaceID = context?.workspaceID ?? selectedWorkspaceID
+
+    switch shortcut {
+    case .newTab:
+      createTerminalTab(workspaceID: targetWorkspaceID, groupID: context?.groupID)
+    case .closeActiveTab:
+      if let context {
+        closeSurface(context.surfaceID, workspaceID: context.workspaceID)
+      } else {
+        closeActiveSurface(workspaceID: targetWorkspaceID)
+      }
+    case .reopenClosedTab:
+      reopenClosedSurface(workspaceID: targetWorkspaceID)
+    case .previousTab:
+      selectAdjacentSurface(offset: -1, context: context)
+    case .nextTab:
+      selectAdjacentSurface(offset: 1, context: context)
+    case .goBack, .goForward, .toggleZoom:
+      break
+    }
+  }
+
+  private func selectAdjacentSurface(offset: Int, context: TerminalHostSurfaceContext?) {
+    guard let context,
+          let document = canvasDocumentsByWorkspaceID[context.workspaceID],
+          let groupID = context.groupID,
+          let group = document.groupsByID[groupID],
+          let currentIndex = group.surfaceOrder.firstIndex(of: context.surfaceID),
+          !group.surfaceOrder.isEmpty
+    else {
+      return
+    }
+
+    let nextIndex =
+      (currentIndex + offset + group.surfaceOrder.count) % group.surfaceOrder.count
+    selectSurface(group.surfaceOrder[nextIndex], workspaceID: context.workspaceID, groupID: groupID)
+  }
+
   func closeActiveSurface(workspaceID: String? = nil) {
     guard let targetWorkspaceID = workspaceID ?? selectedWorkspaceID,
           let surfaceID = activeCanvasSurfaceID(for: targetWorkspaceID)

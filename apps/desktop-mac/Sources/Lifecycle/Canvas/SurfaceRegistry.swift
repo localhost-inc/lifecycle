@@ -43,7 +43,20 @@ struct ResolvedSurface {
 struct SurfaceRenderState: Equatable {
   let isFocused: Bool
   let isVisible: Bool
+  let isInteractionBlocked: Bool
   let presentationScale: CGFloat
+
+  init(
+    isFocused: Bool,
+    isVisible: Bool,
+    isInteractionBlocked: Bool = false,
+    presentationScale: CGFloat
+  ) {
+    self.isFocused = isFocused
+    self.isVisible = isVisible
+    self.isInteractionBlocked = isInteractionBlocked
+    self.presentationScale = presentationScale
+  }
 }
 
 struct SurfaceLifecycleContext {

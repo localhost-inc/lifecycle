@@ -87,6 +87,61 @@ final class WorkspaceExtensionTests: XCTestCase {
     )
   }
 
+  func testGitExtensionSubtitleSummarizesLoadingChangesAndSyncState() {
+    XCTAssertEqual(gitExtensionSubtitle(snapshot: nil, isLoading: true), "loading")
+
+    let changedSnapshot = gitSnapshot(
+      status: BridgeGitStatusResult(
+        branch: "feature/git",
+        headSha: "abcdef",
+        upstream: "origin/feature/git",
+        ahead: 0,
+        behind: 0,
+        files: [
+          BridgeGitFileStatus(
+            path: "src/app.swift",
+            originalPath: nil,
+            indexStatus: nil,
+            worktreeStatus: "modified",
+            staged: false,
+            unstaged: true,
+            stats: BridgeGitFileStats(insertions: 4, deletions: 1)
+          ),
+        ]
+      )
+    )
+
+    XCTAssertEqual(gitExtensionSubtitle(snapshot: changedSnapshot, isLoading: false), "1 changed")
+
+    let syncSnapshot = gitSnapshot(
+      status: BridgeGitStatusResult(
+        branch: "feature/git",
+        headSha: "abcdef",
+        upstream: "origin/feature/git",
+        ahead: 2,
+        behind: 1,
+        files: []
+      )
+    )
+
+    XCTAssertEqual(gitExtensionSubtitle(snapshot: syncSnapshot, isLoading: false), "2 ahead, 1 behind")
+  }
+
+  func testGitExtensionFileLabelsAndStats() {
+    let file = BridgeGitFileStatus(
+      path: "src/app.swift",
+      originalPath: nil,
+      indexStatus: "added",
+      worktreeStatus: "modified",
+      staged: true,
+      unstaged: true,
+      stats: BridgeGitFileStats(insertions: 12, deletions: 3)
+    )
+
+    XCTAssertEqual(gitExtensionFileStatusLabel(file), "AM")
+    XCTAssertEqual(gitExtensionStatsLabel(file.stats), "+12 -3")
+  }
+
   func testSessionsExtensionActivityLabelIncludesToolAndWaitingDetails() {
     XCTAssertEqual(
       sessionsExtensionActivityLabel(for: BridgeTerminalRecord(id: "1", title: "Shell", kind: "shell", busy: false)),
@@ -632,7 +687,38 @@ final class WorkspaceExtensionTests: XCTestCase {
         path: "/tmp/lifecycle"
       ),
       terminalEnvelope: nil,
-      stackSummary: nil
+      stackSummary: nil,
+      gitSnapshot: nil,
+      isGitLoading: false
+    )
+  }
+
+  private func gitSnapshot(status: BridgeGitStatusResult) -> BridgeWorkspaceGitResponse {
+    BridgeWorkspaceGitResponse(
+      status: status,
+      commits: [],
+      currentBranch: BridgeGitBranchPullRequestResult(
+        support: BridgeGitPullRequestSupport(
+          available: false,
+          provider: nil,
+          reason: nil,
+          message: nil
+        ),
+        branch: status.branch,
+        upstream: status.upstream,
+        hasPullRequestChanges: nil,
+        suggestedBaseRef: nil,
+        pullRequest: nil
+      ),
+      pullRequests: BridgeGitPullRequestListResult(
+        support: BridgeGitPullRequestSupport(
+          available: false,
+          provider: nil,
+          reason: nil,
+          message: nil
+        ),
+        pullRequests: []
+      )
     )
   }
 

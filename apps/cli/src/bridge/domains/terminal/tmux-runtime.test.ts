@@ -39,7 +39,7 @@ describe("tmux terminal runtime", () => {
     ]);
   });
 
-  test("enables mouse mode for per-surface mirror sessions", () => {
+  test("keeps mouse mode disabled for managed per-surface mirror sessions", () => {
     const command = buildEnsureTmuxConnectionCommand(
       resolveTmuxRuntimeProfile({ persistenceMode: "managed" }),
       "workspace-session",
@@ -49,8 +49,9 @@ describe("tmux terminal runtime", () => {
     );
 
     expect(command).toContain(
-      "'tmux' '-L' 'lifecycle-managed-v2' '-f' '/dev/null' 'set-option' '-t' 'workspace-session--conn--surface--_4' 'mouse' 'on'",
+      "'tmux' '-L' 'lifecycle-managed-v2' '-f' '/dev/null' 'set-option' '-t' 'workspace-session--conn--surface--_4' 'mouse' 'off'",
     );
+    expect(command).not.toContain("'mouse' 'on'");
   });
 
   test("sets lifecycle workspace environment on tmux sessions and mirrors", () => {

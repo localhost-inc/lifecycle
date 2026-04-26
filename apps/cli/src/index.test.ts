@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parseManifest } from "@lifecycle/contracts";
 
-import { extractHookPrompt } from "./commands/workspace/activity/emit";
+import { extractHookPrompt, extractHookTurnId } from "./commands/workspace/activity/emit";
 import { main } from "./index";
 
 function createIo() {
@@ -1306,6 +1306,12 @@ describe("lifecycle cli", () => {
       "Provider message",
     );
     expect(extractHookPrompt({ payload: { userPrompt: "Camel prompt" } })).toBe("Camel prompt");
+  });
+
+  test("extracts workspace activity turn id from Codex hook payload variants", () => {
+    expect(extractHookTurnId({ turn_id: "turn_snake" })).toBe("turn_snake");
+    expect(extractHookTurnId({ turnId: "turn_camel" })).toBe("turn_camel");
+    expect(extractHookTurnId({ payload: { turn_id: "turn_nested" } })).toBe("turn_nested");
   });
 
   test("fails workspace activity emit when terminal context cannot be resolved", async () => {

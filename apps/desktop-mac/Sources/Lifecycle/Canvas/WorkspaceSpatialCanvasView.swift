@@ -1335,6 +1335,7 @@ private struct CanvasSpatialSurfaceCard: View {
       for: item.surfaces,
       activeSurfaceID: item.activeSurface?.id,
       groupIsActive: item.isActive,
+      isInteractionBlocked: model.draggingSurfaceID != nil,
       presentationScale: presentationScale
     )
   }
@@ -1348,7 +1349,10 @@ private struct CanvasSpatialSurfaceCard: View {
         ForEach(renderedSurfaceStates) { renderedSurface in
           renderedSurface.surface.content.body(renderState: renderedSurface.renderState)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .allowsHitTesting(renderedSurface.renderState.isVisible)
+            .allowsHitTesting(
+              renderedSurface.renderState.isVisible &&
+                !renderedSurface.renderState.isInteractionBlocked
+            )
             .opacity(renderedSurface.renderState.isVisible ? 1 : 0)
             .zIndex(renderedSurface.renderState.isVisible ? 1 : 0)
         }

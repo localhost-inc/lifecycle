@@ -8,6 +8,7 @@ struct WorkspaceExtensionKind: RawRepresentable, Codable, Hashable, Sendable {
   }
 
   static let debug = WorkspaceExtensionKind(rawValue: "debug")
+  static let git = WorkspaceExtensionKind(rawValue: "git")
   static let sessions = WorkspaceExtensionKind(rawValue: "sessions")
   static let stack = WorkspaceExtensionKind(rawValue: "stack")
 }
@@ -18,6 +19,8 @@ struct WorkspaceExtensionContext {
   let workspace: BridgeWorkspaceSummary
   let terminalEnvelope: BridgeWorkspaceTerminalsEnvelope?
   let stackSummary: BridgeWorkspaceStackSummary?
+  let gitSnapshot: BridgeWorkspaceGitResponse?
+  let isGitLoading: Bool
 
   var scope: BridgeWorkspaceScope? {
     terminalEnvelope?.workspace

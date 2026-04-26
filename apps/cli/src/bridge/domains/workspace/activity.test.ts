@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { setTimeout as sleep } from "node:timers/promises";
 import { applyDbMigrations } from "@lifecycle/db/migrations";
 import { insertRepository, insertWorkspace } from "@lifecycle/db/queries";
 import { createTursoDb } from "@lifecycle/db/turso";
@@ -128,9 +129,21 @@ async function installFakeTitleGenerator(rootDir: string): Promise<string> {
   const binDir = join(rootDir, "bin");
   await mkdir(binDir, { recursive: true });
   const codexPath = join(binDir, "codex");
-  await writeFile(codexPath, "#!/bin/sh\necho Prompt Based Title\n", "utf8");
+  await writeFile(codexPath, "#!/bin/sh\n/bin/sleep 1\necho Prompt Based Title\n", "utf8");
   await chmod(codexPath, 0o755);
   return binDir;
+}
+
+async function waitForGeneratedTitle(
+  read: () => Promise<string | null | undefined>,
+): Promise<string | null | undefined> {
+  const deadline = Date.now() + 3_000;
+  let current = await read();
+  while (!current && Date.now() < deadline) {
+    await sleep(50);
+    current = await read();
+  }
+  return current;
 }
 
 describe("workspace activity", () => {
@@ -199,6 +212,7 @@ describe("workspace activity", () => {
     const workspaceRegistry = createWorkspaceRegistry([]);
     const titleGeneratorPath = await installFakeTitleGenerator(rootDir);
 
+    const startedAt = Date.now();
     const turnSummary = await emitWorkspaceActivity(
       db,
       workspaceRegistry,
@@ -212,6 +226,7 @@ describe("workspace activity", () => {
       },
       { ...environment, PATH: titleGeneratorPath },
     );
+    expect(Date.now() - startedAt).toBeLessThan(500);
     expect(turnSummary.terminals).toEqual([
       expect.objectContaining({
         busy: true,
@@ -220,10 +235,44 @@ describe("workspace activity", () => {
         source: "explicit",
         state: "turn_active",
         terminal_id: "term_hook",
+        title: null,
+        turn_id: "turn_1",
+      }),
+    ]);
+    await expect(
+      waitForGeneratedTitle(async () => {
+        const summary = await readWorkspaceActivity(
+          db,
+          workspaceRegistry,
+          workspaceId,
+          environment,
+        );
+        return summary.terminals.find((terminal) => terminal.terminal_id === "term_hook")?.title;
+      }),
+    ).resolves.toBe("Prompt Based Title");
+
+    const repeatedTurnSummary = await emitWorkspaceActivity(
+      db,
+      workspaceRegistry,
+      workspaceId,
+      {
+        event: "turn.started",
+        provider: "codex",
+        terminalId: "term_hook",
+        turnId: "turn_1",
+      },
+      environment,
+    );
+    expect(repeatedTurnSummary.terminals).toEqual([
+      expect.objectContaining({
+        prompt: "Implement the prompt title flow",
+        state: "turn_active",
+        terminal_id: "term_hook",
         title: "Prompt Based Title",
         turn_id: "turn_1",
       }),
     ]);
+
     const activityPath = join(
       rootDir,
       "activity",

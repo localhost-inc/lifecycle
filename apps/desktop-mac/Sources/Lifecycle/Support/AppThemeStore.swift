@@ -1504,7 +1504,7 @@ enum TerminalThemeConfigWriter {
       "cursor-color = \(tokens.terminalCursorColor)",
       "cursor-text = \(tokens.terminalSurfaceBackground)",
       "selection-background = \(tokens.surfaceSelected)",
-      "selection-foreground = \(tokens.foreground)",
+      "selection-foreground = \(tokens.foreground.primaryHex)",
     ]
 
     lines.append(

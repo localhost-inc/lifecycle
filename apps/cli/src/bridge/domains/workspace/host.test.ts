@@ -383,12 +383,6 @@ describe("workspace contract", () => {
         "lc-local-session",
         "window-size",
         "latest",
-        ";",
-        "set-option",
-        "-t",
-        "lc-local-session",
-        "mouse",
-        "on",
       ],
       cwd: REPO_PATH,
       env: [["TERM", "xterm-256color"]],
@@ -448,7 +442,7 @@ describe("workspace contract", () => {
         "-t",
         "lc-local-session",
         "mouse",
-        "on",
+        "off",
       ],
       cwd: REPO_PATH,
       env: [
@@ -863,7 +857,7 @@ describe("workspace contract", () => {
     expect(terminal).toEqual({
       id: "@8",
       title: "Tab 4",
-      kind: "custom",
+      kind: "shell",
       busy: false,
     });
   });
@@ -924,7 +918,7 @@ describe("workspace contract", () => {
     expect(terminal).toEqual({
       id: "@104",
       title: "Tab 4",
-      kind: "custom",
+      kind: "shell",
       busy: false,
     });
   });
@@ -1059,7 +1053,7 @@ describe("workspace contract", () => {
     expect(terminal).toEqual({
       id: "@8",
       title: "Tab 4",
-      kind: "custom",
+      kind: "shell",
       busy: false,
     });
   });
@@ -1120,7 +1114,7 @@ describe("workspace contract", () => {
     expect(terminal).toEqual({
       id: "@8",
       title: "Tab 4",
-      kind: "custom",
+      kind: "shell",
       busy: false,
     });
   });
@@ -1203,7 +1197,7 @@ describe("workspace contract", () => {
     expect(terminal).toEqual({
       id: "@8",
       title: "Tab 4",
-      kind: "custom",
+      kind: "shell",
       busy: false,
     });
     expect(

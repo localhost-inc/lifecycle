@@ -500,6 +500,8 @@ final class AppModel: ObservableObject {
   @Published var stackSummaryByWorkspaceID: [String: BridgeWorkspaceStackSummary] = [:]
   @Published var stackServicePhasesByWorkspaceID: [String: [String: StackServicePhase]] = [:]
   @Published var stackLoadingWorkspaceIDs = Set<String>()
+  @Published var gitSnapshotByWorkspaceID: [String: BridgeWorkspaceGitResponse] = [:]
+  @Published var gitLoadingWorkspaceIDs = Set<String>()
   @Published var terminalConnectionBySurfaceID: [String: BridgeTerminalConnection] = [:]
   @Published var agentsByWorkspaceID: [String: [BridgeAgentRecord]] = [:]
   @Published var canvasDocumentsByWorkspaceID: [String: WorkspaceCanvasDocument] = [:]
@@ -562,6 +564,7 @@ final class AppModel: ObservableObject {
   func registerExtensions() {
     WorkspaceExtensionRegistry.shared.register(StackExtensionDefinition())
     WorkspaceExtensionRegistry.shared.register(SessionsExtensionDefinition())
+    WorkspaceExtensionRegistry.shared.register(GitExtensionDefinition())
     WorkspaceExtensionRegistry.shared.register(DebugExtensionDefinition())
   }
 

@@ -14,7 +14,13 @@ import {
 import { LifecycleCliError } from "../../../errors";
 
 const HOOK_PROMPT_KEYS = ["prompt", "input", "message", "text", "userPrompt"];
-const HOOK_PROMPT_STDIN_TIMEOUT_MS = 250;
+const HOOK_TURN_ID_KEYS = ["turnId", "turn_id"];
+const HOOK_STDIN_TIMEOUT_MS = 2_000;
+
+interface HookActivityInput {
+  prompt?: string | undefined;
+  turnId?: string | undefined;
+}
 
 function parseMetadata(raw?: string): Record<string, unknown> | undefined {
   if (!raw) {
@@ -45,28 +51,31 @@ function parseMetadata(raw?: string): Record<string, unknown> | undefined {
   return parsed as Record<string, unknown>;
 }
 
-async function readHookPromptFromStdin(): Promise<string | undefined> {
+async function readHookActivityFromStdin(): Promise<HookActivityInput> {
   if (process.stdin.isTTY) {
-    return undefined;
+    return {};
   }
 
-  const raw = await readStdinWithTimeout(HOOK_PROMPT_STDIN_TIMEOUT_MS);
+  const raw = await readStdinWithTimeout(HOOK_STDIN_TIMEOUT_MS);
   if (!raw.trim()) {
-    return undefined;
+    return {};
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return undefined;
+    return {};
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return undefined;
+    return {};
   }
 
-  return extractHookPrompt(parsed);
+  return {
+    prompt: extractHookPrompt(parsed),
+    turnId: extractHookTurnId(parsed),
+  };
 }
 
 async function readStdinWithTimeout(timeoutMs: number): Promise<string> {
@@ -122,6 +131,31 @@ export function extractHookPrompt(payload: unknown): string | undefined {
   return undefined;
 }
 
+export function extractHookTurnId(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object") {
+    return undefined;
+  }
+
+  for (const key of HOOK_TURN_ID_KEYS) {
+    const value = (payload as Record<string, unknown>)[key];
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
+    }
+  }
+
+  for (const key of ["event", "payload", "properties", "session"]) {
+    const turnId = extractHookTurnId((payload as Record<string, unknown>)[key]);
+    if (turnId) {
+      return turnId;
+    }
+  }
+
+  return undefined;
+}
+
 export default defineCommand({
   description: "Emit an explicit activity event for the current Lifecycle-managed terminal.",
   input: z.object({
@@ -147,7 +181,9 @@ export default defineCommand({
       const workspaceId = resolveWorkspaceId(input.workspaceId);
       const terminalId = resolveTerminalId(input.terminalId);
       const metadata = parseMetadata(input.metadata);
-      const prompt = input.prompt ?? (await readHookPromptFromStdin());
+      const hookInput = event === "turn.started" ? await readHookActivityFromStdin() : {};
+      const prompt = input.prompt ?? hookInput.prompt;
+      const turnId = input.turnId ?? hookInput.turnId;
       const { client } = await ensureBridge();
       const response = await client.workspaces[":id"].activity.$post({
         param: { id: workspaceId },
@@ -159,7 +195,7 @@ export default defineCommand({
           ...(prompt ? { prompt } : {}),
           ...(input.provider ? { provider: input.provider } : {}),
           terminalId,
-          ...(input.turnId ? { turnId: input.turnId } : {}),
+          ...(turnId ? { turnId } : {}),
         },
       });
       const result = await response.json();

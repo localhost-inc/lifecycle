@@ -94,6 +94,8 @@ describe("repo hook installer", () => {
     expect(adapter).toContain("LIFECYCLE_WORKSPACE_ID");
     expect(adapter).toContain("tmux display-message");
     expect(adapter).toContain("--terminal-id");
+    expect(adapter).toContain("hook_prompt");
+    expect(adapter).toContain("--turn-id");
     expect(adapter).toContain("workspace activity emit");
     expect(adapter).not.toContain("--read-hook-input");
 

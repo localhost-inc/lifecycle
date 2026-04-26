@@ -56,6 +56,7 @@ func renderedSurfaces(
   for surfaces: [CanvasSurface],
   activeSurfaceID: String?,
   groupIsActive: Bool,
+  isInteractionBlocked: Bool = false,
   presentationScale: CGFloat = 1
 ) -> [WorkspaceGroupRenderedSurface] {
   guard let selectedSurface =
@@ -70,6 +71,7 @@ func renderedSurfaces(
       renderState: SurfaceRenderState(
         isFocused: groupIsActive,
         isVisible: true,
+        isInteractionBlocked: isInteractionBlocked,
         presentationScale: presentationScale
       ),
       surface: selectedSurface
@@ -102,8 +104,8 @@ struct WorkspaceGroupView: View {
               }
 
               if !surfaces.isEmpty {
-                TerminalCreationMenuButton(style: .iconOnly) {
-                  model.createTerminalTab(workspaceID: workspaceID, groupID: group.id)
+                TerminalCreationMenuButton(style: .iconOnly) { kind in
+                  model.createTerminalTab(kind: kind, workspaceID: workspaceID, groupID: group.id)
                 }
                 .padding(.horizontal, 10)
               }
@@ -165,7 +167,10 @@ struct WorkspaceGroupView: View {
               renderedSurface.surface.content.body(renderState: renderedSurface.renderState)
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
                 .clipped()
-                .allowsHitTesting(renderedSurface.renderState.isVisible && !isDragging)
+                .allowsHitTesting(
+                  renderedSurface.renderState.isVisible &&
+                    !renderedSurface.renderState.isInteractionBlocked
+                )
                 .opacity(renderedSurface.renderState.isVisible ? 1 : 0)
                 .zIndex(renderedSurface.renderState.isVisible ? 1 : 0)
             }
@@ -226,7 +231,8 @@ struct WorkspaceGroupView: View {
     renderedSurfaces(
       for: surfaces,
       activeSurfaceID: activeSurface?.id,
-      groupIsActive: isActive
+      groupIsActive: isActive,
+      isInteractionBlocked: model.draggingSurfaceID != nil
     )
   }
 

@@ -51,8 +51,8 @@ struct WorkspaceCanvasContainerView: View {
               .multilineTextAlignment(.center)
           }
 
-          TerminalCreationMenuButton(style: .prominent) {
-            model.createTerminalTab(workspaceID: workspace.id)
+          TerminalCreationMenuButton(style: .prominent) { kind in
+            model.createTerminalTab(kind: kind, workspaceID: workspace.id)
           }
           .padding(.top, 4)
         }

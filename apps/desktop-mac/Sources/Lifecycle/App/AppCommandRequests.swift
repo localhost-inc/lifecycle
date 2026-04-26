@@ -17,3 +17,18 @@ enum AppCommandRequest {
     NotificationCenter.default.post(name: notificationName, object: nil)
   }
 }
+
+enum TerminalWorkspaceShortcut: Int, Sendable {
+  case previousTab = 1
+  case nextTab = 2
+  case closeActiveTab = 3
+  case newTab = 5
+  case goBack = 6
+  case goForward = 7
+  case reopenClosedTab = 8
+  case toggleZoom = 9
+
+  static let notificationName = Notification.Name("LifecycleTerminalWorkspaceShortcutRequested")
+  static let terminalIDUserInfoKey = "terminalID"
+  static let kindUserInfoKey = "shortcutKind"
+}

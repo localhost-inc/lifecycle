@@ -118,34 +118,139 @@ export async function emitWorkspaceActivity(
   const workspace = await requireWorkspaceRecord(db, workspaceId);
   const repository = await requireRepositoryRecord(db, workspace.repository_id, workspaceId);
   const scope = workspaceActivityScope(workspace, repository, environment);
-  const inputWithTitle = await withGeneratedTitle(input, workspace.workspace_root, environment);
 
   const current = await readStoredWorkspaceActivity(scope, environment);
-  const next = reduceStoredWorkspaceActivity(current, inputWithTitle, new Date().toISOString());
+  const next = reduceStoredWorkspaceActivity(current, input, new Date().toISOString());
 
   if (next !== current) {
     await writeStoredWorkspaceActivity(scope, next, environment);
   }
 
+  scheduleGeneratedTitleUpdate({
+    db,
+    environment,
+    input,
+    scope,
+    workspaceHosts,
+    workspaceId,
+    workspaceRoot: workspace.workspace_root,
+  });
+
   return readWorkspaceActivity(db, workspaceHosts, workspaceId, environment);
 }
 
-async function withGeneratedTitle(
-  input: EmitWorkspaceActivityInput,
-  cwd: string | null,
-  environment: NodeJS.ProcessEnv,
-): Promise<EmitWorkspaceActivityInput> {
+function scheduleGeneratedTitleUpdate(input: {
+  db: SqlDriver;
+  environment: NodeJS.ProcessEnv;
+  input: EmitWorkspaceActivityInput;
+  scope: WorkspaceActivityScope;
+  workspaceHosts: WorkspaceHostRegistry;
+  workspaceId: string;
+  workspaceRoot: string | null;
+}): void {
+  if (!shouldGenerateTitle(input.input)) {
+    return;
+  }
+
+  void updateGeneratedTitle(input).catch((error) => {
+    console.error("Failed to generate workspace activity title:", error);
+  });
+}
+
+function shouldGenerateTitle(input: EmitWorkspaceActivityInput): boolean {
   if (input.event !== "turn.started" || normalizeOptionalString(input.title)) {
-    return input;
+    return false;
   }
 
-  const prompt = normalizeOptionalString(input.prompt);
+  return normalizeOptionalString(input.prompt) !== null;
+}
+
+async function updateGeneratedTitle(input: {
+  db: SqlDriver;
+  environment: NodeJS.ProcessEnv;
+  input: EmitWorkspaceActivityInput;
+  scope: WorkspaceActivityScope;
+  workspaceHosts: WorkspaceHostRegistry;
+  workspaceId: string;
+  workspaceRoot: string | null;
+}): Promise<void> {
+  const prompt = normalizeOptionalString(input.input.prompt);
   if (!prompt) {
-    return input;
+    return;
   }
 
-  const title = await generateWorkspaceTitle({ cwd, prompt }, environment);
-  return title ? { ...input, title } : input;
+  const title = await generateWorkspaceTitle(
+    { cwd: input.workspaceRoot, prompt },
+    input.environment,
+  );
+  if (!title) {
+    return;
+  }
+
+  const current = await readStoredWorkspaceActivity(input.scope, input.environment);
+  const next = applyGeneratedTitle(current, input.input, title, new Date().toISOString());
+  if (next === current) {
+    return;
+  }
+
+  await writeStoredWorkspaceActivity(input.scope, next, input.environment);
+  const summary = await readWorkspaceActivity(
+    input.db,
+    input.workspaceHosts,
+    input.workspaceId,
+    input.environment,
+  );
+  const [{ broadcastMessage }, { workspaceTopic }] = await Promise.all([
+    import("../../lib/server"),
+    import("../../lib/socket-topics"),
+  ]);
+  broadcastMessage(
+    await buildWorkspaceActivitySocketMessage(input.db, summary),
+    workspaceTopic(input.workspaceId),
+  );
+}
+
+function applyGeneratedTitle(
+  current: StoredWorkspaceActivityState,
+  input: EmitWorkspaceActivityInput,
+  title: string,
+  now: string,
+): StoredWorkspaceActivityState {
+  const terminal = current.terminals[input.terminalId];
+  if (!terminal?.turn || normalizeOptionalString(terminal.turn.title)) {
+    return current;
+  }
+  if (!matchesGeneratedTitleTarget(terminal.turn, input)) {
+    return current;
+  }
+
+  return {
+    terminals: {
+      ...current.terminals,
+      [input.terminalId]: {
+        ...terminal,
+        turn: {
+          ...terminal.turn,
+          title,
+        },
+      },
+    },
+    updated_at: now,
+    workspace_id: current.workspace_id,
+  };
+}
+
+function matchesGeneratedTitleTarget(
+  signal: StoredActivitySignal,
+  input: EmitWorkspaceActivityInput,
+): boolean {
+  const inputTurnId = normalizeOptionalString(input.turnId);
+  if (inputTurnId !== null && signal.turn_id !== inputTurnId) {
+    return false;
+  }
+
+  const inputPrompt = normalizeOptionalString(input.prompt);
+  return inputPrompt !== null && signal.prompt === inputPrompt;
 }
 
 export async function buildWorkspaceActivitySocketMessage(
@@ -367,8 +472,13 @@ function applyActivityEvent(
     case "turn.started": {
       const turnId = normalizeOptionalString(input.turnId);
       const sameTurn = terminal.turn !== null && terminal.turn.turn_id === turnId;
+      const previousTurn = terminal.turn;
       terminal.last_event_at = now;
       terminal.turn = createSignal(input, now, turnId);
+      if (sameTurn && previousTurn) {
+        terminal.turn.prompt ??= previousTurn.prompt;
+        terminal.turn.title ??= previousTurn.title;
+      }
       if (!sameTurn) {
         terminal.tool = null;
         terminal.waiting = null;

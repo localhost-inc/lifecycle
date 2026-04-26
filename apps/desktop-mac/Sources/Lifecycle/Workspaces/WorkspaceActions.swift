@@ -162,6 +162,7 @@ extension AppModel {
       await loadTerminals(for: workspaceID, force: false)
       await ensureInitialTerminalTabIfNeeded(for: workspaceID)
       await loadStack(for: workspaceID, force: false)
+      await loadGit(for: workspaceID, force: false)
       if workspaceCanvasDocumentContainsAgentSurface(canvasDocumentsByWorkspaceID[workspaceID]) {
         await loadAgents(for: workspaceID, force: false)
         enterVisibleAgentIfPresent(for: workspaceID)
@@ -356,6 +357,8 @@ extension AppModel {
     let allWorkspaceIDs = Set(repositories.flatMap(\.workspaces).map(\.id))
     openedWorkspaceIDs.formIntersection(allWorkspaceIDs)
     stackSummaryByWorkspaceID = stackSummaryByWorkspaceID.filter { allWorkspaceIDs.contains($0.key) }
+    gitSnapshotByWorkspaceID = gitSnapshotByWorkspaceID.filter { allWorkspaceIDs.contains($0.key) }
+    gitLoadingWorkspaceIDs.formIntersection(allWorkspaceIDs)
     restorePersistedCanvasDocuments(validWorkspaceIDs: allWorkspaceIDs)
     restorePersistedExtensionSidebarLayoutState(validWorkspaceIDs: allWorkspaceIDs)
     AppLog.info(
@@ -469,15 +472,6 @@ extension AppModel {
     return panel.url
   }
 
-  func detectRepositoryBranch(at repositoryPath: String) async -> String? {
-    let output = try? await ProcessRunner.run(
-      program: "git",
-      args: ["rev-parse", "--abbrev-ref", "HEAD"],
-      cwd: repositoryPath
-    )
-    return output?.stdout
-  }
-
   func selectRepository(
     _ repository: BridgeRepository,
     autoCreateInitialTerminal: Bool = false
@@ -510,4 +504,13 @@ extension AppModel {
     }
     return (workspaceID, repositoryID)
   }
+}
+
+func detectRepositoryBranch(at repositoryPath: String) async -> String? {
+  let output = try? await ProcessRunner.run(
+    program: "git",
+    args: ["symbolic-ref", "--short", "HEAD"],
+    cwd: repositoryPath
+  )
+  return output?.stdout
 }

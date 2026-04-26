@@ -216,12 +216,9 @@ export class LocalWorkspaceHost implements WorkspaceHostAdapter {
       sessionName,
       "window-size",
       "latest",
-      ";",
-      "set-option",
-      "-t",
-      sessionName,
-      "mouse",
-      "on",
+      ...(tmuxProfile.mode === "managed"
+        ? [";", "set-option", "-t", sessionName, "mouse", "off"]
+        : []),
     ];
 
     return {

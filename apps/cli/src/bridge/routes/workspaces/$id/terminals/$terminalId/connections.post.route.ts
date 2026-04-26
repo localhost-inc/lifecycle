@@ -1,44 +1,12 @@
 import { createRoute } from "routedjs";
 import { z } from "zod";
 import { connectWorkspaceTerminal } from "../../../../../domains/terminal/service";
+import {
+  BridgeShellLaunchSpecSchema,
+  BridgeWorkspaceScopeSchema,
+  BridgeWorkspaceTerminalRuntimeSchema,
+} from "../../../../schemas";
 
-const BridgeWorkspaceScopeSchema = z
-  .object({
-    binding: z.enum(["bound", "adhoc"]).meta({ id: "BridgeWorkspaceBinding" }),
-    workspace_id: z.string().nullable(),
-    workspace_name: z.string(),
-    repo_name: z.string().nullable(),
-    host: z
-      .enum(["local", "docker", "remote", "cloud", "unknown"])
-      .meta({ id: "BridgeWorkspaceScopeHost" }),
-    status: z.string().nullable(),
-    source_ref: z.string().nullable(),
-    cwd: z.string().nullable(),
-    workspace_root: z.string().nullable(),
-    resolution_note: z.string().nullable(),
-    resolution_error: z.string().nullable(),
-  })
-  .meta({ id: "BridgeWorkspaceScope" });
-const BridgeWorkspaceTerminalRuntimeSchema = z
-  .object({
-    backend_label: z.string(),
-    runtime_id: z.string().nullable(),
-    launch_error: z.string().nullable(),
-    persistent: z.boolean(),
-    supports_create: z.boolean(),
-    supports_close: z.boolean(),
-    supports_connect: z.boolean(),
-    supports_rename: z.boolean(),
-  })
-  .meta({ id: "BridgeWorkspaceTerminalRuntime" });
-const BridgeShellLaunchSpecSchema = z
-  .object({
-    program: z.string(),
-    args: z.array(z.string()),
-    cwd: z.string().nullable(),
-    env: z.array(z.tuple([z.string(), z.string()])),
-  })
-  .meta({ id: "BridgeShellLaunchSpec" });
 const BridgeTerminalTransportSchema = z
   .discriminatedUnion("kind", [
     z

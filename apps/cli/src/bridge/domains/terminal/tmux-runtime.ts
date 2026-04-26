@@ -319,13 +319,13 @@ function buildTmuxSessionOptionCommands(
 ): string[] {
   const commands = [
     buildTmuxCommandText(profile, ["set-option", "-t", sessionName, "window-size", "latest"]),
-    buildTmuxCommandText(profile, ["set-option", "-t", sessionName, "mouse", "on"]),
   ];
 
   if (profile.mode === "managed") {
     commands.unshift(
       buildTmuxCommandText(profile, ["set-option", "-t", sessionName, "status", "off"]),
     );
+    commands.push(buildTmuxCommandText(profile, ["set-option", "-t", sessionName, "mouse", "off"]));
   }
 
   return commands;

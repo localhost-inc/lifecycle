@@ -10,6 +10,8 @@ final class WorkspaceStore: ObservableObject {
   @Published private(set) var extensionSidebarState: WorkspaceExtensionSidebarState?
   @Published private(set) var terminalEnvelope: BridgeWorkspaceTerminalsEnvelope?
   @Published private(set) var isTerminalLoading = false
+  @Published private(set) var gitSnapshot: BridgeWorkspaceGitResponse?
+  @Published private(set) var isGitLoading = false
   @Published private(set) var draggingSurfaceID: String?
 
   private unowned let model: AppModel
@@ -21,6 +23,7 @@ final class WorkspaceStore: ObservableObject {
     self.canvasState = nil
     self.extensionSidebarState = nil
     self.terminalEnvelope = nil
+    self.gitSnapshot = nil
     self.draggingSurfaceID = nil
     syncFromModel()
   }
@@ -31,6 +34,8 @@ final class WorkspaceStore: ObservableObject {
     extensionSidebarState = model.extensionSidebarState(for: workspaceID)
     terminalEnvelope = model.terminalEnvelope(for: workspaceID)
     isTerminalLoading = model.terminalLoadingWorkspaceIDs.contains(workspaceID)
+    gitSnapshot = model.gitSnapshot(for: workspaceID)
+    isGitLoading = model.isGitLoading(for: workspaceID)
     draggingSurfaceID = model.draggingSurfaceID
   }
 

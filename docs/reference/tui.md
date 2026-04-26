@@ -80,6 +80,7 @@ The TUI should reason about workspace paths in one simple way:
 5. Closing the TUI detaches the client; the tmux session survives.
 6. The right column reflects the same local workspace scope when Lifecycle can resolve it.
 7. If the selected local worktree was deleted on disk, the bridge should restore the worktree and update `workspace.workspace_root` before terminal operations continue.
+8. Lifecycle-managed tmux sessions keep tmux mouse mode disabled so embedded terminal hosts own wheel scrolling and scrollback behavior. Clients may route wheel events to the terminal surface, but they should not require tmux mouse reporting for normal scrollback.
 
 ### `cloud`
 

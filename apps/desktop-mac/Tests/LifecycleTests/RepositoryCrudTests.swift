@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 
 @testable import Lifecycle
@@ -23,6 +24,32 @@ final class RepositoryCrudTests: XCTestCase {
     XCTAssertEqual(
       preferredRootWorkspaceName(branchName: "feat/native-shell", repositoryName: "lifecycle"),
       "feat/native-shell"
+    )
+  }
+
+  func testDetectRepositoryBranchReadsUnbornMainBranch() async throws {
+    let tempDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("lifecycle-repository-crud-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: tempDirectory,
+      withIntermediateDirectories: true
+    )
+    defer {
+      try? FileManager.default.removeItem(at: tempDirectory)
+    }
+
+    _ = try await ProcessRunner.run(
+      program: "git",
+      args: ["init", "-b", "main"],
+      cwd: tempDirectory.path
+    )
+
+    XCTAssertEqual(
+      preferredRootWorkspaceName(
+        branchName: await detectRepositoryBranch(at: tempDirectory.path),
+        repositoryName: "lifecycle"
+      ),
+      "main"
     )
   }
 

@@ -199,7 +199,9 @@ extension AppModel {
       repository: repository,
       workspace: workspace,
       terminalEnvelope: terminalEnvelopeByWorkspaceID[workspaceID],
-      stackSummary: stackSummaryByWorkspaceID[workspaceID]
+      stackSummary: stackSummaryByWorkspaceID[workspaceID],
+      gitSnapshot: gitSnapshotByWorkspaceID[workspaceID],
+      isGitLoading: gitLoadingWorkspaceIDs.contains(workspaceID)
     )
   }
 }
